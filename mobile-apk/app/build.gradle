@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'pk.mansehra.bikeaya'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "pk.mansehra.bikeaya"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            def ksFile = file("release-keystore.jks")
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword System.getenv("ANDROID_KS_PASS") ?: "mansehra123"
+                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "bikeaya"
+                keyPassword System.getenv("ANDROID_KEY_PASS") ?: "mansehra123"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (file("release-keystore.jks").exists()) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}

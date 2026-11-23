@@ -95,29 +95,46 @@ def seed_initial_data(db: Session) -> None:
         )
 
     # 5. App Releases (Download Center entries)
+    apk_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.0.0/MansehraBikeaya.apk"
+    exe_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.0.0/MansehraBikeayaDesk.exe"
     if db.query(AppRelease).count() == 0:
         db.add_all(
             [
                 AppRelease(
                     platform="android_apk",
-                    version="1.0.0-web-ready",
-                    file_name="MansehraBikeaya-v1.0.0.apk",
-                    download_url="#apk-build-pending",
-                    file_size_mb=14.2,
-                    release_notes="Mobile APK packaging scheduled right after live Render deployment. Install PWA directly from Chrome meanwhile!",
+                    version="1.0.0",
+                    file_name="MansehraBikeaya.apk",
+                    download_url=apk_url,
+                    file_size_mb=4.8,
+                    release_notes="Official Android app (.apk) for Customers, Motorbike Captains & Admin connected to live Mansehra Bikeaya.",
                     is_latest=True,
                 ),
                 AppRelease(
                     platform="windows_exe",
-                    version="1.0.0-web-ready",
-                    file_name="MansehraBikeayaDesk-Setup-v1.0.0.exe",
-                    download_url="#exe-build-pending",
-                    file_size_mb=68.5,
-                    release_notes="Windows Desktop EXE installer for Admin Desk & Dispatch scheduled in packaging phase.",
+                    version="1.0.0",
+                    file_name="MansehraBikeayaDesk.exe",
+                    download_url=exe_url,
+                    file_size_mb=16.0,
+                    release_notes="Standalone Windows Desktop app (.exe) for Mansehra Bikeaya Admin Dispatch, Settlements & P&L Reports.",
                     is_latest=True,
                 ),
             ]
         )
+    else:
+        for rel in db.query(AppRelease).all():
+            if rel.download_url.startswith("#"):
+                if rel.platform == "android_apk":
+                    rel.version = "1.0.0"
+                    rel.file_name = "MansehraBikeaya.apk"
+                    rel.download_url = apk_url
+                    rel.file_size_mb = 4.8
+                    rel.release_notes = "Official Android app (.apk) for Customers, Motorbike Captains & Admin connected to live Mansehra Bikeaya."
+                elif rel.platform == "windows_exe":
+                    rel.version = "1.0.0"
+                    rel.file_name = "MansehraBikeayaDesk.exe"
+                    rel.download_url = exe_url
+                    rel.file_size_mb = 16.0
+                    rel.release_notes = "Standalone Windows Desktop app (.exe) for Mansehra Bikeaya Admin Dispatch, Settlements & P&L Reports."
 
     db.commit()
 

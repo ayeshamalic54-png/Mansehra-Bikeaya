@@ -33,11 +33,17 @@ export function DownloadsPage({ onBack }) {
     }
     if (!rel.download_url || rel.download_url.startsWith('#')) {
       setNotice(
-        `${rel.file_name} (${rel.version}) is registered for Phase 2 packaging (.apk / .exe) right after your Render URL goes live. Meanwhile, you can use Chrome → "Add to Home Screen" / "Install App" right now!`
+        `${rel.file_name} (${rel.version}) packaging is in progress. Meanwhile, you can use Chrome → "Add to Home Screen" / "Install App" right now!`
       );
       return;
     }
-    window.open(rel.download_url, '_blank', 'noopener,noreferrer');
+    const a = document.createElement('a');
+    a.href = rel.download_url;
+    a.download = rel.file_name;
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   return (

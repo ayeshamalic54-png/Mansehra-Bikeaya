@@ -24,3 +24,15 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Desktop / Android Local Build Outputs
+desktop-exe/build/
+desktop-exe/dist/
+desktop-exe/*.spec
+desktop-exe/icon.ico
+mobile-apk/.gradle/
+mobile-apk/app/build/
+mobile-apk/build/
+mobile-apk/*.jks
+mobile-apk/*.keystore
+local.properties

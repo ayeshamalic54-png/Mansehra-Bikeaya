@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppRelease, MansehraZone, PricingRule, SystemSetting
@@ -111,3 +112,18 @@ def track_release_download(release_id: int, db: Session = Depends(get_db)):
     rel.download_count += 1
     db.commit()
     return {"id": rel.id, "download_count": rel.download_count, "download_url": rel.download_url}
+
+
+@router.get("/download/{platform}")
+def direct_platform_download(platform: str, db: Session = Depends(get_db)):
+    rel = (
+        db.query(AppRelease)
+        .filter(AppRelease.platform == platform, AppRelease.is_latest.is_(True))
+        .order_by(AppRelease.created_at.desc())
+        .first()
+    )
+    if not rel or not rel.download_url or rel.download_url.startswith("#"):
+        raise HTTPException(status_code=404, detail="Installer package not published yet")
+    rel.download_count += 1
+    db.commit()
+    return RedirectResponse(url=rel.download_url, status_code=302)
