@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'pk.mansehra.bikeaya'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "pk.mansehra.bikeaya"
