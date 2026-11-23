@@ -1,0 +1,292 @@
+from datetime import date, timedelta
+from sqlalchemy.orm import Session
+from app.auth import hash_password
+from app.models import (
+    AdminExpense,
+    AppRelease,
+    Booking,
+    LedgerEntry,
+    MansehraZone,
+    PricingRule,
+    PromoCode,
+    RiderProfile,
+    SystemSetting,
+    User,
+)
+from app.services.finance import complete_booking_and_post_ledger, utcnow
+
+
+def seed_initial_data(db: Session) -> None:
+    # 1. Mansehra Zones
+    if db.query(MansehraZone).count() == 0:
+        zones = [
+            MansehraZone(name="Main Bazar / Lari Adda", area_tag="City Core", approx_km_from_center=1.0, surcharge=0),
+            MansehraZone(name="Abbottabad Road", area_tag="City Core", approx_km_from_center=2.5, surcharge=0),
+            MansehraZone(name="Ghazikot Township", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
+            MansehraZone(name="Shinkiari Road", area_tag="City North", approx_km_from_center=3.0, surcharge=0),
+            MansehraZone(name="College Doraha", area_tag="Education Hub", approx_km_from_center=2.0, surcharge=0),
+            MansehraZone(name="Kaghan Colony", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
+            MansehraZone(name="Channai", area_tag="Suburb", approx_km_from_center=4.5, surcharge=10),
+            MansehraZone(name="King Abdullah Hospital", area_tag="Medical", approx_km_from_center=2.5, surcharge=0),
+            MansehraZone(name="Hazara University (Dhodial)", area_tag="University", approx_km_from_center=11.0, surcharge=30),
+            MansehraZone(name="Baffa Town", area_tag="Outer Town", approx_km_from_center=12.5, surcharge=40),
+        ]
+        db.add_all(zones)
+
+    # 2. Pricing & Commission Rules
+    if db.query(PricingRule).count() == 0:
+        rules = [
+            PricingRule(
+                service_type="bike_ride",
+                display_name="Bike Ride (Sawari)",
+                base_fare=60.0,
+                per_km_rate=25.0,
+                min_fare=80.0,
+                commission_type="percent",
+                commission_value=15.0,
+                peak_multiplier=1.0,
+            ),
+            PricingRule(
+                service_type="parcel",
+                display_name="Parcel Delivery",
+                base_fare=80.0,
+                per_km_rate=30.0,
+                min_fare=100.0,
+                commission_type="percent",
+                commission_value=18.0,
+                peak_multiplier=1.0,
+            ),
+            PricingRule(
+                service_type="errand",
+                display_name="Bazaar Errand",
+                base_fare=100.0,
+                per_km_rate=30.0,
+                min_fare=120.0,
+                commission_type="fixed",
+                commission_value=40.0,
+                peak_multiplier=1.0,
+            ),
+        ]
+        db.add_all(rules)
+
+    # 3. System Settings
+    default_settings = {
+        "business_name": "Mansehra Bikeaya",
+        "city": "Mansehra, KPK",
+        "default_credit_limit": "1500",
+        "support_phone": "+92 300 1111111",
+        "support_whatsapp": "+92 300 1111111",
+    }
+    for k, v in default_settings.items():
+        if not db.query(SystemSetting).filter(SystemSetting.key == k).first():
+            db.add(SystemSetting(key=k, value=v))
+
+    # 4. Promo Codes
+    if db.query(PromoCode).count() == 0:
+        db.add(
+            PromoCode(
+                code="MANSEHRA20",
+                discount_type="fixed",
+                discount_value=20.0,
+                max_discount=20.0,
+                min_fare=120.0,
+                is_active=True,
+            )
+        )
+
+    # 5. App Releases (Download Center entries)
+    if db.query(AppRelease).count() == 0:
+        db.add_all(
+            [
+                AppRelease(
+                    platform="android_apk",
+                    version="1.0.0-web-ready",
+                    file_name="MansehraBikeaya-v1.0.0.apk",
+                    download_url="#apk-build-pending",
+                    file_size_mb=14.2,
+                    release_notes="Mobile APK packaging scheduled right after live Render deployment. Install PWA directly from Chrome meanwhile!",
+                    is_latest=True,
+                ),
+                AppRelease(
+                    platform="windows_exe",
+                    version="1.0.0-web-ready",
+                    file_name="MansehraBikeayaDesk-Setup-v1.0.0.exe",
+                    download_url="#exe-build-pending",
+                    file_size_mb=68.5,
+                    release_notes="Windows Desktop EXE installer for Admin Desk & Dispatch scheduled in packaging phase.",
+                    is_latest=True,
+                ),
+            ]
+        )
+
+    db.commit()
+
+    # 6. Default Users (Admin, Riders, Customer)
+    admin = db.query(User).filter(User.phone == "03001111111").first()
+    if not admin:
+        admin = User(
+            full_name="Owner Admin (Mansehra)",
+            phone="03001111111",
+            email="admin@mansehrabikeaya.pk",
+            password_hash=hash_password("admin123"),
+            role="admin",
+            is_active=True,
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+
+    rider1 = db.query(User).filter(User.phone == "03112222222").first()
+    if not rider1:
+        rider1 = User(
+            full_name="Usman Khan",
+            phone="03112222222",
+            email="usman.rider@mansehrabikeaya.pk",
+            password_hash=hash_password("rider123"),
+            role="rider",
+            is_active=True,
+        )
+        db.add(rider1)
+        db.commit()
+        db.refresh(rider1)
+        db.add(
+            RiderProfile(
+                user_id=rider1.id,
+                cnic_number="13503-4821901-1",
+                bike_model="Honda CD-70",
+                bike_plate="MNA-4821",
+                license_no="MNS-DL-2041",
+                zone_name="Ghazikot Township",
+                is_verified=True,
+                is_online=True,
+                credit_limit=1500.0,
+            )
+        )
+        db.commit()
+
+    rider2 = db.query(User).filter(User.phone == "03123333333").first()
+    if not rider2:
+        rider2 = User(
+            full_name="Bilal Ahmed",
+            phone="03123333333",
+            email="bilal.rider@mansehrabikeaya.pk",
+            password_hash=hash_password("rider123"),
+            role="rider",
+            is_active=True,
+        )
+        db.add(rider2)
+        db.commit()
+        db.refresh(rider2)
+        db.add(
+            RiderProfile(
+                user_id=rider2.id,
+                cnic_number="13503-9910421-3",
+                bike_model="Honda CG-125",
+                bike_plate="MNB-9104",
+                license_no="MNS-DL-3192",
+                zone_name="Shinkiari Road",
+                is_verified=True,
+                is_online=True,
+                credit_limit=1500.0,
+            )
+        )
+        db.commit()
+
+    customer = db.query(User).filter(User.phone == "03334444444").first()
+    if not customer:
+        customer = User(
+            full_name="Hammad Raza",
+            phone="03334444444",
+            email="hammad@example.pk",
+            password_hash=hash_password("user123"),
+            role="customer",
+            is_active=True,
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+
+    # 7. Sample initial bookings & expense so Admin Dashboard shows live numbers out of the box
+    if db.query(Booking).count() == 0:
+        b1 = Booking(
+            booking_code="MNS-1001",
+            customer_id=customer.id,
+            rider_id=rider1.id,
+            service_type="bike_ride",
+            pickup_zone="Main Bazar / Lari Adda",
+            pickup_address="Lari Adda Main Gate",
+            drop_zone="Ghazikot Township",
+            drop_address="Ghazikot Sector B Masjid",
+            distance_km=4.0,
+            estimated_fare=160.0,
+            discount_amount=0.0,
+            final_fare=160.0,
+            payment_method="cash",
+            payment_collector="rider",
+            status="assigned",
+            assigned_at=utcnow() - timedelta(hours=2),
+        )
+        db.add(b1)
+        db.commit()
+        db.refresh(b1)
+        complete_booking_and_post_ledger(db, b1, admin)
+
+        b2 = Booking(
+            booking_code="MNS-1002",
+            customer_id=customer.id,
+            rider_id=rider2.id,
+            service_type="parcel",
+            pickup_zone="Abbottabad Road",
+            pickup_address="Zafar Medical Store",
+            drop_zone="Kaghan Colony",
+            drop_address="House 14, Street 3",
+            distance_km=3.5,
+            estimated_fare=185.0,
+            discount_amount=0.0,
+            final_fare=185.0,
+            payment_method="cash",
+            payment_collector="rider",
+            receiver_name="Salman Tariq",
+            receiver_phone="03455551122",
+            cod_amount=0.0,
+            status="assigned",
+            assigned_at=utcnow() - timedelta(hours=1),
+        )
+        db.add(b2)
+        db.commit()
+        db.refresh(b2)
+        complete_booking_and_post_ledger(db, b2, admin)
+
+        b3 = Booking(
+            booking_code="MNS-1003",
+            customer_id=customer.id,
+            rider_id=None,
+            service_type="bike_ride",
+            pickup_zone="College Doraha",
+            pickup_address="Govt Postgraduate College Gate",
+            drop_zone="Hazara University (Dhodial)",
+            drop_address="Main Admin Block",
+            distance_km=10.5,
+            estimated_fare=353.0,
+            discount_amount=0.0,
+            final_fare=353.0,
+            payment_method="cash",
+            payment_collector="rider",
+            status="pending",
+            customer_notes="Call on arrival near main gate",
+        )
+        db.add(b3)
+        db.commit()
+
+    if db.query(AdminExpense).count() == 0:
+        db.add(
+            AdminExpense(
+                title="Mansehra Rider Pamphlets & Stand Stickers",
+                category="marketing",
+                amount=50.0,
+                expense_date=date.today(),
+                note="Initial launch print batch",
+                recorded_by_id=admin.id,
+            )
+        )
+        db.commit()
