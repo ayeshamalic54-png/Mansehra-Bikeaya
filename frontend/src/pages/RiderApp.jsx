@@ -93,7 +93,7 @@ export function RiderApp({ onOpenDownloads }) {
   const summary = ledgerData.summary || {};
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] pb-24">
+    <div className="min-h-screen pb-24">
       {/* Dark Captain Header */}
       <header className="sticky top-0 z-20 bg-slate-900 text-white border-b border-slate-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
@@ -108,7 +108,7 @@ export function RiderApp({ onOpenDownloads }) {
             <button
               onClick={handleToggleOnline}
               className={`px-3.5 py-2 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 transition ${
-                rp?.is_online ? 'bg-[#00A651] text-white' : 'bg-slate-700 text-slate-300'
+                rp?.is_online ? 'bg-[#009E4D] text-white' : 'bg-slate-700 text-slate-300'
               }`}
             >
               <Power className="w-3.5 h-3.5" />
@@ -145,7 +145,7 @@ export function RiderApp({ onOpenDownloads }) {
         )}
 
         {msg && (
-          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#008E46] text-xs font-bold">
+          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#008741] text-xs font-bold">
             {msg}
           </div>
         )}
@@ -160,19 +160,19 @@ export function RiderApp({ onOpenDownloads }) {
           <div className="space-y-4">
             {/* Captain Ledger Strip */}
             <div className="grid grid-cols-3 gap-2.5 text-center">
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-3">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
                 <div className="text-[11px] text-slate-500">Collected</div>
                 <div className="text-base font-extrabold mono-num text-slate-900">
                   Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}
                 </div>
               </div>
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-3">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
                 <div className="text-[11px] text-slate-500">My Share</div>
-                <div className="text-base font-extrabold mono-num text-[#00A651]">
+                <div className="text-base font-extrabold mono-num text-[#009E4D]">
                   Rs. {Number(summary.total_net_earned || 0).toFixed(0)}
                 </div>
               </div>
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-3">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
                 <div className="text-[11px] text-slate-500">Admin Due</div>
                 <div className={`text-base font-extrabold mono-num ${Number(summary.balance_due_to_admin || 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                   Rs. {Number(summary.balance_due_to_admin || 0).toFixed(0)}
@@ -184,21 +184,21 @@ export function RiderApp({ onOpenDownloads }) {
               <h2 className="text-sm font-extrabold text-slate-900">
                 Available Ride &amp; Parcel Requests ({availableJobs.length})
               </h2>
-              <button onClick={loadAll} className="text-xs font-bold text-[#00A651] underline">
+              <button onClick={loadAll} className="text-xs font-bold text-[#009E4D] underline">
                 Refresh
               </button>
             </div>
 
             {availableJobs.length === 0 ? (
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
                 No pending ride requests right now. Keep Duty ONLINE to receive new Mansehra bookings!
               </div>
             ) : (
               availableJobs.map((job) => (
-                <div key={job.id} className="bg-white border-2 border-[#00A651]/40 rounded-2xl p-4 space-y-3 text-xs shadow-xs">
+                <div key={job.id} className="bg-white border-2 border-[#009E4D]/40 rounded-2xl p-4 space-y-3 text-xs shadow-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-lg bg-[#EC1FA8] text-white font-bold">NEW JOB</span>
+                      <span className="px-2 py-0.5 rounded-lg bg-teal-600 text-white font-bold">NEW JOB</span>
                       <span className="mono-num font-bold">{job.booking_code}</span>
                       <StatusBadge value={job.service_type} />
                     </div>
@@ -207,29 +207,29 @@ export function RiderApp({ onOpenDownloads }) {
 
                   <div className="space-y-1 text-slate-800">
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#00A651] shrink-0 mt-0.5" />
+                      <MapPin className="w-3.5 h-3.5 text-[#009E4D] shrink-0 mt-0.5" />
                       <span><strong>Pickup:</strong> {job.pickup_zone} — {job.pickup_address}</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#EC1FA8] shrink-0 mt-0.5" />
+                      <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
                       <span><strong>Drop:</strong> {job.drop_zone} — {job.drop_address}</span>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-[#F4F6FB] flex items-center justify-between mono-num">
+                  <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between mono-num">
                     <div>
                       <div className="text-slate-500">Customer Fare</div>
                       <div className="text-base font-extrabold text-slate-900">Rs. {job.final_fare}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-slate-500">Your Net Earning</div>
-                      <div className="text-base font-extrabold text-[#00A651]">Rs. {job.rider_earning}</div>
+                      <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => handleAccept(job.id)}
-                    className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#00A651] hover:bg-[#008E46] transition"
+                    className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#009E4D] hover:bg-[#008741] transition"
                   >
                     Accept Ride Now
                   </button>
@@ -244,12 +244,12 @@ export function RiderApp({ onOpenDownloads }) {
           <div className="space-y-4">
             <h2 className="text-sm font-extrabold text-slate-900">Active Assigned Trips ({activeJobs.length})</h2>
             {activeJobs.length === 0 ? (
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
                 No active trip in progress. Check the Duty tab to accept a request.
               </div>
             ) : (
               activeJobs.map((job) => (
-                <div key={job.id} className="bg-white border border-[#E6E9F2] rounded-2xl p-4 space-y-3 text-xs">
+                <div key={job.id} className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="mono-num font-extrabold text-sm">{job.booking_code}</span>
                     <StatusBadge value={job.status} />
@@ -259,14 +259,14 @@ export function RiderApp({ onOpenDownloads }) {
                     <div><strong>Pickup:</strong> {job.pickup_zone} ({job.pickup_address})</div>
                     <div><strong>Drop:</strong> {job.drop_zone} ({job.drop_address})</div>
                     {job.receiver_name && (
-                      <div className="text-[#9C1794] font-semibold">
+                      <div className="text-teal-800 font-semibold">
                         Parcel Receiver: {job.receiver_name} ({job.receiver_phone}) · COD: Rs. {job.cod_amount}
                       </div>
                     )}
                   </div>
 
                   {job.customer && (
-                    <div className="p-3 rounded-xl bg-[#F4F6FB] flex items-center justify-between">
+                    <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between">
                       <div>
                         <div className="font-bold text-slate-900">Customer: {job.customer.full_name}</div>
                         <div className="mono-num text-slate-600">{job.customer.phone}</div>
@@ -283,7 +283,7 @@ export function RiderApp({ onOpenDownloads }) {
 
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between mono-num font-bold">
                     <span>Collect ({job.payment_method}): Rs. {job.final_fare}</span>
-                    <span className="text-[#008E46]">Net: Rs. {job.rider_earning}</span>
+                    <span className="text-[#008741]">Net: Rs. {job.rider_earning}</span>
                   </div>
 
                   <div className="flex gap-2">
@@ -298,14 +298,14 @@ export function RiderApp({ onOpenDownloads }) {
                     {(job.status === 'assigned' || job.status === 'arrived') && (
                       <button
                         onClick={() => handleStep(job.id, 'in_progress')}
-                        className="flex-1 py-3 rounded-xl bg-[#EC1FA8] text-white font-extrabold"
+                        className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-extrabold"
                       >
                         Start Ride
                       </button>
                     )}
                     <button
                       onClick={() => handleStep(job.id, 'completed')}
-                      className="flex-1 py-3 rounded-xl bg-[#00A651] text-white font-extrabold"
+                      className="flex-1 py-3 rounded-xl bg-[#009E4D] text-white font-extrabold"
                     >
                       Complete Trip
                     </button>
@@ -337,12 +337,12 @@ export function RiderApp({ onOpenDownloads }) {
                 </div>
                 <div>
                   <div className="text-slate-400">Settled</div>
-                  <div className="font-bold text-[#00A651]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
+                  <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white border border-[#E6E9F2] rounded-2xl divide-y divide-[#EEF1F7] text-xs">
+            <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
               <div className="p-4 font-extrabold text-slate-900">Hisab-Kitab Transaction Log</div>
               {(ledgerData.entries || []).length === 0 ? (
                 <div className="p-6 text-center text-slate-500">No ledger entries yet.</div>
@@ -356,7 +356,7 @@ export function RiderApp({ onOpenDownloads }) {
                       </div>
                     </div>
                     <div className="text-right mono-num shrink-0">
-                      <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#00A651]'}`}>
+                      <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#009E4D]'}`}>
                         {e.signed_delta > 0 ? `+Rs.${e.signed_delta}` : `-Rs.${Math.abs(e.signed_delta)}`}
                       </div>
                       <div className="text-[11px] text-slate-500">Bal: Rs.{e.balance_after}</div>
@@ -370,7 +370,7 @@ export function RiderApp({ onOpenDownloads }) {
 
         {/* TAB 4: PROFILE */}
         {tab === 'profile' && (
-          <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3 text-xs">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
             <div className="text-base font-extrabold text-slate-900">{user?.full_name}</div>
             <div><strong>Phone:</strong> <span className="mono-num">{user?.phone}</span></div>
             <div><strong>Bike:</strong> {rp?.bike_model} (<span className="mono-num">{rp?.bike_plate}</span>)</div>
@@ -380,7 +380,7 @@ export function RiderApp({ onOpenDownloads }) {
             <div><strong>Rating:</strong> ★ {rp?.rating_avg}</div>
             <button
               onClick={onOpenDownloads}
-              className="mt-2 w-full py-3 rounded-xl bg-[#EC1FA8] text-white font-bold inline-flex items-center justify-center gap-2"
+              className="mt-2 w-full py-3 rounded-xl bg-teal-600 text-white font-bold inline-flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
               Open APK / EXE Download Center
@@ -389,7 +389,7 @@ export function RiderApp({ onOpenDownloads }) {
         )}
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#E6E9F2]">
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80">
         <div className="max-w-3xl mx-auto grid grid-cols-4">
           {[
             { id: 'duty', label: 'Duty', icon: Bike },
@@ -404,7 +404,7 @@ export function RiderApp({ onOpenDownloads }) {
                 key={item.id}
                 onClick={() => setTab(item.id)}
                 className={`py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
-                  active ? 'border-[#00A651] text-[#00A651]' : 'border-transparent text-slate-500'
+                  active ? 'border-[#009E4D] text-[#009E4D]' : 'border-transparent text-slate-500'
                 }`}
               >
                 <Icon className="w-4 h-4" />

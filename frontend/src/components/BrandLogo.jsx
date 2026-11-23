@@ -1,19 +1,36 @@
 import React from 'react';
-import { Bike } from 'lucide-react';
 
-export function BrandLogo({ dark = false, subtitle = 'Mansehra Network' }) {
+export function BrandLogo({ dark = false, subtitle = 'Mansehra Network', size = 'md' }) {
+  const iconBox = size === 'sm' ? 'w-9 h-9 rounded-xl' : 'w-10 h-10 rounded-xl';
   return (
-    <div className="flex items-center gap-2.5 select-none">
-      <div className="relative w-10 h-10 rounded-xl bg-[#00A651] flex items-center justify-center shadow-sm shadow-[#00A651]/30">
-        <Bike className="w-5 h-5 text-white" strokeWidth={2.4} />
-        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#EC1FA8] ring-2 ring-white" />
+    <div className="flex items-center gap-3 select-none">
+      <div
+        className={`${iconBox} bg-gradient-to-br from-[#00B259] to-[#007D3D] flex items-center justify-center shadow-md shadow-emerald-900/15 ring-1 ring-white/20 shrink-0`}
+      >
+        <svg viewBox="0 0 36 36" className="w-6 h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Speed lines */}
+          <path d="M5 13H10M4 18H8" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" />
+          {/* Rear & Front Wheels */}
+          <circle cx="11" cy="24" r="4.5" stroke="#FFFFFF" strokeWidth="2.3" />
+          <circle cx="26.5" cy="24" r="4.5" stroke="#FFFFFF" strokeWidth="2.3" />
+          {/* Sleek Motorbike Frame */}
+          <path
+            d="M11 24L15.5 14.5H22.5L26.5 24M15.5 14.5L13 10.5H10M21.5 14.5L23.5 10.5H27.5"
+            stroke="#FFFFFF"
+            strokeWidth="2.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle cx="26.5" cy="24" r="1.2" fill="#A7F3D0" />
+        </svg>
       </div>
       <div>
-        <div className={`text-base font-extrabold tracking-tight leading-none ${dark ? 'text-white' : 'text-slate-900'}`}>
-          Mansehra <span className="text-[#00A651]">Bikeaya</span>
+        <div className={`text-[16px] font-extrabold tracking-tight leading-none flex items-center gap-1 ${dark ? 'text-white' : 'text-slate-900'}`}>
+          <span>Mansehra</span>
+          <span className={dark ? 'text-emerald-400' : 'text-[#009E4D]'}>Bikeaya</span>
         </div>
         {subtitle && (
-          <div className={`text-[11px] font-medium mt-0.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <div className={`text-[11px] font-medium mt-1 tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
             {subtitle}
           </div>
         )}

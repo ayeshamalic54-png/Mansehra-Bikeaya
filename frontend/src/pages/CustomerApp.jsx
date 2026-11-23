@@ -216,22 +216,22 @@ export function CustomerApp({ onOpenDownloads }) {
     : 160;
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] pb-24">
+    <div className="min-h-screen pb-24">
       {/* Top Bar */}
-      <header className="sticky top-0 z-20 bg-white border-b border-[#E6E9F2] no-print">
+      <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 no-print">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <BrandLogo subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenDownloads}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-fuchsia-50 text-[#9C1794] border border-fuchsia-200 inline-flex items-center gap-1"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1"
             >
               <Download className="w-3.5 h-3.5" />
               APK
             </button>
             <button
               onClick={logout}
-              className="p-2 rounded-xl border border-[#E6E9F2] text-slate-600 hover:bg-slate-100"
+              className="p-2 rounded-xl border border-slate-200/80 text-slate-600 hover:bg-slate-100"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
@@ -242,7 +242,7 @@ export function CustomerApp({ onOpenDownloads }) {
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
         {statusMsg && (
-          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#008E46] text-xs font-bold flex items-center justify-between">
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#008741] text-xs font-bold flex items-center justify-between">
             <span>{statusMsg}</span>
             <button onClick={() => setStatusMsg('')} className="underline ml-2">Dismiss</button>
           </div>
@@ -273,13 +273,13 @@ export function CustomerApp({ onOpenDownloads }) {
                     onClick={() => setServiceType(s.id)}
                     className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col gap-1.5 ${
                       active
-                        ? 'bg-white border-[#00A651] shadow-sm'
-                        : 'bg-white/70 border-[#E6E9F2] text-slate-600 hover:bg-white'
+                        ? 'bg-white border-[#009E4D] shadow-sm'
+                        : 'bg-white/70 border-slate-200/80 text-slate-600 hover:bg-white'
                     }`}
                   >
                     <span
                       className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                        active ? 'bg-[#00A651] text-white' : 'bg-[#F4F6FB] text-slate-600'
+                        active ? 'bg-[#009E4D] text-white' : 'bg-slate-50/80 text-slate-600'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -292,14 +292,14 @@ export function CustomerApp({ onOpenDownloads }) {
             </div>
 
             {/* Pickup & Drop Card */}
-            <div className="bg-white border border-[#E6E9F2] rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-600 block mb-1">Pickup Area (Mansehra)</label>
                   <select
                     value={pickupZone}
                     onChange={(e) => setPickupZone(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
                     {bootstrap.zones.map((z) => (
                       <option key={z.id} value={z.name}>
@@ -316,18 +316,18 @@ export function CustomerApp({ onOpenDownloads }) {
                     placeholder="e.g. Near Lari Adda Gate 1"
                     value={pickupAddress}
                     onChange={(e) => setPickupAddress(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#EEF1F7]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="font-bold text-slate-600 block mb-1">Drop Area (Mansehra)</label>
                   <select
                     value={dropZone}
                     onChange={(e) => setDropZone(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
                     {bootstrap.zones.map((z) => (
                       <option key={z.id} value={z.name}>
@@ -344,15 +344,15 @@ export function CustomerApp({ onOpenDownloads }) {
                     placeholder="e.g. Sector B House 12"
                     value={dropAddress}
                     onChange={(e) => setDropAddress(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-[#EEF1F7]">
+              <div className="pt-2 border-t border-slate-100">
                 <div className="flex justify-between font-bold text-slate-700 mb-1">
                   <span>Approximate Route Distance</span>
-                  <span className="mono-num text-[#00A651]">{distanceKm} km</span>
+                  <span className="mono-num text-[#009E4D]">{distanceKm} km</span>
                 </div>
                 <input
                   type="range"
@@ -361,25 +361,25 @@ export function CustomerApp({ onOpenDownloads }) {
                   step="0.5"
                   value={distanceKm}
                   onChange={(e) => setDistanceKm(Number(e.target.value))}
-                  className="w-full accent-[#00A651]"
+                  className="w-full accent-[#009E4D]"
                 />
               </div>
 
               {serviceType === 'parcel' && (
-                <div className="p-3 rounded-2xl bg-[#F4F6FB] border border-[#E6E9F2] grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="p-3 rounded-2xl bg-slate-50/80 border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <input
                     type="text"
                     placeholder="Receiver Name"
                     value={receiverName}
                     onChange={(e) => setReceiverName(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-white"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-white"
                   />
                   <input
                     type="text"
                     placeholder="Receiver Phone"
                     value={receiverPhone}
                     onChange={(e) => setReceiverPhone(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-white"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-white"
                   />
                   <input
                     type="number"
@@ -387,18 +387,18 @@ export function CustomerApp({ onOpenDownloads }) {
                     placeholder="COD Cash (Rs.)"
                     value={codAmount}
                     onChange={(e) => setCodAmount(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-white mono-num"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-white mono-num"
                   />
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#EEF1F7]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="font-bold text-slate-600 block mb-1">Payment Method</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
                     <option value="cash">Cash to Motorbike Rider</option>
                     <option value="easypaisa">EasyPaisa (to Admin Source)</option>
@@ -412,7 +412,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     placeholder="Optional code"
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num uppercase"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num uppercase"
                   />
                   {promoError && <div className="text-[11px] text-rose-600 mt-1">{promoError}</div>}
                 </div>
@@ -423,7 +423,7 @@ export function CustomerApp({ onOpenDownloads }) {
                 placeholder="Instructions for captain (optional)"
                 value={customerNotes}
                 onChange={(e) => setCustomerNotes(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
             </div>
 
@@ -431,11 +431,11 @@ export function CustomerApp({ onOpenDownloads }) {
             <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <div className="text-xs text-slate-400">Guaranteed Total Fare</div>
-                <div className="text-3xl font-extrabold mono-num text-[#00A651]">
+                <div className="text-3xl font-extrabold mono-num text-[#009E4D]">
                   Rs. {estimate?.estimated_fare ?? fallbackFare}
                 </div>
                 {estimate?.discount_amount > 0 && (
-                  <div className="text-xs text-[#EC1FA8] font-semibold">
+                  <div className="text-xs text-teal-600 font-semibold">
                     Promo saved Rs. {estimate.discount_amount}
                   </div>
                 )}
@@ -443,7 +443,7 @@ export function CustomerApp({ onOpenDownloads }) {
               <button
                 type="submit"
                 disabled={busy}
-                className="px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-[#00A651] hover:bg-[#008E46] text-white shadow-lg transition disabled:opacity-60"
+                className="px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-[#009E4D] hover:bg-[#008741] text-white shadow-lg transition disabled:opacity-60"
               >
                 {busy ? 'Dispatching...' : 'Confirm & Find Motorbike Rider'}
               </button>
@@ -454,7 +454,7 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 2: MY RIDES */}
         {tab === 'rides' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 bg-white border border-[#E6E9F2] p-1 rounded-2xl text-xs font-bold">
+            <div className="grid grid-cols-3 bg-white border border-slate-200/80 p-1 rounded-2xl text-xs font-bold">
               {[
                 ['active', `Active (${activeRides.length})`],
                 ['completed', `Completed (${completedRides.length})`],
@@ -464,7 +464,7 @@ export function CustomerApp({ onOpenDownloads }) {
                   key={id}
                   onClick={() => setRideFilter(id)}
                   className={`py-2 rounded-xl transition ${
-                    rideFilter === id ? 'bg-[#00A651] text-white' : 'text-slate-600'
+                    rideFilter === id ? 'bg-[#009E4D] text-white' : 'text-slate-600'
                   }`}
                 >
                   {label}
@@ -473,12 +473,12 @@ export function CustomerApp({ onOpenDownloads }) {
             </div>
 
             {shownRides.length === 0 ? (
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-8 text-center text-sm text-slate-500">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-sm text-slate-500">
                 No rides in this list yet.
               </div>
             ) : (
               shownRides.map((b) => (
-                <div key={b.id} className="bg-white border border-[#E6E9F2] rounded-2xl p-4 space-y-3 text-xs">
+                <div key={b.id} className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold mono-num text-sm text-slate-900">{b.booking_code}</span>
@@ -489,13 +489,13 @@ export function CustomerApp({ onOpenDownloads }) {
 
                   <div className="space-y-1 text-slate-700">
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#00A651] shrink-0 mt-0.5" />
+                      <MapPin className="w-3.5 h-3.5 text-[#009E4D] shrink-0 mt-0.5" />
                       <span>
                         <strong>From:</strong> {b.pickup_zone} — {b.pickup_address}
                       </span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#EC1FA8] shrink-0 mt-0.5" />
+                      <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
                       <span>
                         <strong>To:</strong> {b.drop_zone} — {b.drop_address}
                       </span>
@@ -504,7 +504,7 @@ export function CustomerApp({ onOpenDownloads }) {
 
                   {/* Assigned Captain Box */}
                   {b.rider ? (
-                    <div className="p-3 rounded-xl bg-[#F4F6FB] border border-[#E6E9F2] flex items-center justify-between gap-2">
+                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between gap-2">
                       <div>
                         <div className="font-bold text-slate-900 text-sm">{b.rider.full_name}</div>
                         <div className="text-slate-500 mono-num">
@@ -513,7 +513,7 @@ export function CustomerApp({ onOpenDownloads }) {
                       </div>
                       <a
                         href={`tel:${b.rider.phone}`}
-                        className="px-3 py-2 rounded-xl bg-[#00A651] text-white font-bold inline-flex items-center gap-1"
+                        className="px-3 py-2 rounded-xl bg-[#009E4D] text-white font-bold inline-flex items-center gap-1"
                       >
                         <Phone className="w-3.5 h-3.5" />
                         Call
@@ -528,7 +528,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     )
                   )}
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[#EEF1F7]">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                     <div className="mono-num font-extrabold text-sm text-slate-900">
                       Fare: Rs. {b.final_fare} <span className="font-normal text-slate-500">({b.payment_method})</span>
                     </div>
@@ -544,7 +544,7 @@ export function CustomerApp({ onOpenDownloads }) {
                       {b.status === 'completed' && !b.customer_rating && (
                         <button
                           onClick={() => setRatingTargetId(b.id)}
-                          className="px-3 py-1.5 rounded-lg bg-[#EC1FA8] text-white font-bold"
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-bold"
                         >
                           Rate Captain ★
                         </button>
@@ -559,8 +559,8 @@ export function CustomerApp({ onOpenDownloads }) {
                   </div>
 
                   {ratingTargetId === b.id && (
-                    <form onSubmit={handleRate} className="p-3 rounded-xl bg-fuchsia-50 border border-fuchsia-200 space-y-2">
-                      <div className="font-bold text-[#9C1794]">Rate Your Captain (1–5 Stars)</div>
+                    <form onSubmit={handleRate} className="p-3 rounded-xl bg-teal-50 border border-teal-200 space-y-2">
+                      <div className="font-bold text-teal-800">Rate Your Captain (1–5 Stars)</div>
                       <div className="flex gap-1.5">
                         {[1, 2, 3, 4, 5].map((n) => (
                           <button
@@ -568,7 +568,7 @@ export function CustomerApp({ onOpenDownloads }) {
                             type="button"
                             onClick={() => setRatingStars(n)}
                             className={`px-3 py-1 rounded-lg font-bold ${
-                              ratingStars >= n ? 'bg-amber-500 text-white' : 'bg-white border border-[#E6E9F2]'
+                              ratingStars >= n ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200/80'
                             }`}
                           >
                             {n}★
@@ -580,16 +580,16 @@ export function CustomerApp({ onOpenDownloads }) {
                         placeholder="Short feedback (optional)"
                         value={ratingFeedback}
                         onChange={(e) => setRatingFeedback(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-[#E6E9F2] bg-white"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200/80 bg-white"
                       />
                       <div className="flex gap-2">
-                        <button type="submit" className="px-4 py-1.5 rounded-lg bg-[#00A651] text-white font-bold">
+                        <button type="submit" className="px-4 py-1.5 rounded-lg bg-[#009E4D] text-white font-bold">
                           Submit Rating
                         </button>
                         <button
                           type="button"
                           onClick={() => setRatingTargetId(null)}
-                          className="px-3 py-1.5 rounded-lg bg-white border border-[#E6E9F2]"
+                          className="px-3 py-1.5 rounded-lg bg-white border border-slate-200/80"
                         >
                           Close
                         </button>
@@ -605,11 +605,11 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 3: PAYMENTS & RECEIPTS */}
         {tab === 'payments' && (
           <div className="space-y-4">
-            <div className="bg-white border border-[#E6E9F2] rounded-3xl p-5 flex items-center justify-between">
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 flex items-center justify-between">
               <div>
                 <div className="text-xs text-slate-500 font-semibold">Total Completed Ride Spend</div>
                 <div className="text-3xl font-extrabold mono-num text-slate-900">Rs. {totalSpent.toFixed(0)}</div>
-                <div className="text-xs text-[#00A651] font-semibold mt-0.5">
+                <div className="text-xs text-[#009E4D] font-semibold mt-0.5">
                   {completedRides.length} completed trips
                 </div>
               </div>
@@ -622,7 +622,7 @@ export function CustomerApp({ onOpenDownloads }) {
               </button>
             </div>
 
-            <div className="bg-white border border-[#E6E9F2] rounded-2xl divide-y divide-[#EEF1F7]">
+            <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100">
               {completedRides.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">No completed receipts yet.</div>
               ) : (
@@ -633,7 +633,7 @@ export function CustomerApp({ onOpenDownloads }) {
                       <div className="text-slate-500">{b.pickup_zone} → {b.drop_zone}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-extrabold mono-num text-sm text-[#00A651]">Rs. {b.final_fare}</div>
+                      <div className="font-extrabold mono-num text-sm text-[#009E4D]">Rs. {b.final_fare}</div>
                       <div className="text-slate-500 uppercase">{b.payment_method}</div>
                     </div>
                   </div>
@@ -646,23 +646,23 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 4: MENU & SUPPORT */}
         {tab === 'menu' && (
           <div className="space-y-4">
-            <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 flex items-center justify-between">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex items-center justify-between">
               <div>
                 <div className="text-base font-extrabold text-slate-900">{user?.full_name}</div>
                 <div className="text-xs text-slate-500 mono-num">{user?.phone} · Customer Account</div>
               </div>
               <button
                 onClick={onOpenDownloads}
-                className="px-4 py-2 rounded-xl bg-[#EC1FA8] text-white text-xs font-bold inline-flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
                 Get APK / EXE
               </button>
             </div>
 
-            <form onSubmit={handleTicketSubmit} className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3 text-xs">
+            <form onSubmit={handleTicketSubmit} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
               <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
-                <HelpCircle className="w-4 h-4 text-[#00A651]" />
+                <HelpCircle className="w-4 h-4 text-[#009E4D]" />
                 Complaint &amp; Support Desk
               </div>
               <input
@@ -671,7 +671,7 @@ export function CustomerApp({ onOpenDownloads }) {
                 placeholder="Subject (e.g. Fare question or lost item)"
                 value={ticketForm.subject}
                 onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
               <textarea
                 rows={3}
@@ -679,25 +679,25 @@ export function CustomerApp({ onOpenDownloads }) {
                 placeholder="Describe your issue..."
                 value={ticketForm.message}
                 onChange={(e) => setTicketForm({ ...ticketForm, message: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
-              <button type="submit" className="px-4 py-2.5 rounded-xl bg-[#00A651] text-white font-bold">
+              <button type="submit" className="px-4 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
                 Send to Admin Support
               </button>
             </form>
 
             {tickets.length > 0 && (
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5 text-xs">
                 <div className="font-bold text-slate-900">My Support Tickets</div>
                 {tickets.map((t) => (
-                  <div key={t.id} className="p-3 rounded-xl bg-[#F4F6FB] border border-[#E6E9F2] space-y-1">
+                  <div key={t.id} className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
                     <div className="flex justify-between font-bold">
                       <span>{t.subject}</span>
                       <StatusBadge value={t.status} />
                     </div>
                     <p className="text-slate-600">{t.message}</p>
                     {t.admin_reply && (
-                      <div className="mt-1 p-2 rounded-lg bg-emerald-50 text-[#008E46] font-semibold">
+                      <div className="mt-1 p-2 rounded-lg bg-emerald-50 text-[#008741] font-semibold">
                         Admin Reply: {t.admin_reply}
                       </div>
                     )}
@@ -710,7 +710,7 @@ export function CustomerApp({ onOpenDownloads }) {
       </main>
 
       {/* Bottom Mobile Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#E6E9F2] no-print">
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80 no-print">
         <div className="max-w-3xl mx-auto grid grid-cols-4">
           {[
             { id: 'book', label: 'Book', icon: Bike },
@@ -725,7 +725,7 @@ export function CustomerApp({ onOpenDownloads }) {
                 key={item.id}
                 onClick={() => setTab(item.id)}
                 className={`py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
-                  active ? 'border-[#00A651] text-[#00A651]' : 'border-transparent text-slate-500'
+                  active ? 'border-[#009E4D] text-[#009E4D]' : 'border-transparent text-slate-500'
                 }`}
               >
                 <Icon className="w-4 h-4" />

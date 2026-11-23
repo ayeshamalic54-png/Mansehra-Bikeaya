@@ -105,7 +105,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
 
     return (
       <div className="space-y-4 text-xs">
-        <form onSubmit={handleSaveRelease} className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3">
+        <form onSubmit={handleSaveRelease} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="font-extrabold text-sm text-slate-900">
               {editingReleaseId ? 'Edit Release Build' : 'Publish Android (.apk) or Windows (.exe) Build'}
@@ -120,7 +120,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             <select
               value={relForm.platform}
               onChange={(e) => setRelForm({ ...relForm, platform: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-bold"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
             >
               <option value="android_apk">Android (.apk)</option>
               <option value="windows_exe">Windows (.exe)</option>
@@ -131,7 +131,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Version (1.0.1)"
               value={relForm.version}
               onChange={(e) => setRelForm({ ...relForm, version: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
             <input
               type="text"
@@ -139,7 +139,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="File Name"
               value={relForm.file_name}
               onChange={(e) => setRelForm({ ...relForm, file_name: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
             <input
               type="number"
@@ -147,7 +147,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Size MB"
               value={relForm.file_size_mb}
               onChange={(e) => setRelForm({ ...relForm, file_size_mb: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
           </div>
           <input
@@ -156,28 +156,28 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             placeholder="Download URL"
             value={relForm.download_url}
             onChange={(e) => setRelForm({ ...relForm, download_url: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
           />
           <input
             type="text"
             placeholder="Release Notes"
             value={relForm.release_notes}
             onChange={(e) => setRelForm({ ...relForm, release_notes: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
           />
-          <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#00A651] text-white font-bold">
+          <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
             {editingReleaseId ? 'Save Release Changes' : 'Publish to /downloads Page'}
           </button>
         </form>
 
-        <div className="bg-white border border-[#E6E9F2] rounded-2xl p-4 space-y-2">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2">
           <div className="font-extrabold text-sm">Published Builds</div>
           {releases.map((rel) => (
-            <div key={rel.id} className="p-3 rounded-xl bg-[#F4F6FB] flex flex-wrap justify-between items-center gap-2">
+            <div key={rel.id} className="p-3 rounded-xl bg-slate-50/80 flex flex-wrap justify-between items-center gap-2">
               <div>
                 <div className="font-bold">
                   {rel.file_name} (v{rel.version}) · {rel.platform}{' '}
-                  {rel.is_latest && <span className="px-2 py-0.5 rounded bg-emerald-50 text-[#008E46]">Latest</span>}
+                  {rel.is_latest && <span className="px-2 py-0.5 rounded bg-emerald-50 text-[#008741]">Latest</span>}
                 </div>
                 <div className="text-slate-500">{rel.download_url}</div>
               </div>
@@ -196,7 +196,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                       is_latest: rel.is_latest,
                     });
                   }}
-                  className="p-1.5 rounded-lg bg-white border border-[#E6E9F2]"
+                  className="p-1.5 rounded-lg bg-white border border-slate-200/80"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -224,12 +224,12 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
     return (
       <div className="space-y-3 text-xs">
         {tickets.length === 0 ? (
-          <div className="bg-white border border-[#E6E9F2] rounded-2xl p-6 text-center text-slate-500">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 text-center text-slate-500">
             No support complaints submitted yet.
           </div>
         ) : (
           tickets.map((t) => (
-            <div key={t.id} className="bg-white border border-[#E6E9F2] rounded-2xl p-4 space-y-2">
+            <div key={t.id} className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2">
               <div className="flex justify-between items-center font-bold">
                 <span>{t.subject} — {t.user_name} ({t.user_phone})</span>
                 <div className="flex items-center gap-2">
@@ -267,9 +267,9 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                   required
                   defaultValue={t.admin_reply || ''}
                   placeholder="Type reply to resolve..."
-                  className="flex-1 px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#00A651] text-white font-bold">
+                <button type="submit" className="px-4 py-2 rounded-xl bg-[#009E4D] text-white font-bold">
                   Reply &amp; Resolve
                 </button>
               </form>
@@ -332,7 +332,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
         {/* Zones CRUD */}
-        <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
           <div className="flex justify-between items-center">
             <span className="font-extrabold text-sm">Mansehra Zones</span>
             {editingZoneId && (
@@ -345,13 +345,13 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Zone Name"
               value={zoneForm.name}
               onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
             <input
               placeholder="Area Tag (e.g. City Core)"
               value={zoneForm.area_tag}
               onChange={(e) => setZoneForm({ ...zoneForm, area_tag: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
             <input
               type="number"
@@ -359,20 +359,20 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Approx Km"
               value={zoneForm.approx_km_from_center}
               onChange={(e) => setZoneForm({ ...zoneForm, approx_km_from_center: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
             <input
               type="number"
               placeholder="Surcharge Rs."
               value={zoneForm.surcharge}
               onChange={(e) => setZoneForm({ ...zoneForm, surcharge: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
-            <button type="submit" className="col-span-2 py-2 rounded-xl bg-[#00A651] text-white font-bold">
+            <button type="submit" className="col-span-2 py-2 rounded-xl bg-[#009E4D] text-white font-bold">
               {editingZoneId ? 'Save Zone Changes' : '+ Add Zone'}
             </button>
           </form>
-          <div className="divide-y divide-[#EEF1F7] max-h-72 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
             {zones.map((z) => (
               <div key={z.id} className="py-2.5 flex justify-between items-center gap-2">
                 <div>
@@ -415,7 +415,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         </div>
 
         {/* Promos CRUD */}
-        <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
           <div className="flex justify-between items-center">
             <span className="font-extrabold text-sm">Promo Codes</span>
             {editingPromoId && (
@@ -428,12 +428,12 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Code (EID50)"
               value={promoForm.code}
               onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value.toUpperCase() })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num uppercase"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num uppercase"
             />
             <select
               value={promoForm.discount_type}
               onChange={(e) => setPromoForm({ ...promoForm, discount_type: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
             >
               <option value="fixed">Fixed (Rs.)</option>
               <option value="percent">Percent (%)</option>
@@ -444,7 +444,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Discount Value"
               value={promoForm.discount_value}
               onChange={(e) => setPromoForm({ ...promoForm, discount_value: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
             <input
               type="number"
@@ -452,13 +452,13 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="Min Fare Rs."
               value={promoForm.min_fare}
               onChange={(e) => setPromoForm({ ...promoForm, min_fare: e.target.value })}
-              className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
-            <button type="submit" className="col-span-2 py-2 rounded-xl bg-[#EC1FA8] text-white font-bold">
+            <button type="submit" className="col-span-2 py-2 rounded-xl bg-teal-600 text-white font-bold">
               {editingPromoId ? 'Save Promo Changes' : '+ Add Promo'}
             </button>
           </form>
-          <div className="divide-y divide-[#EEF1F7]">
+          <div className="divide-y divide-slate-100">
             {promos.map((p) => (
               <div key={p.id} className="py-2.5 flex justify-between items-center gap-2">
                 <div>
@@ -470,7 +470,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                       await apiRequest(`/api/admin/promos/${p.id}/toggle`, { method: 'PATCH' });
                       await loadSubpage();
                     }}
-                    className={`px-2 py-1 rounded-lg font-bold ${p.is_active ? 'bg-emerald-50 text-[#008E46]' : 'bg-slate-100 text-slate-500'}`}
+                    className={`px-2 py-1 rounded-lg font-bold ${p.is_active ? 'bg-emerald-50 text-[#008741]' : 'bg-slate-100 text-slate-500'}`}
                   >
                     {p.is_active ? 'Active' : 'Off'}
                   </button>
@@ -514,9 +514,9 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
   // Admin Security, Own Password, & System Settings
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
-      <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-4">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4">
         <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
-          <ShieldCheck className="w-4 h-4 text-[#00A651]" />
+          <ShieldCheck className="w-4 h-4 text-[#009E4D]" />
           Admin Profile &amp; Password Control
         </div>
         <form
@@ -538,7 +538,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             placeholder="Admin Full Name"
             value={adminProfile.full_name}
             onChange={(e) => setAdminProfile({ ...adminProfile, full_name: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
           />
           <input
             type="text"
@@ -546,14 +546,14 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             placeholder="Admin Phone Login"
             value={adminProfile.phone}
             onChange={(e) => setAdminProfile({ ...adminProfile, phone: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
           />
           <input
             type="email"
             placeholder="Admin Email"
             value={adminProfile.email}
             onChange={(e) => setAdminProfile({ ...adminProfile, email: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
           />
           <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold">
             Save Admin Profile
@@ -574,10 +574,10 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               onNotify(err.message, true);
             }
           }}
-          className="pt-3 border-t border-[#EEF1F7] space-y-2.5"
+          className="pt-3 border-t border-slate-100 space-y-2.5"
         >
           <div className="font-bold text-slate-900 flex items-center gap-1.5">
-            <KeyRound className="w-3.5 h-3.5 text-[#EC1FA8]" />
+            <KeyRound className="w-3.5 h-3.5 text-teal-600" />
             Change Admin Login Password
           </div>
           <div className="flex gap-2">
@@ -588,16 +588,16 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               placeholder="New Admin Password (min 4 chars)"
               value={adminNewPassword}
               onChange={(e) => setAdminNewPassword(e.target.value)}
-              className="flex-1 px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
-            <button type="submit" className="px-4 py-2 rounded-xl bg-[#EC1FA8] text-white font-bold">
+            <button type="submit" className="px-4 py-2 rounded-xl bg-teal-600 text-white font-bold">
               Update Password
             </button>
           </div>
         </form>
       </div>
 
-      <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
         <div className="font-extrabold text-sm text-slate-900">Business Settings</div>
         {Object.entries(sysSettings).map(([k, v]) => (
           <div key={k} className="flex items-center gap-2">
@@ -606,7 +606,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
               type="text"
               value={v}
               onChange={(e) => setSysSettings({ ...sysSettings, [k]: e.target.value })}
-              className="flex-1 px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
             <button
               onClick={async () => {
@@ -614,7 +614,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 onNotify(`Saved ${k}!`);
                 onRefreshBootstrap();
               }}
-              className="px-3 py-2 rounded-xl bg-[#00A651] text-white font-bold"
+              className="px-3 py-2 rounded-xl bg-[#009E4D] text-white font-bold"
             >
               Save
             </button>

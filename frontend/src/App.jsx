@@ -14,9 +14,9 @@ function AppRouter() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F4F6FB] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="w-10 h-10 rounded-2xl bg-[#00A651] mx-auto animate-pulse" />
+          <div className="w-10 h-10 rounded-2xl bg-[#009E4D] mx-auto animate-pulse" />
           <div className="text-sm font-bold text-slate-700">Loading Mansehra Bikeaya...</div>
         </div>
       </div>

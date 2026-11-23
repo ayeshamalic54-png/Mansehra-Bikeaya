@@ -3,9 +3,9 @@ import React from 'react';
 export function StatCard({ label, value, subtext, accent = 'default', icon: Icon }) {
   const accentText =
     accent === 'green'
-      ? 'text-[#00A651]'
+      ? 'text-[#009E4D]'
       : accent === 'magenta'
-      ? 'text-[#EC1FA8]'
+      ? 'text-teal-700'
       : accent === 'amber'
       ? 'text-amber-600'
       : accent === 'rose'
@@ -13,11 +13,11 @@ export function StatCard({ label, value, subtext, accent = 'default', icon: Icon
       : 'text-slate-900';
 
   return (
-    <div className="bg-white border border-[#E6E9F2] rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between gap-2">
+    <div className="card-elevated rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-2 transition hover:border-slate-300/90">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-slate-500">{label}</span>
         {Icon && (
-          <span className="w-8 h-8 rounded-xl bg-[#F4F6FB] flex items-center justify-center text-slate-600">
+          <span className="w-8 h-8 rounded-xl bg-slate-100/80 flex items-center justify-center text-slate-600">
             <Icon className="w-4 h-4" />
           </span>
         )}

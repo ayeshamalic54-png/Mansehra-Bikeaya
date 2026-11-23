@@ -248,7 +248,7 @@ export function AdminDashboard({ onOpenDownloads }) {
   const kpis = overview?.kpis || {};
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] flex">
+    <div className="min-h-screen flex">
       {/* Sidebar Desktop + Mobile Drawer */}
       <aside
         className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-slate-950 text-slate-100 flex flex-col justify-between p-4 transition-transform duration-200 no-print ${
@@ -281,7 +281,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                       }}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
                         active
-                          ? 'bg-[#00A651] text-white shadow-sm'
+                          ? 'bg-[#009E4D] text-white shadow-sm'
                           : 'text-slate-300 hover:bg-slate-900 hover:text-white'
                       }`}
                     >
@@ -290,7 +290,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                         {item.label}
                       </span>
                       {item.id === 'dispatch' && kpis.pending_dispatch_count > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-[#EC1FA8] text-white text-[10px] mono-num">
+                        <span className="px-1.5 py-0.5 rounded-full bg-teal-600 text-white text-[10px] mono-num">
                           {kpis.pending_dispatch_count}
                         </span>
                       )}
@@ -307,7 +307,7 @@ export function AdminDashboard({ onOpenDownloads }) {
             onClick={onOpenDownloads}
             className="w-full py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 font-bold flex items-center justify-center gap-1.5"
           >
-            <Download className="w-3.5 h-3.5 text-[#EC1FA8]" />
+            <Download className="w-3.5 h-3.5 text-teal-600" />
             APK / EXE Downloads
           </button>
           <button
@@ -322,11 +322,11 @@ export function AdminDashboard({ onOpenDownloads }) {
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-20 bg-white border-b border-[#E6E9F2] px-4 sm:px-6 h-16 flex items-center justify-between gap-3 no-print">
+        <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-3 no-print">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-xl border border-[#E6E9F2] text-slate-700"
+              className="lg:hidden p-2 rounded-xl border border-slate-200/80 text-slate-700"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -343,13 +343,13 @@ export function AdminDashboard({ onOpenDownloads }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSubpage('manual_booking')}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#00A651] hover:bg-[#008E46]"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#009E4D] hover:bg-[#008741]"
             >
               + Manual Booking
             </button>
             <button
               onClick={() => setSubpage('settlements')}
-              className="hidden sm:inline-flex px-3.5 py-2 rounded-xl text-xs font-bold border border-[#E6E9F2] bg-[#F4F6FB] hover:bg-slate-200"
+              className="hidden sm:inline-flex px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200/80 bg-slate-50/80 hover:bg-slate-200"
             >
               Collect Rider Cash
             </button>
@@ -368,7 +368,7 @@ export function AdminDashboard({ onOpenDownloads }) {
               className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between ${
                 toast.isError
                   ? 'bg-rose-50 border-rose-200 text-rose-700'
-                  : 'bg-emerald-50 border-emerald-200 text-[#008E46]'
+                  : 'bg-emerald-50 border-emerald-200 text-[#008741]'
               }`}
             >
               <span>{toast.text}</span>
@@ -381,7 +381,7 @@ export function AdminDashboard({ onOpenDownloads }) {
             <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4">
               <form
                 onSubmit={handleSaveEditedBooking}
-                className="bg-white border border-[#E6E9F2] rounded-2xl p-5 w-full max-w-lg space-y-3 text-xs shadow-xl"
+                className="bg-white border border-slate-200/80 rounded-2xl p-5 w-full max-w-lg space-y-3 text-xs shadow-xl"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-sm text-slate-900">
@@ -395,7 +395,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   <select
                     value={editingBooking.service_type}
                     onChange={(e) => setEditingBooking({ ...editingBooking, service_type: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     <option value="bike_ride">Bike Ride</option>
                     <option value="parcel">Parcel Delivery</option>
@@ -408,12 +408,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                     placeholder="Final Fare (Rs.)"
                     value={editingBooking.final_fare}
                     onChange={(e) => setEditingBooking({ ...editingBooking, final_fare: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                   <select
                     value={editingBooking.pickup_zone}
                     onChange={(e) => setEditingBooking({ ...editingBooking, pickup_zone: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     {bootstrap.zones.map((z) => (
                       <option key={z.id} value={z.name}>{z.name}</option>
@@ -424,12 +424,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                     required
                     value={editingBooking.pickup_address}
                     onChange={(e) => setEditingBooking({ ...editingBooking, pickup_address: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   />
                   <select
                     value={editingBooking.drop_zone}
                     onChange={(e) => setEditingBooking({ ...editingBooking, drop_zone: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     {bootstrap.zones.map((z) => (
                       <option key={z.id} value={z.name}>{z.name}</option>
@@ -440,12 +440,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                     required
                     value={editingBooking.drop_address}
                     onChange={(e) => setEditingBooking({ ...editingBooking, drop_address: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   />
                   <select
                     value={editingBooking.payment_method}
                     onChange={(e) => setEditingBooking({ ...editingBooking, payment_method: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     <option value="cash">Cash</option>
                     <option value="easypaisa">EasyPaisa</option>
@@ -454,7 +454,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   <select
                     value={editingBooking.payment_collector}
                     onChange={(e) => setEditingBooking({ ...editingBooking, payment_collector: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     <option value="rider">Collected by Rider</option>
                     <option value="admin">Collected by Admin</option>
@@ -465,10 +465,10 @@ export function AdminDashboard({ onOpenDownloads }) {
                   placeholder="Notes"
                   value={editingBooking.customer_notes || ''}
                   onChange={(e) => setEditingBooking({ ...editingBooking, customer_notes: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
                 <div className="flex gap-2 pt-1">
-                  <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#00A651] text-white font-bold">
+                  <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
                     Save Booking Changes
                   </button>
                   <button type="button" onClick={() => setEditingBooking(null)} className="px-4 py-2.5 rounded-xl border">
@@ -525,16 +525,16 @@ export function AdminDashboard({ onOpenDownloads }) {
                 />
               </div>
 
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl overflow-hidden text-xs">
-                <div className="p-4 border-b border-[#E6E9F2] flex items-center justify-between">
+              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
+                <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
                   <span className="font-extrabold text-sm text-slate-900">Recent Rides &amp; Commission Split</span>
-                  <button onClick={() => setSubpage('dispatch')} className="font-bold text-[#00A651] underline">
+                  <button onClick={() => setSubpage('dispatch')} className="font-bold text-[#009E4D] underline">
                     View Full Dispatch Queue →
                   </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
-                    <thead className="bg-[#F4F6FB] text-slate-500 border-b border-[#E6E9F2]">
+                    <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
                       <tr>
                         <th className="p-3.5">Code</th>
                         <th className="p-3.5">Route</th>
@@ -545,7 +545,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                         <th className="p-3.5">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EEF1F7]">
+                    <tbody className="divide-y divide-slate-100">
                       {overview.recent_bookings.map((b) => (
                         <tr key={b.id}>
                           <td className="p-3.5 mono-num font-bold">{b.booking_code}</td>
@@ -560,7 +560,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                               <select
                                 defaultValue=""
                                 onChange={(e) => handleAssignRider(b.id, e.target.value)}
-                                className="px-2 py-1 rounded-lg border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                                className="px-2 py-1 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
                               >
                                 <option value="">Assign Captain...</option>
                                 {verifiedRiders.map((r) => (
@@ -572,20 +572,20 @@ export function AdminDashboard({ onOpenDownloads }) {
                             )}
                           </td>
                           <td className="p-3.5 mono-num font-bold">Rs. {b.final_fare}</td>
-                          <td className="p-3.5 mono-num font-extrabold text-[#00A651]">Rs. {b.commission_amount}</td>
+                          <td className="p-3.5 mono-num font-extrabold text-[#009E4D]">Rs. {b.commission_amount}</td>
                           <td className="p-3.5"><StatusBadge value={b.status} /></td>
                           <td className="p-3.5 whitespace-nowrap space-x-1.5">
                             {b.rider_id && ['assigned', 'arrived', 'in_progress'].includes(b.status) && (
                               <button
                                 onClick={() => handleAdminStatus(b.id, 'completed')}
-                                className="px-2.5 py-1 rounded-lg bg-[#00A651] text-white font-bold"
+                                className="px-2.5 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
                               >
                                 Complete
                               </button>
                             )}
                             <button
                               onClick={() => setEditingBooking(b)}
-                              className="p-1.5 rounded-lg bg-[#F4F6FB] text-slate-700"
+                              className="p-1.5 rounded-lg bg-slate-50/80 text-slate-700"
                               title="Edit Booking"
                             >
                               <Pencil className="w-3.5 h-3.5 inline" />
@@ -610,7 +610,7 @@ export function AdminDashboard({ onOpenDownloads }) {
           {/* 2. DISPATCH QUEUE */}
           {subpage === 'dispatch' && (
             <div className="space-y-4">
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl p-4 flex flex-wrap gap-3 items-center justify-between text-xs">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap gap-3 items-center justify-between text-xs">
                 <div className="flex flex-wrap gap-1.5">
                   {['', 'pending', 'assigned', 'in_progress', 'completed', 'cancelled'].map((st) => (
                     <button
@@ -619,7 +619,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                       className={`px-3 py-1.5 rounded-xl font-bold capitalize ${
                         bookingStatusFilter === st
                           ? 'bg-slate-900 text-white'
-                          : 'bg-[#F4F6FB] text-slate-600'
+                          : 'bg-slate-50/80 text-slate-600'
                       }`}
                     >
                       {st ? st.replace('_', ' ') : 'All Rides'}
@@ -632,17 +632,17 @@ export function AdminDashboard({ onOpenDownloads }) {
                     placeholder="Search code or address..."
                     value={bookingSearch}
                     onChange={(e) => setBookingSearch(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   />
-                  <button onClick={loadBookings} className="px-3 py-1.5 rounded-xl bg-[#00A651] text-white font-bold">
+                  <button onClick={loadBookings} className="px-3 py-1.5 rounded-xl bg-[#009E4D] text-white font-bold">
                     Search
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white border border-[#E6E9F2] rounded-2xl overflow-x-auto text-xs">
+              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-x-auto text-xs">
                 <table className="w-full text-left">
-                  <thead className="bg-[#F4F6FB] text-slate-500 border-b border-[#E6E9F2]">
+                  <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
                     <tr>
                       <th className="p-3.5">Code / Service</th>
                       <th className="p-3.5">Customer</th>
@@ -653,7 +653,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                       <th className="p-3.5">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#EEF1F7]">
+                  <tbody className="divide-y divide-slate-100">
                     {bookings.map((b) => (
                       <tr key={b.id}>
                         <td className="p-3.5">
@@ -673,7 +673,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                             <select
                               value={b.rider_id || ''}
                               onChange={(e) => handleAssignRider(b.id, e.target.value)}
-                              className="px-2 py-1.5 rounded-lg border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                              className="px-2 py-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
                             >
                               <option value="">Select Rider...</option>
                               {verifiedRiders.map((r) => (
@@ -688,14 +688,14 @@ export function AdminDashboard({ onOpenDownloads }) {
                         </td>
                         <td className="p-3.5 mono-num">
                           <div className="font-bold">Rs. {b.final_fare}</div>
-                          <div className="text-[#00A651] font-bold">Comm: Rs. {b.commission_amount}</div>
+                          <div className="text-[#009E4D] font-bold">Comm: Rs. {b.commission_amount}</div>
                         </td>
                         <td className="p-3.5"><StatusBadge value={b.status} /></td>
                         <td className="p-3.5 space-x-1.5 whitespace-nowrap">
                           {b.rider_id && !['completed', 'cancelled'].includes(b.status) && (
                             <button
                               onClick={() => handleAdminStatus(b.id, 'completed')}
-                              className="px-2.5 py-1 rounded-lg bg-[#00A651] text-white font-bold"
+                              className="px-2.5 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
                             >
                               Complete
                             </button>
@@ -710,7 +710,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                           )}
                           <button
                             onClick={() => setEditingBooking(b)}
-                            className="p-1.5 rounded-lg bg-[#F4F6FB] text-slate-700"
+                            className="p-1.5 rounded-lg bg-slate-50/80 text-slate-700"
                             title="Edit Booking"
                           >
                             <Pencil className="w-3.5 h-3.5 inline" />
@@ -733,7 +733,7 @@ export function AdminDashboard({ onOpenDownloads }) {
 
           {/* 3. MANUAL PHONE BOOKING */}
           {subpage === 'manual_booking' && (
-            <form onSubmit={handleCreateManualBooking} className="bg-white border border-[#E6E9F2] rounded-2xl p-6 space-y-4 text-xs max-w-3xl">
+            <form onSubmit={handleCreateManualBooking} className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-4 text-xs max-w-3xl">
               <div className="font-extrabold text-base text-slate-900">
                 Create Phone / WhatsApp Dispatch Booking
               </div>
@@ -744,19 +744,19 @@ export function AdminDashboard({ onOpenDownloads }) {
                   placeholder="Customer Mobile (03...)"
                   value={manualForm.customer_phone}
                   onChange={(e) => setManualForm({ ...manualForm, customer_phone: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
                 <input
                   type="text"
                   placeholder="Customer Name"
                   value={manualForm.customer_name}
                   onChange={(e) => setManualForm({ ...manualForm, customer_name: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
                 <select
                   value={manualForm.service_type}
                   onChange={(e) => setManualForm({ ...manualForm, service_type: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-bold"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
                 >
                   <option value="bike_ride">Bike Ride</option>
                   <option value="parcel">Parcel Delivery</option>
@@ -767,7 +767,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                 <select
                   value={manualForm.pickup_zone}
                   onChange={(e) => setManualForm({ ...manualForm, pickup_zone: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
                   {bootstrap.zones.map((z) => (
                     <option key={z.id} value={z.name}>Pickup: {z.name}</option>
@@ -779,12 +779,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                   placeholder="Pickup exact landmark"
                   value={manualForm.pickup_address}
                   onChange={(e) => setManualForm({ ...manualForm, pickup_address: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
                 <select
                   value={manualForm.drop_zone}
                   onChange={(e) => setManualForm({ ...manualForm, drop_zone: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
                   {bootstrap.zones.map((z) => (
                     <option key={z.id} value={z.name}>Drop: {z.name}</option>
@@ -796,7 +796,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   placeholder="Drop exact landmark"
                   value={manualForm.drop_address}
                   onChange={(e) => setManualForm({ ...manualForm, drop_address: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -807,19 +807,19 @@ export function AdminDashboard({ onOpenDownloads }) {
                   placeholder="Distance (km)"
                   value={manualForm.distance_km}
                   onChange={(e) => setManualForm({ ...manualForm, distance_km: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
                 />
                 <input
                   type="number"
                   placeholder="Override Fare Rs. (optional)"
                   value={manualForm.custom_fare}
                   onChange={(e) => setManualForm({ ...manualForm, custom_fare: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
                 />
                 <select
                   value={manualForm.rider_id}
                   onChange={(e) => setManualForm({ ...manualForm, rider_id: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
                   <option value="">Leave Open in Queue</option>
                   {verifiedRiders.map((r) => (
@@ -827,7 +827,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   ))}
                 </select>
               </div>
-              <button type="submit" className="px-6 py-3 rounded-xl bg-[#00A651] text-white font-extrabold">
+              <button type="submit" className="px-6 py-3 rounded-xl bg-[#009E4D] text-white font-extrabold">
                 Create &amp; Dispatch Ride
               </button>
             </form>

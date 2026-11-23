@@ -175,24 +175,24 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   if (subpage === 'pricing') {
     return (
       <div className="space-y-4">
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-[#008E46] font-medium">
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-[#008741] font-medium">
           <strong>Live Commission &amp; Fare Control:</strong> Adjust your Admin Commission (% or Fixed Rs.), service name, rates, or enable/pause any service anytime. Past completed rides keep their historical snapshot.
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {pricing.map((rule, idx) => (
-            <div key={rule.id} className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b border-[#EEF1F7] pb-2.5 gap-2">
+            <div key={rule.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
                 <input
                   type="text"
                   value={rule.display_name}
                   onChange={(e) => updateRuleField(idx, 'display_name', e.target.value)}
-                  className="font-extrabold text-sm text-slate-900 bg-transparent border-b border-transparent focus:border-[#00A651] focus:outline-none w-full"
+                  className="font-extrabold text-sm text-slate-900 bg-transparent border-b border-transparent focus:border-[#009E4D] focus:outline-none w-full"
                 />
                 <button
                   type="button"
                   onClick={() => updateRuleField(idx, 'is_active', !rule.is_active)}
                   className={`px-2.5 py-1 rounded-lg font-bold shrink-0 ${
-                    rule.is_active ? 'bg-emerald-50 text-[#008E46]' : 'bg-slate-100 text-slate-500'
+                    rule.is_active ? 'bg-emerald-50 text-[#008741]' : 'bg-slate-100 text-slate-500'
                   }`}
                 >
                   {rule.is_active ? 'Active' : 'Paused'}
@@ -206,7 +206,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     type="number"
                     value={rule.base_fare}
                     onChange={(e) => updateRuleField(idx, 'base_fare', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                 </label>
                 <label className="space-y-1">
@@ -215,7 +215,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     type="number"
                     value={rule.per_km_rate}
                     onChange={(e) => updateRuleField(idx, 'per_km_rate', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                 </label>
                 <label className="space-y-1">
@@ -224,7 +224,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     type="number"
                     value={rule.min_fare}
                     onChange={(e) => updateRuleField(idx, 'min_fare', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                 </label>
                 <label className="space-y-1">
@@ -234,7 +234,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     step="0.1"
                     value={rule.peak_multiplier}
                     onChange={(e) => updateRuleField(idx, 'peak_multiplier', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                 </label>
                 <label className="space-y-1">
@@ -242,7 +242,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                   <select
                     value={rule.commission_type}
                     onChange={(e) => updateRuleField(idx, 'commission_type', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
                   >
                     <option value="percent">Percent (%)</option>
                     <option value="fixed">Fixed (Rs.)</option>
@@ -255,14 +255,14 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     step="0.5"
                     value={rule.commission_value}
                     onChange={(e) => updateRuleField(idx, 'commission_value', e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-extrabold text-[#008E46]"
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-extrabold text-[#008741]"
                   />
                 </label>
               </div>
 
               <button
                 onClick={() => handleSavePricing(rule)}
-                className="w-full py-2.5 rounded-xl bg-[#00A651] hover:bg-[#008E46] text-white font-bold inline-flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold inline-flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Save {rule.display_name}
@@ -277,7 +277,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   if (subpage === 'expenses') {
     return (
       <div className="space-y-5">
-        <form onSubmit={handleSaveExpense} className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3 text-xs">
+        <form onSubmit={handleSaveExpense} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
           <div className="flex items-center justify-between">
             <span className="font-extrabold text-sm text-slate-900">
               {editingExpenseId ? 'Edit Business Expense' : 'Log Business Expense (Deducted in Net Profit Report)'}
@@ -308,12 +308,12 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               placeholder="Title (e.g. Office Rent, Flyers)"
               value={expForm.title}
               onChange={(e) => setExpForm({ ...expForm, title: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
             />
             <select
               value={expForm.category}
               onChange={(e) => setExpForm({ ...expForm, category: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
             >
               <option value="office_rent">Office Rent</option>
               <option value="marketing">Marketing / Ads</option>
@@ -329,14 +329,14 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               placeholder="Amount (Rs.)"
               value={expForm.amount}
               onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
             />
             <input
               type="date"
               required
               value={expForm.expense_date}
               onChange={(e) => setExpForm({ ...expForm, expense_date: e.target.value })}
-              className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num"
+              className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
             />
           </div>
           <button
@@ -348,9 +348,9 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           </button>
         </form>
 
-        <div className="bg-white border border-[#E6E9F2] rounded-2xl overflow-hidden text-xs">
+        <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
           <table className="w-full text-left">
-            <thead className="bg-[#F4F6FB] text-slate-500 border-b border-[#E6E9F2]">
+            <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
               <tr>
                 <th className="p-3.5">Date</th>
                 <th className="p-3.5">Title</th>
@@ -359,7 +359,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                 <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EEF1F7]">
+            <tbody className="divide-y divide-slate-100">
               {expenses.map((ex) => (
                 <tr key={ex.id}>
                   <td className="p-3.5 mono-num">{ex.expense_date}</td>
@@ -399,9 +399,9 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   // Default: settlements & lain-dain ledger
   return (
     <div className="space-y-5">
-      <form onSubmit={handleSettlement} className="bg-white border border-[#E6E9F2] rounded-2xl p-5 space-y-3 text-xs">
+      <form onSubmit={handleSettlement} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
         <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
-          <Receipt className="w-4 h-4 text-[#00A651]" />
+          <Receipt className="w-4 h-4 text-[#009E4D]" />
           Record Rider Cash Collection / Settlement (Lain-Dain)
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -409,7 +409,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             required
             value={settForm.rider_id}
             onChange={(e) => setSettForm({ ...settForm, rider_id: e.target.value })}
-            className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-bold"
+            className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
           >
             {balances.map((b) => (
               <option key={b.rider_id} value={b.rider_id}>
@@ -421,7 +421,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           <select
             value={settForm.entry_type}
             onChange={(e) => setSettForm({ ...settForm, entry_type: e.target.value })}
-            className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+            className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
           >
             <option value="settlement_to_admin">Rider Paid Admin (Collect Cash)</option>
             <option value="payout_to_rider">Admin Paid Rider (Digital Payout)</option>
@@ -437,13 +437,13 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             placeholder="Amount (Rs.)"
             value={settForm.amount}
             onChange={(e) => setSettForm({ ...settForm, amount: e.target.value })}
-            className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] mono-num font-bold"
+            className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
           />
 
           <select
             value={settForm.payment_channel}
             onChange={(e) => setSettForm({ ...settForm, payment_channel: e.target.value })}
-            className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] font-semibold"
+            className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
           >
             <option value="cash">Cash Handover</option>
             <option value="easypaisa">EasyPaisa</option>
@@ -456,24 +456,24 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             placeholder="Ref # / Note"
             value={settForm.note}
             onChange={(e) => setSettForm({ ...settForm, note: e.target.value })}
-            className="px-3 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB]"
+            className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
           />
         </div>
         <button
           type="submit"
-          className="px-5 py-2.5 rounded-xl bg-[#00A651] hover:bg-[#008E46] text-white font-bold"
+          className="px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
         >
           Confirm &amp; Update Rider Ledger
         </button>
       </form>
 
-      <div className="bg-white border border-[#E6E9F2] rounded-2xl overflow-hidden text-xs">
-        <div className="p-4 border-b border-[#E6E9F2] font-extrabold text-sm text-slate-900">
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
+        <div className="p-4 border-b border-slate-200/80 font-extrabold text-sm text-slate-900">
           Rider Hisab Summary (Who Owes How Much)
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#F4F6FB] text-slate-500 border-b border-[#E6E9F2]">
+            <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
               <tr>
                 <th className="p-3.5">Captain</th>
                 <th className="p-3.5">Trips</th>
@@ -485,7 +485,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                 <th className="p-3.5">Quick Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EEF1F7]">
+            <tbody className="divide-y divide-slate-100">
               {balances.map((r) => (
                 <tr key={r.rider_id}>
                   <td className="p-3.5">
@@ -494,7 +494,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                   </td>
                   <td className="p-3.5 mono-num font-bold">{r.total_trips}</td>
                   <td className="p-3.5 mono-num">Rs. {r.total_gross_collected}</td>
-                  <td className="p-3.5 mono-num text-[#00A651] font-bold">Rs. {r.total_net_earned}</td>
+                  <td className="p-3.5 mono-num text-[#009E4D] font-bold">Rs. {r.total_net_earned}</td>
                   <td className="p-3.5 mono-num font-bold">Rs. {r.total_commission_generated}</td>
                   <td className="p-3.5 mono-num">Rs. {r.total_settled_to_admin}</td>
                   <td className="p-3.5 mono-num font-extrabold">
@@ -514,7 +514,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                             entry_type: 'settlement_to_admin',
                           })
                         }
-                        className="px-2.5 py-1 rounded-lg bg-emerald-50 text-[#008E46] font-bold border border-emerald-200"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 text-[#008741] font-bold border border-emerald-200"
                       >
                         Fill Full Due
                       </button>
@@ -527,11 +527,11 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         </div>
       </div>
 
-      <div className="bg-white border border-[#E6E9F2] rounded-2xl overflow-hidden text-xs">
-        <div className="p-4 border-b border-[#E6E9F2] font-extrabold text-sm text-slate-900">
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
+        <div className="p-4 border-b border-slate-200/80 font-extrabold text-sm text-slate-900">
           Complete Ledger Audit Log (Edit Note / Void Manual Entry)
         </div>
-        <div className="divide-y divide-[#EEF1F7] max-h-96 overflow-y-auto">
+        <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
           {ledger.map((e) => (
             <div key={e.id} className="p-3.5 flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
@@ -543,11 +543,11 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                         type="text"
                         value={ledgerNoteDraft}
                         onChange={(ev) => setLedgerNoteDraft(ev.target.value)}
-                        className="px-2 py-1 rounded border border-[#E6E9F2] bg-[#F4F6FB] font-normal"
+                        className="px-2 py-1 rounded border border-slate-200/80 bg-slate-50/80 font-normal"
                       />
                       <button
                         onClick={() => handleSaveLedgerNote(e.id)}
-                        className="px-2 py-1 rounded bg-[#00A651] text-white"
+                        className="px-2 py-1 rounded bg-[#009E4D] text-white"
                       >
                         Save
                       </button>
@@ -565,7 +565,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <div className="text-right mono-num">
-                  <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#00A651]'}`}>
+                  <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#009E4D]'}`}>
                     {e.signed_delta > 0 ? `+Rs. ${e.signed_delta}` : `-Rs. ${Math.abs(e.signed_delta)}`}
                   </div>
                   <div className="text-[11px] text-slate-500">Bal: Rs. {e.balance_after}</div>

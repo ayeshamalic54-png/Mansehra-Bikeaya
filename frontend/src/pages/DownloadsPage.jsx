@@ -47,23 +47,23 @@ export function DownloadsPage({ onBack }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB]">
-      <header className="bg-white border-b border-[#E6E9F2]">
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <BrandLogo subtitle="Official App Download Center" />
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-[#E6E9F2] bg-[#F4F6FB] hover:bg-slate-200 transition"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200/80 bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
             Back to App
           </button>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <div className="space-y-1">
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-fuchsia-50 text-[#9C1794] border border-fuchsia-200">
+        <div className="space-y-1.5">
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#008741] border border-emerald-200/80">
             Mobile &amp; Desktop Installers
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 pt-2">
@@ -82,10 +82,10 @@ export function DownloadsPage({ onBack }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Android APK Card */}
-          <div className="bg-white border border-[#E6E9F2] rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-5">
+          <div className="card-elevated rounded-3xl p-6 flex flex-col justify-between space-y-5">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-white bg-[#00A651]">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-white bg-[#009E4D]">
                   <Smartphone className="w-3.5 h-3.5" />
                   ANDROID (.APK)
                 </span>
@@ -103,7 +103,7 @@ export function DownloadsPage({ onBack }) {
             </div>
             <button
               onClick={() => handleDownload(latestApk)}
-              className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-[#00A651] hover:bg-[#008E46] inline-flex items-center justify-center gap-2 transition"
+              className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-[#009E4D] hover:bg-[#008741] inline-flex items-center justify-center gap-2 transition"
             >
               <Download className="w-4 h-4" />
               Download Android APK
@@ -111,11 +111,11 @@ export function DownloadsPage({ onBack }) {
           </div>
 
           {/* Windows EXE Card */}
-          <div className="bg-white border border-[#E6E9F2] rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-5">
+          <div className="card-elevated rounded-3xl p-6 flex flex-col justify-between space-y-5">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-white bg-slate-900">
-                  <Monitor className="w-3.5 h-3.5 text-[#EC1FA8]" />
+                  <Monitor className="w-3.5 h-3.5 text-emerald-400" />
                   WINDOWS (.EXE)
                 </span>
                 <span className="text-xs mono-num text-slate-500">
@@ -132,21 +132,21 @@ export function DownloadsPage({ onBack }) {
             </div>
             <button
               onClick={() => handleDownload(latestExe)}
-              className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-[#EC1FA8] hover:opacity-90 inline-flex items-center justify-center gap-2 transition"
+              className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 inline-flex items-center justify-center gap-2 transition"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4 text-emerald-400" />
               Download Windows EXE
             </button>
           </div>
         </div>
 
         {/* PWA Instant Install Tip */}
-        <div className="bg-white border border-[#E6E9F2] rounded-2xl p-5 flex items-start gap-3">
-          <CheckCircle2 className="w-5 h-5 text-[#00A651] shrink-0 mt-0.5" />
+        <div className="card-elevated rounded-2xl p-5 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-[#009E4D] shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm text-slate-600 space-y-1">
             <div className="font-bold text-slate-900">Instant Mobile &amp; Desktop Install (PWA Ready Now)</div>
             <p>
-              This web app already includes a PWA manifest. On Android Chrome tap <strong>Menu → Add to Home Screen</strong>, or on Windows Chrome/Edge click the <strong>Install App</strong> icon in the address bar! Once deployed to Render, we can package and link the standalone <code>.apk</code> and <code>.exe</code> installers directly into the buttons above via Admin → App Releases.
+              You can also install directly from Chrome/Edge via <strong>Add to Home Screen</strong> or <strong>Install App</strong>, or download the standalone <code>.apk</code> / <code>.exe</code> above.
             </p>
           </div>
         </div>
