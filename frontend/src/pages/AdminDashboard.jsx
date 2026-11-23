@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bike,
+  ChevronRight,
   ClipboardList,
   Coins,
   Download,
@@ -34,43 +35,45 @@ import { AdminReportsPanel } from '../components/admin/AdminReportsPanel';
 const NAV_GROUPS = [
   {
     group: 'Overview',
-    items: [{ id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard }],
+    items: [
+      { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, badgeCls: 'bg-emerald-500/15 text-emerald-400' },
+    ],
   },
   {
     group: 'Dispatch & Rides',
     items: [
-      { id: 'dispatch', label: 'Live Rides Queue', icon: ClipboardList },
-      { id: 'manual_booking', label: 'Phone / Manual Booking', icon: PhoneCall },
+      { id: 'dispatch', label: 'Live Rides Queue', icon: ClipboardList, badgeCls: 'bg-sky-500/15 text-sky-400' },
+      { id: 'manual_booking', label: 'Phone / Manual Booking', icon: PhoneCall, badgeCls: 'bg-teal-500/15 text-teal-400' },
     ],
   },
   {
     group: 'Fleet & Users',
     items: [
-      { id: 'riders', label: 'Motorbike Riders', icon: Bike },
-      { id: 'customers', label: 'Customers Directory', icon: Users },
+      { id: 'riders', label: 'Motorbike Riders', icon: Bike, badgeCls: 'bg-emerald-500/15 text-emerald-300' },
+      { id: 'customers', label: 'Customers Directory', icon: Users, badgeCls: 'bg-indigo-500/15 text-indigo-400' },
     ],
   },
   {
     group: 'Finance & Lain-Dain',
     items: [
-      { id: 'settlements', label: 'Rider Dues & Settlements', icon: Wallet },
-      { id: 'pricing', label: 'Fare & Commission %', icon: Coins },
-      { id: 'expenses', label: 'Owner Expenses', icon: Settings },
+      { id: 'settlements', label: 'Rider Dues & Settlements', icon: Wallet, badgeCls: 'bg-amber-500/15 text-amber-400' },
+      { id: 'pricing', label: 'Fare & Commission %', icon: Coins, badgeCls: 'bg-cyan-500/15 text-cyan-400' },
+      { id: 'expenses', label: 'Owner Expenses', icon: Settings, badgeCls: 'bg-rose-500/15 text-rose-400' },
     ],
   },
   {
     group: 'Analytics & Releases',
     items: [
-      { id: 'reports', label: 'Profit & Loss (P&L)', icon: BarChart3 },
-      { id: 'releases', label: 'APK / EXE Releases', icon: PackagePlus },
+      { id: 'reports', label: 'Profit & Loss (P&L)', icon: BarChart3, badgeCls: 'bg-violet-500/15 text-violet-400' },
+      { id: 'releases', label: 'APK / EXE Releases', icon: PackagePlus, badgeCls: 'bg-teal-500/15 text-teal-300' },
     ],
   },
   {
     group: 'Operations & Security',
     items: [
-      { id: 'tickets', label: 'Complaints & Support', icon: HelpCircle },
-      { id: 'zones', label: 'Mansehra Zones & Promos', icon: MapPin },
-      { id: 'settings', label: 'Passwords & Settings', icon: ShieldCheck },
+      { id: 'tickets', label: 'Complaints & Support', icon: HelpCircle, badgeCls: 'bg-orange-500/15 text-orange-400' },
+      { id: 'zones', label: 'Mansehra Zones & Promos', icon: MapPin, badgeCls: 'bg-sky-500/15 text-sky-300' },
+      { id: 'settings', label: 'Passwords & Settings', icon: ShieldCheck, badgeCls: 'bg-emerald-500/15 text-emerald-400' },
     ],
   },
 ];
@@ -251,22 +254,22 @@ export function AdminDashboard({ onOpenDownloads }) {
     <div className="min-h-screen flex">
       {/* Sidebar Desktop + Mobile Drawer */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-slate-950 text-slate-100 flex flex-col justify-between p-4 transition-transform duration-200 no-print ${
+        className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-72 bg-gradient-to-b from-slate-950 via-[#0D1526] to-slate-950 border-r border-slate-800/80 text-slate-100 flex flex-col justify-between p-3.5 transition-transform duration-200 no-print shrink-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="space-y-4 overflow-y-auto pr-1">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <BrandLogo dark subtitle="Admin Command" />
-            <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-slate-400">
+        <div className="space-y-3.5 overflow-y-auto no-scrollbar">
+          <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900/70 border border-slate-800/80">
+            <BrandLogo dark size="sm" subtitle="Admin Command" />
+            <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <nav className="space-y-4">
+          <nav className="space-y-3">
             {NAV_GROUPS.map((grp) => (
-              <div key={grp.group} className="space-y-1">
-                <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <div key={grp.group} className="rounded-2xl bg-slate-900/45 border border-slate-800/60 p-2 space-y-1.5">
+                <div className="px-2 pt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   {grp.group}
                 </div>
                 {grp.items.map((item) => {
@@ -279,21 +282,36 @@ export function AdminDashboard({ onOpenDownloads }) {
                         setSubpage(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
+                      className={`group w-full flex items-center justify-between px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all duration-200 ${
                         active
-                          ? 'bg-[#009E4D] text-white shadow-sm'
-                          : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                          ? 'bg-gradient-to-r from-[#009E4D] to-[#007D3D] border-emerald-400/50 text-white shadow-md shadow-emerald-950/50'
+                          : 'bg-slate-900/75 border-slate-800/80 text-slate-300 hover:bg-slate-800/95 hover:border-emerald-500/40 hover:text-white hover:translate-x-1 hover:shadow-md hover:shadow-black/30'
                       }`}
                     >
-                      <span className="flex items-center gap-2.5">
-                        <Icon className="w-4 h-4 shrink-0" />
-                        {item.label}
-                      </span>
-                      {item.id === 'dispatch' && kpis.pending_dispatch_count > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-teal-600 text-white text-[10px] mono-num">
-                          {kpis.pending_dispatch_count}
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                            active ? 'bg-white/20 text-white' : item.badgeCls
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
                         </span>
-                      )}
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      <span className="flex items-center gap-1 shrink-0">
+                        {item.id === 'dispatch' && kpis.pending_dispatch_count > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-extrabold text-[10px] mono-num">
+                            {kpis.pending_dispatch_count}
+                          </span>
+                        )}
+                        <ChevronRight
+                          className={`w-3.5 h-3.5 transition-all duration-200 ${
+                            active
+                              ? 'opacity-90 translate-x-0 text-white'
+                              : 'opacity-0 -translate-x-1 group-hover:opacity-80 group-hover:translate-x-0 text-emerald-400'
+                          }`}
+                        />
+                      </span>
                     </button>
                   );
                 })}
@@ -302,27 +320,27 @@ export function AdminDashboard({ onOpenDownloads }) {
           </nav>
         </div>
 
-        <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
+        <div className="pt-3 mt-2 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs">
           <button
             onClick={onOpenDownloads}
-            className="w-full py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 font-bold flex items-center justify-center gap-1.5"
+            className="py-2.5 px-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/40 hover:bg-slate-800 text-slate-200 font-bold flex items-center justify-center gap-1.5 transition"
           >
-            <Download className="w-3.5 h-3.5 text-teal-600" />
-            APK / EXE Downloads
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            APK / EXE
           </button>
           <button
             onClick={logout}
-            className="w-full py-2 px-3 rounded-xl text-rose-400 hover:bg-slate-900 font-bold flex items-center justify-center gap-1.5"
+            className="py-2.5 px-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40 text-rose-300 font-bold flex items-center justify-center gap-1.5 transition"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Logout ({user?.full_name?.split(' ')[0]})
+            Logout
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-3 no-print">
+        <header className="sticky top-0 z-20 bg-white/85 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-3 no-print">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(true)}
