@@ -272,3 +272,38 @@ def test_admin_full_crud_and_only_admin_password_control(client):
         == 200
     )
 
+
+def test_seed_idempotent_after_admin_phone_update(client):
+    from app.database import SessionLocal
+    from app.seed import seed_initial_data
+
+    # Admin updates phone while keeping original email (triggers restart-seed test)
+    login = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03001111111", "password": "superadmin99"},
+    )
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+
+    upd = client.patch(
+        "/api/admin/profile",
+        headers=_auth_header(token),
+        json={"phone": "03139620729"},
+    )
+    assert upd.status_code == 200
+
+    # Re-running seed on startup must NOT raise IntegrityError on duplicate email
+    db = SessionLocal()
+    try:
+        seed_initial_data(db)
+    finally:
+        db.close()
+
+    assert (
+        client.post(
+            "/api/auth/login",
+            json={"phone_or_email": "03139620729", "password": "superadmin99"},
+        ).status_code
+        == 200
+    )
+
