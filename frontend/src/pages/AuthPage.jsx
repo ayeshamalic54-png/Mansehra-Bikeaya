@@ -48,18 +48,6 @@ export function AuthPage({ onNavigate }) {
     }
   };
 
-  const quickLogin = async (uPhone, uPass) => {
-    setError('');
-    setBusy(true);
-    try {
-      await login(uPhone, uPass);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#F4F6FB] flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md space-y-5">
@@ -119,7 +107,7 @@ export function AuthPage({ onNavigate }) {
                   <input
                     type="text"
                     required
-                    placeholder="03001111111"
+                    placeholder="03XX-XXXXXXX or email"
                     value={phoneOrEmail}
                     onChange={(e) => setPhoneOrEmail(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6E9F2] bg-[#F4F6FB] focus:outline-none focus:ring-2 focus:ring-[#00A651]"
@@ -263,39 +251,6 @@ export function AuthPage({ onNavigate }) {
               {busy ? 'Please wait...' : mode === 'login' ? 'Login to Dashboard' : 'Create Account'}
             </button>
           </form>
-
-          {/* Demo Accounts Switcher */}
-          <div className="pt-4 border-t border-[#EEF1F7] space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Quick Demo Access (Seeded Accounts)
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => quickLogin('03001111111', 'admin123')}
-                className="py-2 px-2 rounded-xl bg-slate-900 text-white font-bold hover:opacity-90 transition"
-              >
-                Admin Owner
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => quickLogin('03112222222', 'rider123')}
-                className="py-2 px-2 rounded-xl bg-fuchsia-50 border border-fuchsia-200 text-[#9C1794] font-bold hover:bg-fuchsia-100 transition"
-              >
-                Bike Captain
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => quickLogin('03334444444', 'user123')}
-                className="py-2 px-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[#008E46] font-bold hover:bg-emerald-100 transition"
-              >
-                Customer
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

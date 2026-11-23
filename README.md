@@ -29,11 +29,9 @@ cd frontend
 npm run build
 ```
 
-## Demo Login Accounts (Local Seed)
-- **Admin (Owner)**: `03001111111` / `admin123`
-- **Motorbike Captain 1**: `03112222222` / `rider123`
-- **Motorbike Captain 2**: `03123333333` / `rider123`
-- **Customer**: `03334444444` / `user123`
+## Security & Password Policy
+- Only the **Admin** can create/reset passwords for Admin, Motorbike Captains, and Customers from the Admin Dashboard (**Passwords & Settings**, **Motorbike Riders**, **Customers Directory**).
+- Change initial seeded passwords immediately upon first production login.
 
 ## Render Deployment Guide
 1. Push repository to GitHub (verify `.env` and `my db*.txt` are NOT tracked).
@@ -45,7 +43,7 @@ npm run build
    - `JWT_SECRET`: secure random secret
    - `APP_ENV`: `production`
 
-## Phase 2: Packaging `.apk` & `.exe`
-- **Android `.apk`**: Wrap `frontend/dist` with Capacitor (`@capacitor/android`) and compile release `.apk`.
-- **Windows `.exe`**: Wrap desktop portal with Electron (`electron-builder`).
-- Publish release links in **Admin → App Releases** so they immediately appear on `/downloads`.
+## Android APK & Windows EXE Packaging
+- **Android `.apk`**: Built from `mobile-apk/` via GitHub Actions (`MansehraBikeaya.apk`).
+- **Windows `.exe`**: Built from `desktop-exe/` via PyInstaller + PyWebView (`MansehraBikeayaDesk.exe`).
+- Both are published to GitHub Releases and linked directly on `/downloads`.
