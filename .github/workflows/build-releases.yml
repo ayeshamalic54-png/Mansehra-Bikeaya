@@ -48,7 +48,18 @@ jobs:
 
       - name: Build Signed Android Release APK
         working-directory: mobile-apk
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee ../apk-build.log
+
+      - name: Publish APK Failure Log (only on error)
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-apk-log
+          name: Debug APK Build Log
+          prerelease: true
+          files: apk-build.log
 
       - name: Rename APK Artifact
         run: cp mobile-apk/app/build/outputs/apk/release/app-release.apk MansehraBikeaya.apk
