@@ -35,4 +35,6 @@ mobile-apk/app/build/
 mobile-apk/build/
 mobile-apk/*.jks
 mobile-apk/*.keystore
+*.apk
+*.exe
 local.properties
