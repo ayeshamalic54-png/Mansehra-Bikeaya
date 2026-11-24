@@ -22,14 +22,14 @@ import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 export function LandingPage({ onNavigate }) {
   const { bootstrap } = useAuth();
   const [serviceType, setServiceType] = useState('bike_ride');
-  const [pickupZone, setPickupZone] = useState('Main Bazar / Lari Adda');
-  const [dropZone, setDropZone] = useState('Ghazikot Township');
-  const [pickupText, setPickupText] = useState('Main Bazar / Lari Adda, Mansehra');
-  const [dropText, setDropText] = useState('Ghazikot Township, Mansehra');
-  const [pickupLat, setPickupLat] = useState(34.3335);
-  const [pickupLng, setPickupLng] = useState(73.1995);
-  const [dropLat, setDropLat] = useState(34.3168);
-  const [dropLng, setDropLng] = useState(73.1920);
+  const [pickupZone, setPickupZone] = useState('Mansehra — Punjab Chowk');
+  const [dropZone, setDropZone] = useState('Mansehra — Pakhwal Chowk');
+  const [pickupText, setPickupText] = useState('Punjab Chowk, Mansehra');
+  const [dropText, setDropText] = useState('Pakhwal Chowk, Mansehra');
+  const [pickupLat, setPickupLat] = useState(34.328548);
+  const [pickupLng, setPickupLng] = useState(73.188513);
+  const [dropLat, setDropLat] = useState(34.323885);
+  const [dropLng, setDropLng] = useState(73.194572);
   const [nearbyCaptains, setNearbyCaptains] = useState([]);
   const [distanceKm, setDistanceKm] = useState(2.3);
   const [waitMinutes, setWaitMinutes] = useState(0);
@@ -263,7 +263,7 @@ export function LandingPage({ onNavigate }) {
                   dropText={dropText}
                   nearbyCaptains={nearbyCaptains}
                   heightClass="h-44 sm:h-48"
-                  autoLocate={true}
+                  autoLocate={false}
                   onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
                     if (type === 'pickup') {
                       setPickupLat(lat);

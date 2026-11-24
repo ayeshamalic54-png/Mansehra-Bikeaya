@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LocateFixed, MapPin, Navigation, X } from 'lucide-react';
 import { SafarGoMap } from './SafarGoMap';
 import {
+  TOP_MANSEHRA_QUICK_SPOTS,
   fetchRoadRoute,
   findNearestZone,
   reverseGeocode,
@@ -10,9 +11,8 @@ import {
 
 /**
  * Pure InDrive-style Pickup & Drop Map Widget:
- * - No bulky 50-item dropdown menus.
- * - Map shows Customer GPS (P), Destination (D), road route, distance km, and nearby Captains.
- * - Just two clean InDrive inputs: "Pickup (From)" with My GPS + "Drop (To)" with instant search.
+ * - Zero unwanted GPS jumps on load: GPS pins only when user taps "Use GPS".
+ * - Instant Mansehra Chowks & Roads autocomplete + explicit Tap-Map mode switcher.
  */
 export function InteractiveRoutePicker({
   zones = [],
@@ -27,7 +27,7 @@ export function InteractiveRoutePicker({
   onTextChange,
   onRouteResult,
   heightClass = 'h-60 sm:h-64',
-  autoLocate = true,
+  autoLocate = false,
 }) {
   const [activeField, setActiveField] = useState('drop'); // 'pickup' | 'drop' (tapping map sets active field!)
   const [pickupQuery, setPickupQuery] = useState(pickupText);
@@ -41,6 +41,17 @@ export function InteractiveRoutePicker({
   const [routeSource, setRouteSource] = useState('estimate');
   const [routeDuration, setRouteDuration] = useState(null);
   const autoLocatedOnce = useRef(false);
+  const pickerBoxRef = useRef(null);
+
+  useEffect(() => {
+    const onDocDown = (ev) => {
+      if (pickerBoxRef.current && !pickerBoxRef.current.contains(ev.target)) {
+        setFocusedField(null);
+      }
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, []);
 
   // Sync external address updates (e.g., when GPS resolves or pin is dragged)
   useEffect(() => {
@@ -110,7 +121,7 @@ export function InteractiveRoutePicker({
     locateCurrentCustomer(true);
   }, [autoLocate, zones.length]);
 
-  // Autocomplete search when user types in either Pickup or Drop input
+  // Autocomplete search when user types in either Pickup or Drop input (or shows top Chowks/Roads when empty)
   useEffect(() => {
     if (!focusedField) {
       setSuggestions([]);
@@ -119,7 +130,17 @@ export function InteractiveRoutePicker({
     const raw = focusedField === 'pickup' ? pickupQuery : dropQuery;
     const q = (raw || '').trim();
     if (q.length < 2) {
-      setSuggestions([]);
+      setSuggestions(
+        TOP_MANSEHRA_QUICK_SPOTS.map((lm) => ({
+          id: lm.id,
+          label: lm.name,
+          shortName: lm.shortName,
+          lat: lm.lat,
+          lng: lm.lng,
+          zoneName: lm.zone,
+          badge: lm.badge,
+        }))
+      );
       return;
     }
     const timer = setTimeout(async () => {
@@ -127,7 +148,7 @@ export function InteractiveRoutePicker({
       const res = await searchPakistanPlaces(q, zones, pickupLat ?? 34.3335, pickupLng ?? 73.1995);
       setSuggestions(res);
       setSearching(false);
-    }, 200);
+    }, 180);
     return () => clearTimeout(timer);
   }, [focusedField, pickupQuery, dropQuery, zones, pickupLat, pickupLng]);
 
@@ -153,14 +174,14 @@ export function InteractiveRoutePicker({
     if (q.length < 2) return;
     setSearching(true);
     const res =
-      suggestions.length > 0
+      suggestions.length > 0 && q.length >= 2
         ? suggestions
         : await searchPakistanPlaces(q, zones, pickupLat ?? 34.3335, pickupLng ?? 73.1995);
     setSearching(false);
     if (res.length > 0) {
       pickSuggestion(which, res[0]);
     } else {
-      setGpsStatus('Place not found — tap on the map directly.');
+      setGpsStatus('Place not found — select on map directly.');
     }
   };
 
@@ -180,7 +201,7 @@ export function InteractiveRoutePicker({
         heightClass={heightClass}
       />
 
-      {/* Route & Nearby Captains Status Strip */}
+      {/* Route, Nearby Captains & Explicit Tap-Pin Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <div className="flex items-center gap-1.5 text-slate-600 font-medium">
           <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#008741] font-bold">
@@ -194,11 +215,36 @@ export function InteractiveRoutePicker({
             </span>
           )}
         </div>
-        {gpsStatus && <span className="text-[#008741] font-semibold">{gpsStatus}</span>}
+        <div className="flex items-center gap-1.5">
+          {gpsStatus && <span className="text-[#008741] font-semibold mr-1">{gpsStatus}</span>}
+          <span className="text-slate-400 hidden sm:inline">Tap map:</span>
+          <button
+            type="button"
+            onClick={() => setActiveField('pickup')}
+            className={`px-2 py-0.5 rounded-md font-bold border transition ${
+              activeField === 'pickup'
+                ? 'bg-[#009E4D] text-white border-[#009E4D]'
+                : 'bg-white text-slate-600 border-slate-200'
+            }`}
+          >
+            Pickup
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveField('drop')}
+            className={`px-2 py-0.5 rounded-md font-bold border transition ${
+              activeField === 'drop'
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-white text-slate-600 border-slate-200'
+            }`}
+          >
+            Drop
+          </button>
+        </div>
       </div>
 
       {/* 2. Pure InDrive Two-Input Box (From & To — No Giant Dropdown Lists!) */}
-      <div className="relative rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 space-y-2 text-xs">
+      <div ref={pickerBoxRef} className="relative rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 space-y-2 text-xs">
         {/* FROM / PICKUP */}
         <div className="relative flex items-center gap-2 bg-white rounded-xl border border-slate-200/90 px-3 py-2 focus-within:border-[#009E4D]">
           <span className="w-2.5 h-2.5 rounded-full bg-[#009E4D] ring-4 ring-emerald-100 shrink-0" />
@@ -246,7 +292,7 @@ export function InteractiveRoutePicker({
             title="Use My Current GPS Location"
           >
             <LocateFixed className="w-3.5 h-3.5" />
-            {locating ? '...' : 'GPS'}
+            {locating ? '...' : 'Use GPS'}
           </button>
         </div>
 
@@ -272,7 +318,7 @@ export function InteractiveRoutePicker({
                 handleEnterSearch('drop');
               }
             }}
-            placeholder="Where to? e.g. Pakhwal Chowk Mansehra, Safdar Road..."
+            placeholder="Where to? e.g. Baidra Chowk, Baidra Road, Safdar Road..."
             className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none min-w-0"
           />
           {dropQuery && (

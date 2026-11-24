@@ -643,5 +643,51 @@ def test_customer_feedback_and_complaint_flow(client):
     assert resolved["booking_code"] == target_ride["booking_code"]
 
 
+def test_mansehra_chowks_and_roads_distinct_coordinates(client):
+    zones = client.get("/api/public/bootstrap").json()["zones"]
+    by_name = {z["name"]: z for z in zones}
+
+    required_zones = [
+        "Mansehra — Punjab Chowk",
+        "Mansehra — Baidra Chowk",
+        "Mansehra — Baidra Road",
+        "Mansehra — Dhangri Chowk",
+        "Mansehra — Safdar Chowk",
+        "Mansehra — Safdar Road / Dab No. 1",
+        "Mansehra — Shahnawaz Chowk",
+        "Mansehra — Chowk Khatm-e-Nabuwat",
+        "Mansehra — Main Chowk Bazar",
+        "Mansehra — Pakhwal Chowk",
+        "Mansehra — Pakhwal Road",
+        "Mansehra — Township Bypass Chowk",
+        "Mansehra — Phagla Chowk (N-15)",
+        "Mansehra — Karakoram Highway (KKH / N-35)",
+        "Mansehra — Hazara Motorway (M-15 / E-35)",
+        "Mansehra — Naran–Jalkhad Road (N-15)",
+        "Mansehra — Mansehra Bypass Road",
+        "Mansehra — Jail Road",
+        "Mansehra — Chinar Road",
+        "Mansehra — Oghi Road",
+    ]
+    for name in required_zones:
+        assert name in by_name, f"Missing expected Mansehra zone: {name}"
+        assert by_name[name]["lat"] is not None and by_name[name]["lng"] is not None
+
+    # Chowks vs Roads must have strictly distinct GPS pins
+    assert (by_name["Mansehra — Baidra Chowk"]["lat"], by_name["Mansehra — Baidra Chowk"]["lng"]) != (
+        by_name["Mansehra — Baidra Road"]["lat"],
+        by_name["Mansehra — Baidra Road"]["lng"],
+    )
+    assert (by_name["Mansehra — Safdar Chowk"]["lat"], by_name["Mansehra — Safdar Chowk"]["lng"]) != (
+        by_name["Mansehra — Safdar Road / Dab No. 1"]["lat"],
+        by_name["Mansehra — Safdar Road / Dab No. 1"]["lng"],
+    )
+    assert (by_name["Mansehra — Pakhwal Chowk"]["lat"], by_name["Mansehra — Pakhwal Chowk"]["lng"]) != (
+        by_name["Mansehra — Pakhwal Road"]["lat"],
+        by_name["Mansehra — Pakhwal Road"]["lng"],
+    )
+
+
+
 
 

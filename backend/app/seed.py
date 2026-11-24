@@ -19,32 +19,49 @@ from app.services.finance import complete_booking_and_post_ledger, utcnow
 def seed_initial_data(db: Session) -> None:
     # 1. Full City & Intercity Hubs / Zones (idempotent by zone name + coordinate backfill)
     zone_specs = [
-        # --- Mansehra City Core & Tehsil ---
+        # --- Mansehra City Core, Chowks, Highways & Roads ---
         ("Main Bazar / Lari Adda", "City Core", 1.0, 0, 34.3335, 73.1995),
-        ("Abbottabad Road", "City Core", 2.5, 0, 34.3245, 73.2040),
+        ("Abbottabad Road", "Link Road · Old Commercial", 2.5, 0, 34.324470, 73.202414),
         ("Ghazikot Township", "Residential", 3.5, 0, 34.3168, 73.1920),
-        ("Shinkiari Road", "City North", 3.0, 0, 34.3440, 73.2030),
+        ("Shinkiari Road", "Link Road · Siran Valley", 3.0, 0, 34.337644, 73.194713),
         ("College Doraha", "Education Hub", 2.0, 0, 34.3375, 73.1945),
         ("Kaghan Colony", "Residential", 3.5, 0, 34.3395, 73.2090),
         ("Channai", "Suburb", 4.5, 10, 34.3490, 73.1865),
         ("King Abdullah Hospital", "Medical", 2.5, 0, 34.3275, 73.1975),
         ("Hazara University (Dhodial)", "University", 11.0, 30, 34.4328, 73.2610),
         ("Baffa Town", "Outer Town", 12.5, 40, 34.4368, 73.2255),
-        ("Mansehra — Kashmir Road", "Mansehra Core", 2.0, 0, 34.3360, 73.2035),
-        ("Mansehra — Safdar Road / Dab No. 1", "Mansehra Core", 1.5, 0, 34.3342, 73.2016),
-        ("Mansehra — Pakhwal Chowk", "Mansehra Core", 1.5, 0, 34.3230, 73.1940),
+        ("Mansehra — Punjab Chowk", "Chowk · Shahrah-e-Resham & Jail Rd", 1.5, 0, 34.328548, 73.188513),
+        ("Mansehra — Baidra Chowk", "Chowk · Baidra Rd & Motorway Hub", 2.0, 0, 34.334342, 73.187789),
+        ("Mansehra — Dhangri Chowk", "Chowk · Main Shahrah-e-Resham", 1.8, 0, 34.325215, 73.191734),
+        ("Mansehra — Safdar Chowk", "Chowk · Banks & Plazas (KKH)", 1.5, 0, 34.330300, 73.188400),
+        ("Mansehra — Shahnawaz Chowk", "Chowk · Mohalla Saienabad", 2.0, 0, 34.340333, 73.196527),
+        ("Mansehra — Chowk Khatm-e-Nabuwat", "Chowk · Kashmir Road", 1.5, 0, 34.333848, 73.201123),
+        ("Mansehra — Main Chowk Bazar", "Chowk · Main Bazaar", 1.0, 0, 34.330769, 73.201234),
+        ("Mansehra — Pakhwal Chowk", "Chowk · Pakhwal Rd & Madina Colony", 2.0, 0, 34.323885, 73.194572),
+        ("Mansehra — Township Bypass Chowk", "Chowk · KKH & Ghazikot Bypass", 3.5, 0, 34.313611, 73.210442),
+        ("Mansehra — Phagla Chowk (N-15)", "Highway Junction · N-15 & M-15", 13.0, 40, 34.407260, 73.308950),
+        ("Mansehra — Karakoram Highway (KKH / N-35)", "Highway · Shahrah-e-Resham", 2.0, 0, 34.323739, 73.194892),
+        ("Mansehra — Hazara Motorway (M-15 / E-35)", "Motorway Interchange", 4.5, 0, 34.306227, 73.191264),
+        ("Mansehra — Naran–Jalkhad Road (N-15)", "Highway · Babusar / Balakot", 4.0, 0, 34.346063, 73.220614),
+        ("Mansehra — Mansehra Bypass Road", "Bypass Road · Ghazikot–KKH", 3.5, 0, 34.330582, 73.218097),
+        ("Mansehra — Kashmir Road", "Link Road · Inner Bazar–Muzaffarabad", 2.0, 0, 34.336118, 73.203858),
+        ("Mansehra — Safdar Road / Dab No. 1", "City Road · Safdar Rd & OPF School", 1.5, 0, 34.332400, 73.190800),
+        ("Mansehra — Pakhwal Road", "Link Road · Madina Colony–Chehra", 2.5, 0, 34.316127, 73.190583),
+        ("Mansehra — Baidra Road", "Link Road · Baidra Chowk–Interchange", 2.0, 0, 34.332967, 73.194443),
+        ("Mansehra — Jail Road", "City Road · Near Punjab Chowk", 1.5, 0, 34.331800, 73.192000),
+        ("Mansehra — Chinar Road", "City Road · Androon-e-Mansehra", 2.0, 0, 34.343498, 73.202521),
+        ("Mansehra — Oghi Road", "Link Road · Bherkund to Oghi", 4.5, 0, 34.365885, 73.195159),
         ("Mansehra — Nogazia Chowk", "Mansehra Core", 1.5, 0, 34.3270, 73.1930),
-        ("Mansehra — Punjab Chowk", "Mansehra Core", 1.5, 0, 34.3328, 73.2008),
         ("Mansehra — Kachehri / Tehsil Road", "Mansehra Core", 1.5, 0, 34.3352, 73.1978),
         ("Mansehra — Zafar Road / Pehlwan Bagh", "Mansehra Core", 2.0, 0, 34.3315, 73.1955),
-        ("Mansehra — Sabzi Mandi / GT Bypass", "Mansehra Commercial", 3.5, 0, 34.3220, 73.1885),
+        ("Mansehra — Sabzi Mandi / GT Bypass", "Mansehra Commercial", 3.5, 0, 34.348123, 73.198128),
         ("Mansehra — Data Bypass / Chakal", "Mansehra Residential", 4.0, 0, 34.3125, 73.2085),
         ("Mansehra — Muftiabad / Shahrah-e-Resham", "Mansehra City", 2.5, 0, 34.3390, 73.1998),
         ("Mansehra — Nogazi / Bherkund Road", "Mansehra Suburb", 5.0, 10, 34.3545, 73.1755),
         ("Mansehra — Khaki Road / Kotli Bala", "Mansehra Suburb", 5.5, 15, 34.3580, 73.1620),
         ("Mansehra — Labarkot / Chakia", "Mansehra Residential", 4.5, 10, 34.3110, 73.1835),
-        ("Mansehra — Dhangri / KKH", "Mansehra South", 6.0, 15, 34.2945, 73.2055),
-        ("Mansehra — Safada / Atter Shisha", "Mansehra Route", 8.5, 25, 34.3820, 73.2270),
+        ("Mansehra — Dhangri / KKH", "Mansehra KKH", 2.0, 0, 34.325215, 73.191734),
+        ("Mansehra — Safada / Atter Shisha", "Mansehra Route", 8.5, 25, 34.393714, 73.309240),
         ("Mansehra — Qalandarabad", "Mansehra Route", 12.0, 40, 34.2740, 73.2290),
         ("Mansehra — Shinkiari Town", "Mansehra Tehsil", 18.0, 60, 34.4620, 73.2685),
         ("Mansehra — Pakhal / Chattar Plain / Battal", "Mansehra North", 28.0, 90, 34.5810, 73.1535),
@@ -79,12 +96,24 @@ def seed_initial_data(db: Session) -> None:
         ("Battagram (City Center)", "Intercity Hub", 65.0, 250, 34.6775, 73.0255),
         ("Islamabad Airport (New IIA)", "Airport Transfer", 125.0, 500, 33.5607, 72.8516),
     ]
+    stale_placeholder_coords = {
+        "Abbottabad Road": (34.3245, 73.2040),
+        "Shinkiari Road": (34.3440, 73.2030),
+        "Mansehra — Kashmir Road": (34.3360, 73.2035),
+        "Mansehra — Safdar Road / Dab No. 1": (34.3342, 73.2016),
+        "Mansehra — Pakhwal Chowk": (34.3230, 73.1940),
+        "Mansehra — Punjab Chowk": (34.3328, 73.2008),
+        "Mansehra — Sabzi Mandi / GT Bypass": (34.3220, 73.1885),
+        "Mansehra — Dhangri / KKH": (34.2945, 73.2055),
+        "Mansehra — Safada / Atter Shisha": (34.3820, 73.2270),
+    }
     existing_zones = {z.name: z for z in db.query(MansehraZone).all()}
     new_zones = []
     for z_name, z_tag, z_km, z_sur, z_lat, z_lng in zone_specs:
         if z_name in existing_zones:
             ez = existing_zones[z_name]
-            if ez.lat is None or ez.lng is None:
+            cur_pair = (round(ez.lat, 4), round(ez.lng, 4)) if ez.lat is not None and ez.lng is not None else None
+            if ez.lat is None or ez.lng is None or stale_placeholder_coords.get(z_name) == cur_pair:
                 ez.lat = z_lat
                 ez.lng = z_lng
         else:
