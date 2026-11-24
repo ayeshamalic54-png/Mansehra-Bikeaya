@@ -402,18 +402,35 @@ export function RiderApp({ onOpenDownloads }) {
                   )}
 
                   {job.customer && (
-                    <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between">
+                    <div className="p-3 rounded-xl bg-slate-50/80 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="font-bold text-slate-900">Customer: {job.customer.full_name}</div>
                         <div className="mono-num text-slate-600">{job.customer.phone}</div>
                       </div>
-                      <a
-                        href={`tel:${job.customer.phone}`}
-                        className="px-3 py-2 rounded-xl bg-slate-900 text-white font-bold inline-flex items-center gap-1"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                        Call
-                      </a>
+                      <div className="flex items-center gap-2">
+                        {job.pickup_lat != null && (
+                          <a
+                            href={
+                              job.status === 'assigned'
+                                ? `https://www.google.com/maps/dir/?api=1&destination=${job.pickup_lat},${job.pickup_lng}&travelmode=driving`
+                                : `https://www.google.com/maps/dir/?api=1&origin=${job.pickup_lat},${job.pickup_lng}&destination=${job.drop_lat ?? job.pickup_lat},${job.drop_lng ?? job.pickup_lng}&travelmode=driving`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 rounded-xl bg-[#009E4D] text-white font-bold inline-flex items-center gap-1"
+                          >
+                            <MapPin className="w-3.5 h-3.5" />
+                            Google Maps ↗
+                          </a>
+                        )}
+                        <a
+                          href={`tel:${job.customer.phone}`}
+                          className="px-3 py-2 rounded-xl bg-slate-900 text-white font-bold inline-flex items-center gap-1"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          Call
+                        </a>
+                      </div>
                     </div>
                   )}
 

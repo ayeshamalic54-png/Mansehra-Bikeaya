@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
 function esc(str) {
@@ -67,6 +67,8 @@ export function SafarGoMap({
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const baseLayersRef = useRef(null);
+  const [mapStyle, setMapStyle] = useState('street'); // street | satellite
   const callbacksRef = useRef({ interactive, activePinMode, onMapPick, onPinDrag });
   callbacksRef.current = { interactive, activePinMode, onMapPick, onPinDrag };
 
@@ -79,10 +81,25 @@ export function SafarGoMap({
       zoomControl: true,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
+    const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(map);
+    });
+    const satelliteLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '&copy; Esri World Imagery', maxZoom: 19 }
+    );
+    const satelliteLabels = L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19 }
+    );
+    const satelliteRoads = L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19 }
+    );
+
+    streetLayer.addTo(map);
+    baseLayersRef.current = { streetLayer, satelliteLayer, satelliteLabels, satelliteRoads };
 
     const group = L.layerGroup().addTo(map);
     map.on('click', (ev) => {
@@ -101,8 +118,26 @@ export function SafarGoMap({
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
+      baseLayersRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layers = baseLayersRef.current;
+    if (!map || !layers) return;
+    if (mapStyle === 'satellite') {
+      if (map.hasLayer(layers.streetLayer)) map.removeLayer(layers.streetLayer);
+      if (!map.hasLayer(layers.satelliteLayer)) layers.satelliteLayer.addTo(map);
+      if (!map.hasLayer(layers.satelliteRoads)) layers.satelliteRoads.addTo(map);
+      if (!map.hasLayer(layers.satelliteLabels)) layers.satelliteLabels.addTo(map);
+    } else {
+      if (map.hasLayer(layers.satelliteLayer)) map.removeLayer(layers.satelliteLayer);
+      if (map.hasLayer(layers.satelliteRoads)) map.removeLayer(layers.satelliteRoads);
+      if (map.hasLayer(layers.satelliteLabels)) map.removeLayer(layers.satelliteLabels);
+      if (!map.hasLayer(layers.streetLayer)) layers.streetLayer.addTo(map);
+    }
+  }, [mapStyle]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -177,6 +212,7 @@ export function SafarGoMap({
             To: ${esc(b.drop_zone)} (${esc(b.drop_address)})<br/>
             <strong>${esc(b.distance_km)} km · Rs. ${esc(b.final_fare)}</strong>
             ${b.rider_name ? `<br/>Captain: ${esc(b.rider_name)}` : '<br/><span style="color:#D97706;font-weight:700;">Waiting Captain</span>'}
+            <br/><a href="https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${b.pickup_lat},${b.pickup_lng}`)}&destination=${encodeURIComponent(`${b.drop_lat ?? b.pickup_lat},${b.drop_lng ?? b.pickup_lng}`)}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="color:#009E4D;font-weight:700;text-decoration:underline;">Open in Google Maps ↗</a>
           </div>`
         );
         bounds.push([b.pickup_lat, b.pickup_lng]);
@@ -216,6 +252,7 @@ export function SafarGoMap({
           ${c.distance_km != null ? `Distance: <strong>${esc(c.distance_km)} km (~${esc(c.eta_min || 3)} min)</strong><br/>` : ''}
           Status: <strong>${c.is_online !== false ? 'ONLINE' : 'OFFLINE'}</strong>
           ${c.active_booking_code ? `<br/>Active Trip: <strong>${esc(c.active_booking_code)}</strong>` : ''}
+          <br/><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.lat},${c.lng}`)}" target="_blank" rel="noopener noreferrer" style="color:#0284C7;font-weight:700;text-decoration:underline;">Locate on Google Maps ↗</a>
         </div>`
       );
       if (bounds.length === 0 || activeBookings?.length > 0) {
@@ -243,9 +280,48 @@ export function SafarGoMap({
     fitSignature,
   ]);
 
+  const googleMapsUrl =
+    pickup?.lat != null && drop?.lat != null
+      ? `https://www.google.com/maps/dir/?api=1&origin=${pickup.lat},${pickup.lng}&destination=${drop.lat},${drop.lng}&travelmode=driving`
+      : pickup?.lat != null
+      ? `https://www.google.com/maps/search/?api=1&query=${pickup.lat},${pickup.lng}`
+      : 'https://www.google.com/maps/@34.3335,73.1995,13z';
+
   return (
     <div className={`relative w-full ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}>
       <div ref={containerRef} className="w-full h-full" />
+
+      {/* Top-Right: Free Street / Satellite View Switcher */}
+      <div className="absolute top-2.5 right-2.5 z-[400] inline-flex rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm p-0.5 text-[10px] font-extrabold">
+        <button
+          type="button"
+          onClick={() => setMapStyle('street')}
+          className={`px-2 py-1 rounded-md transition ${
+            mapStyle === 'street' ? 'bg-[#009E4D] text-white' : 'text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          Street
+        </button>
+        <button
+          type="button"
+          onClick={() => setMapStyle('satellite')}
+          className={`px-2 py-1 rounded-md transition ${
+            mapStyle === 'satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          Satellite
+        </button>
+      </div>
+
+      {/* Bottom-Left: Free Official Google Maps Turn-by-Turn Navigation Link */}
+      <a
+        href={googleMapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute bottom-2.5 left-2.5 z-[400] px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-[10px] font-extrabold text-slate-800 hover:border-[#009E4D] hover:text-[#008741] transition"
+      >
+        Open in Google Maps ↗
+      </a>
     </div>
   );
 }
