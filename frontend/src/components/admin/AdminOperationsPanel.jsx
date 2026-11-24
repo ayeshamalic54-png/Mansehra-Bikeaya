@@ -13,7 +13,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
   const [relForm, setRelForm] = useState({
     platform: 'android_apk',
     version: '1.0.1',
-    file_name: 'MansehraBikeaya-v1.0.1.apk',
+    file_name: 'SafarGo-v1.0.1.apk',
     download_url: '',
     file_size_mb: 14.5,
     release_notes: '',
@@ -90,7 +90,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         setRelForm({
           platform: 'android_apk',
           version: '1.0.1',
-          file_name: 'MansehraBikeaya-v1.0.1.apk',
+          file_name: 'SafarGo-v1.0.1.apk',
           download_url: '',
           file_size_mb: 14.5,
           release_notes: '',

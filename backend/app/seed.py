@@ -145,7 +145,7 @@ def seed_initial_data(db: Session) -> None:
 
     # 3. System Settings
     default_settings = {
-        "business_name": "Bikeaya",
+        "business_name": "SafarGo",
         "city": "Hazara & Intercity",
         "default_credit_limit": "1500",
         "support_phone": "+92 300 1111111",

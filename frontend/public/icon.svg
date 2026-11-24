@@ -2,12 +2,11 @@
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#00B259"/>
-      <stop offset="1" stop-color="#007D3D"/>
+      <stop offset="0.55" stop-color="#00964A"/>
+      <stop offset="1" stop-color="#006B35"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <path d="M9 24H17M7 32H14" stroke="rgba(255,255,255,0.6)" stroke-width="3.2" stroke-linecap="round"/>
-  <circle cx="20" cy="43" r="7.5" stroke="#FFFFFF" stroke-width="3.8"/>
-  <circle cx="46" cy="43" r="7.5" stroke="#FFFFFF" stroke-width="3.8"/>
-  <path d="M20 43L28 26H40L46 43M28 26L23.5 19H18M38 26L41.5 19H48.5" stroke="#FFFFFF" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 17H25L38 32L25 47H14L27 32L14 17Z" fill="#FFFFFF"/>
+  <path d="M31 17H39L52 32L39 47H31L44 32L31 17Z" fill="#A7F3D0"/>
 </svg>

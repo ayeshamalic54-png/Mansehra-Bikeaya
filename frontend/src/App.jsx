@@ -17,7 +17,7 @@ function AppRouter() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-2">
           <div className="w-10 h-10 rounded-2xl bg-[#009E4D] mx-auto animate-pulse" />
-          <div className="text-sm font-bold text-slate-700">Loading Bikeaya...</div>
+          <div className="text-sm font-bold text-slate-700">Loading SafarGo...</div>
         </div>
       </div>
     );

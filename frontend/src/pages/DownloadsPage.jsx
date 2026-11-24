@@ -67,7 +67,7 @@ export function DownloadsPage({ onBack }) {
             Mobile &amp; Desktop Installers
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 pt-2">
-            Download Bikeaya (.APK &amp; .EXE)
+            Download SafarGo (.APK &amp; .EXE)
           </h1>
           <p className="text-sm text-slate-600">
             Get the Android mobile installer for Customers, Bike &amp; Car Captains, or the Windows Desktop application for Admin Dispatch.

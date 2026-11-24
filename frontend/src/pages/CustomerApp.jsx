@@ -142,7 +142,7 @@ export function CustomerApp({ onOpenDownloads }) {
           customer_notes: customerNotes || null,
         },
       });
-      setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest Bikeaya captain...`);
+      setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest SafarGo captain...`);
       setPickupAddress('');
       setDropAddress('');
       setPromoCode('');
@@ -192,7 +192,7 @@ export function CustomerApp({ onOpenDownloads }) {
         body: { subject: ticketForm.subject, message: ticketForm.message, category: 'customer' },
       });
       setTicketForm({ subject: '', message: '' });
-      setStatusMsg('Support ticket submitted to Bikeaya Admin.');
+      setStatusMsg('Support ticket submitted to SafarGo Admin.');
       await loadTickets();
     } catch (err) {
       setErrMsg(err.message);

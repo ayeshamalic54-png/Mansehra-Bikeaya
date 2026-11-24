@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Mansehra Bikeaya API",
-    description="Motorbike Ride, Parcel Delivery, Rider Settlement & Owner Profit System",
+    title="SafarGo API",
+    description="Multi-City Bike Rides, Cars, Parcel Delivery, Rider Settlement & Owner Profit System",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -85,7 +85,7 @@ app.include_router(reports_router.router)
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "mansehra-bikeaya"}
+    return {"status": "ok", "service": "safargo"}
 
 
 # Serve built React SPA when frontend/dist exists (used in local prod preview & Render)

@@ -357,7 +357,7 @@ export function LandingPage({ onNavigate }) {
               <ShieldCheck className="w-4 h-4" />
               Official Android APK &amp; Windows Desktop Installer
             </div>
-            <h2 className="text-2xl font-extrabold">Take Bikeaya Everywhere</h2>
+            <h2 className="text-2xl font-extrabold">Take SafarGo Everywhere</h2>
             <p className="text-sm text-slate-300">
               Download the Android APK for customers &amp; captains or the Windows Desktop EXE for your central dispatch and accounting office.
             </p>

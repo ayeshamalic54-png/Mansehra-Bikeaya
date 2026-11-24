@@ -199,7 +199,7 @@ def export_pnl_csv(
         )
 
     output.seek(0)
-    filename = f"mansehra_bikeaya_report_{start_d.isoformat()}_to_{end_d.isoformat()}.csv"
+    filename = f"safargo_report_{start_d.isoformat()}_to_{end_d.isoformat()}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
