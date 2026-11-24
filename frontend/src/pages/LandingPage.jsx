@@ -4,8 +4,10 @@ import {
   Bike,
   Calculator,
   Car,
+  Clock,
   Download,
   HelpCircle,
+  MapPin,
   MessageSquare,
   Monitor,
   Package,
@@ -439,6 +441,89 @@ export function LandingPage({ onNavigate }) {
           </div>
         </section>
       </main>
+
+      {/* Branded Office Address, Phone, WhatsApp & Footer */}
+      {(() => {
+        const s = bootstrap.settings || {};
+        const officeAddress = s.office_address || 'Main Bazar / Shahrah-e-Resham, Mansehra, KPK';
+        const phoneNum = s.support_phone || '+92 300 1111111';
+        const waRaw = s.support_whatsapp || phoneNum;
+        const waDigits = waRaw.replace(/\D+/g, '').replace(/^0/, '92');
+        const officeHours = s.office_hours || '24/7 Dispatch · 8:00 AM – 11:00 PM Office';
+        const brandName = s.business_name || 'SafarGo';
+        return (
+          <footer className="mt-12 bg-slate-950 text-slate-300 border-t border-slate-800">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-4 space-y-2.5">
+                  <BrandLogo dark={true} subtitle="Bikes · Cars · Parcels · Intercity" size="sm" />
+                  <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
+                    Fast Motorbikes, Comfortable AC Cars &amp; Express Parcel Delivery across Mansehra, Abbottabad, Haripur, Battagram &amp; Islamabad Airport.
+                  </p>
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{officeHours}</span>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+                  <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-1.5 hover:border-emerald-500/40 transition">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                      <MapPin className="w-4 h-4 shrink-0" />
+                      <span>Head Office Address</span>
+                    </div>
+                    <div className="text-sm font-semibold text-white leading-snug">{officeAddress}</div>
+                    <div className="text-[11px] text-slate-400">{s.city || 'Hazara & Intercity'}</div>
+                  </div>
+
+                  <a
+                    href={`tel:${phoneNum}`}
+                    className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-1.5 hover:border-emerald-500/40 transition block"
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                      <Phone className="w-4 h-4 shrink-0" />
+                      <span>Call Dispatch Helpline</span>
+                    </div>
+                    <div className="text-sm font-extrabold text-white mono-num">{phoneNum}</div>
+                    <div className="text-[11px] text-slate-400">Tap to call directly</div>
+                  </a>
+
+                  <a
+                    href={waDigits ? `https://wa.me/${waDigits}` : `tel:${phoneNum}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-1.5 hover:border-emerald-500/40 transition block"
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                      <MessageSquare className="w-4 h-4 shrink-0" />
+                      <span>WhatsApp Support &amp; Booking</span>
+                    </div>
+                    <div className="text-sm font-extrabold text-white mono-num">{waRaw}</div>
+                    <div className="text-[11px] text-slate-400">Chat on WhatsApp anytime</div>
+                  </a>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[11px] text-slate-400">
+                <span>
+                  &copy; {new Date().getFullYear()} {brandName}. All rights reserved.
+                </span>
+                <div className="flex flex-wrap items-center gap-4 font-semibold">
+                  <button onClick={() => onNavigate('auth')} className="hover:text-emerald-400 transition">
+                    Book Ride / Login
+                  </button>
+                  <button onClick={() => onNavigate('downloads')} className="hover:text-emerald-400 transition">
+                    Download APK / EXE
+                  </button>
+                  <button onClick={() => onNavigate('auth')} className="hover:text-emerald-400 transition">
+                    Customer Feedback &amp; Support
+                  </button>
+                </div>
+              </div>
+            </div>
+          </footer>
+        );
+      })()}
     </div>
   );
 }

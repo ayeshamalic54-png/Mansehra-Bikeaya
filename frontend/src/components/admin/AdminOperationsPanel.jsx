@@ -613,29 +613,72 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         </form>
       </div>
 
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
-        <div className="font-extrabold text-sm text-slate-900">Business Settings</div>
-        {Object.entries(sysSettings).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-2">
-            <span className="w-36 font-semibold capitalize text-slate-600">{k.replace(/_/g, ' ')}</span>
-            <input
-              type="text"
-              value={v}
-              onChange={(e) => setSysSettings({ ...sysSettings, [k]: e.target.value })}
-              className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
-            />
-            <button
-              onClick={async () => {
-                await apiRequest(`/api/admin/settings/${k}`, { method: 'PUT', body: { value: sysSettings[k] } });
-                onNotify(`Saved ${k}!`);
-                onRefreshBootstrap();
-              }}
-              className="px-3 py-2 rounded-xl bg-[#009E4D] text-white font-bold"
-            >
-              Save
-            </button>
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4">
+        <div>
+          <div className="font-extrabold text-sm text-slate-900">
+            Office Address, Helpline &amp; Business Settings
           </div>
-        ))}
+          <p className="text-slate-500 mt-0.5">
+            Changes here automatically show on the SafarGo Home Page bottom footer and Support sections.
+          </p>
+        </div>
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              const fields = [
+                'office_address',
+                'support_phone',
+                'support_whatsapp',
+                'office_hours',
+                'business_name',
+                'city',
+                'default_credit_limit',
+              ];
+              await Promise.all(
+                fields.map((key) =>
+                  apiRequest(`/api/admin/settings/${key}`, {
+                    method: 'PUT',
+                    body: { value: String(sysSettings[key] ?? '').trim() },
+                  })
+                )
+              );
+              onNotify('Office address, WhatsApp & helpline saved!');
+              onRefreshBootstrap();
+            } catch (err) {
+              onNotify(err.message, true);
+            }
+          }}
+          className="space-y-3"
+        >
+          {[
+            { key: 'office_address', label: 'Office Address', placeholder: 'e.g. Main Bazar / Shahrah-e-Resham, Mansehra' },
+            { key: 'support_phone', label: 'Helpline Phone #', placeholder: 'e.g. +92 300 1111111' },
+            { key: 'support_whatsapp', label: 'WhatsApp Number', placeholder: 'e.g. +92 300 1111111' },
+            { key: 'office_hours', label: 'Office & Dispatch Hours', placeholder: 'e.g. 24/7 Dispatch · 8 AM – 11 PM' },
+            { key: 'business_name', label: 'Brand Name', placeholder: 'SafarGo' },
+            { key: 'city', label: 'Operating Cities', placeholder: 'Hazara & Intercity' },
+            { key: 'default_credit_limit', label: 'Default Rider Limit (Rs.)', placeholder: '1500' },
+          ].map((f) => (
+            <div key={f.key} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+              <label className="sm:w-44 font-semibold text-slate-700 shrink-0">{f.label}</label>
+              <input
+                type="text"
+                placeholder={f.placeholder}
+                value={sysSettings[f.key] ?? ''}
+                onChange={(e) => setSysSettings({ ...sysSettings, [f.key]: e.target.value })}
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 focus:bg-white focus:border-[#009E4D] focus:outline-none"
+              />
+            </div>
+          ))}
+          <button
+            type="submit"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold transition"
+          >
+            Save Office &amp; Contact Settings
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -198,6 +198,8 @@ def seed_initial_data(db: Session) -> None:
     default_settings = {
         "business_name": "SafarGo",
         "city": "Hazara & Intercity",
+        "office_address": "Main Bazar / Shahrah-e-Resham, Mansehra, KPK",
+        "office_hours": "24/7 Dispatch · 8:00 AM – 11:00 PM Office",
         "default_credit_limit": "1500",
         "support_phone": "+92 300 1111111",
         "support_whatsapp": "+92 300 1111111",

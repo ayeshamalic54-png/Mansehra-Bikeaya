@@ -681,7 +681,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                     <tbody className="divide-y divide-slate-100">
                       {overview.recent_bookings.map((b) => (
                         <tr key={b.id}>
-                          <td className="p-3.5 mono-num font-bold">{b.booking_code}</td>
+                          <td className="p-3.5 mono-num font-bold">
+                            <div>{b.booking_code}</div>
+                            <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-800 text-[10px] font-extrabold">
+                              {b.distance_km} km
+                            </span>
+                          </td>
                           <td className="p-3.5">
                             <div className="font-semibold text-slate-900">{b.pickup_zone} → {b.drop_zone}</div>
                             <div className="text-[11px] text-slate-500">{b.customer?.full_name} ({b.customer?.phone})</div>
@@ -905,6 +910,16 @@ export function AdminDashboard({ onOpenDownloads }) {
                         <td className="p-3.5">
                           <div><strong>{b.pickup_zone}</strong> ({b.pickup_address})</div>
                           <div>→ <strong>{b.drop_zone}</strong> ({b.drop_address})</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-800 text-[10px] font-extrabold mono-num">
+                              {b.distance_km} km
+                            </span>
+                            {Number(b.wait_minutes || 0) > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold mono-num">
+                                Wait: {b.wait_minutes}m
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3.5">
                           {b.status !== 'completed' && b.status !== 'cancelled' ? (

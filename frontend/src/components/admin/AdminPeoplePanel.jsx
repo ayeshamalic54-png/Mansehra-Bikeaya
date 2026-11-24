@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { KeyRound, Pencil, Trash2, X } from 'lucide-react';
+import { KeyRound, MapPin, Pencil, Trash2, X } from 'lucide-react';
 import { apiRequest } from '../../api/client';
+import { StatusBadge } from '../StatusBadge';
 
 export function AdminPeoplePanel({
   mode, // 'riders' | 'customers'
@@ -14,6 +15,7 @@ export function AdminPeoplePanel({
   // Password Modal State (shared for Rider or Customer)
   const [pwTarget, setPwTarget] = useState(null); // { id, name, role }
   const [newPassword, setNewPassword] = useState('');
+  const [tripsRiderId, setTripsRiderId] = useState(null);
 
   // Rider Form State (Create or Edit)
   const [editingRiderId, setEditingRiderId] = useState(null);
@@ -369,8 +371,17 @@ export function AdminPeoplePanel({
                       </div>
                     </td>
                     <td className="p-3.5 mono-num">
-                      <div>{r.total_trips} trips</div>
+                      <div className="font-bold text-slate-900">{r.total_trips} trips · <span className="text-sky-700">{r.total_distance_km ?? 0} km</span></div>
                       <div className="text-amber-600 font-bold">★ {r.rating_avg}</div>
+                      {(r.recent_trips || []).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setTripsRiderId(tripsRiderId === r.id ? null : r.id)}
+                          className="mt-1 px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-sky-800 font-bold text-[10px] hover:bg-sky-100"
+                        >
+                          {tripsRiderId === r.id ? 'Hide Trips' : `View Per-Trip km (${r.recent_trips.length})`}
+                        </button>
+                      )}
                     </td>
                     <td className="p-3.5 mono-num">
                       <div className="font-bold text-amber-600">Due: Rs. {r.balance_due_to_admin}</div>
@@ -445,6 +456,55 @@ export function AdminPeoplePanel({
               </tbody>
             </table>
           </div>
+
+          {tripsRiderId && (() => {
+            const target = riders.find((r) => r.id === tripsRiderId);
+            if (!target) return null;
+            return (
+              <div className="bg-white border border-sky-200 rounded-2xl p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-extrabold text-sm text-slate-900">
+                      Per-Trip Distance Log — {target.full_name} ({target.bike_plate})
+                    </div>
+                    <div className="text-slate-500 mono-num">
+                      Completed Distance: <strong>{target.total_distance_km ?? 0} km</strong> across {target.total_trips} trips
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTripsRiderId(null)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 inline-flex items-center gap-1"
+                  >
+                    <X className="w-3.5 h-3.5" /> Close
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                  {(target.recent_trips || []).map((t) => (
+                    <div key={t.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-900 flex flex-wrap items-center gap-2">
+                          <span className="mono-num">{t.booking_code}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-800 text-[11px] font-extrabold mono-num">
+                            <MapPin className="w-3 h-3 inline mr-0.5" />
+                            {t.distance_km} km
+                          </span>
+                          <StatusBadge value={t.status} />
+                        </div>
+                        <div className="text-slate-600 mt-0.5">{t.pickup_zone} → {t.drop_zone}</div>
+                      </div>
+                      <div className="text-right mono-num">
+                        <div className="font-bold text-slate-900">Fare: Rs. {t.final_fare}</div>
+                        <div className="text-[11px] text-[#008741] font-semibold">
+                          Captain Net: Rs. {t.rider_earning} · Comm: Rs. {t.commission_amount}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </>
       ) : (
         <>

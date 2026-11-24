@@ -486,37 +486,70 @@ def list_riders(
         .order_by(User.created_at.desc())
         .all()
     )
-    return [
-        {
-            "id": u.id,
-            "full_name": u.full_name,
-            "phone": u.phone,
-            "is_active": u.is_active,
-            "created_at": u.created_at,
-            "cnic_number": u.rider_profile.cnic_number if u.rider_profile else None,
-            "vehicle_type": u.rider_profile.vehicle_type if u.rider_profile else "bike",
-            "bike_model": u.rider_profile.bike_model if u.rider_profile else None,
-            "bike_plate": u.rider_profile.bike_plate if u.rider_profile else None,
-            "license_no": u.rider_profile.license_no if u.rider_profile else None,
-            "zone_name": u.rider_profile.zone_name if u.rider_profile else None,
-            "current_lat": u.rider_profile.current_lat if u.rider_profile else None,
-            "current_lng": u.rider_profile.current_lng if u.rider_profile else None,
-            "location_updated_at": u.rider_profile.location_updated_at if u.rider_profile else None,
-            "is_verified": u.rider_profile.is_verified if u.rider_profile else False,
-            "is_online": u.rider_profile.is_online if u.rider_profile else False,
-            "credit_limit": u.rider_profile.credit_limit if u.rider_profile else 1500.0,
-            "balance_due_to_admin": u.rider_profile.balance_due_to_admin if u.rider_profile else 0.0,
-            "custom_commission_type": u.rider_profile.custom_commission_type if u.rider_profile else None,
-            "custom_commission_value": u.rider_profile.custom_commission_value if u.rider_profile else None,
-            "total_trips": u.rider_profile.total_trips if u.rider_profile else 0,
-            "total_gross_collected": u.rider_profile.total_gross_collected if u.rider_profile else 0.0,
-            "total_net_earned": u.rider_profile.total_net_earned if u.rider_profile else 0.0,
-            "total_commission_generated": u.rider_profile.total_commission_generated if u.rider_profile else 0.0,
-            "total_settled_to_admin": u.rider_profile.total_settled_to_admin if u.rider_profile else 0.0,
-            "rating_avg": u.rider_profile.rating_avg if u.rider_profile else 5.0,
-        }
-        for u in riders
-    ]
+    rider_ids = [u.id for u in riders]
+    trips_by_rider: dict[int, list[Booking]] = {}
+    if rider_ids:
+        all_rider_trips = (
+            db.query(Booking)
+            .filter(Booking.rider_id.in_(rider_ids))
+            .order_by(Booking.created_at.desc())
+            .all()
+        )
+        for bk in all_rider_trips:
+            trips_by_rider.setdefault(bk.rider_id, []).append(bk)
+
+    out = []
+    for u in riders:
+        r_trips = trips_by_rider.get(u.id, [])
+        completed_km = round(sum(float(b.distance_km or 0.0) for b in r_trips if b.status == "completed"), 1)
+        out.append(
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "phone": u.phone,
+                "is_active": u.is_active,
+                "created_at": u.created_at,
+                "cnic_number": u.rider_profile.cnic_number if u.rider_profile else None,
+                "vehicle_type": u.rider_profile.vehicle_type if u.rider_profile else "bike",
+                "bike_model": u.rider_profile.bike_model if u.rider_profile else None,
+                "bike_plate": u.rider_profile.bike_plate if u.rider_profile else None,
+                "license_no": u.rider_profile.license_no if u.rider_profile else None,
+                "zone_name": u.rider_profile.zone_name if u.rider_profile else None,
+                "current_lat": u.rider_profile.current_lat if u.rider_profile else None,
+                "current_lng": u.rider_profile.current_lng if u.rider_profile else None,
+                "location_updated_at": u.rider_profile.location_updated_at if u.rider_profile else None,
+                "is_verified": u.rider_profile.is_verified if u.rider_profile else False,
+                "is_online": u.rider_profile.is_online if u.rider_profile else False,
+                "credit_limit": u.rider_profile.credit_limit if u.rider_profile else 1500.0,
+                "balance_due_to_admin": u.rider_profile.balance_due_to_admin if u.rider_profile else 0.0,
+                "custom_commission_type": u.rider_profile.custom_commission_type if u.rider_profile else None,
+                "custom_commission_value": u.rider_profile.custom_commission_value if u.rider_profile else None,
+                "total_trips": u.rider_profile.total_trips if u.rider_profile else 0,
+                "total_distance_km": completed_km,
+                "recent_trips": [
+                    {
+                        "id": b.id,
+                        "booking_code": b.booking_code,
+                        "service_type": b.service_type,
+                        "pickup_zone": b.pickup_zone,
+                        "drop_zone": b.drop_zone,
+                        "distance_km": b.distance_km,
+                        "final_fare": b.final_fare,
+                        "rider_earning": b.rider_earning,
+                        "commission_amount": b.commission_amount,
+                        "status": b.status,
+                        "created_at": b.created_at,
+                    }
+                    for b in r_trips[:20]
+                ],
+                "total_gross_collected": u.rider_profile.total_gross_collected if u.rider_profile else 0.0,
+                "total_net_earned": u.rider_profile.total_net_earned if u.rider_profile else 0.0,
+                "total_commission_generated": u.rider_profile.total_commission_generated if u.rider_profile else 0.0,
+                "total_settled_to_admin": u.rider_profile.total_settled_to_admin if u.rider_profile else 0.0,
+                "rating_avg": u.rider_profile.rating_avg if u.rider_profile else 5.0,
+            }
+        )
+    return out
 
 
 @router.post("/riders", status_code=status.HTTP_201_CREATED)

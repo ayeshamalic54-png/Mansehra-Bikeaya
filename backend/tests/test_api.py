@@ -809,6 +809,37 @@ def test_safargo_digital_payments_paid_status_and_admin_discount(client):
     assert all(e["recorded_by"] == "SafarGo" for e in ledger_entries)
 
 
+def test_admin_per_trip_km_and_office_contact_settings(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    # 1. Riders list exposes total_distance_km and per-trip distance_km in recent_trips
+    riders = client.get("/api/admin/riders", headers=_auth_header(admin_token))
+    assert riders.status_code == 200
+    r_rows = riders.json()
+    assert any(r["total_distance_km"] > 0 and len(r["recent_trips"]) >= 1 for r in r_rows)
+    first_with_trips = next(r for r in r_rows if len(r["recent_trips"]) >= 1)
+    assert "distance_km" in first_with_trips["recent_trips"][0]
+
+    # 2. Admin edits office_address, support_phone, support_whatsapp, office_hours -> reflected in public bootstrap
+    updates = {
+        "office_address": "Paracha Plaza, Shahrah-e-Resham, Mansehra",
+        "support_phone": "+92 311 5550199",
+        "support_whatsapp": "+92 311 5550199",
+        "office_hours": "24/7 Dispatch · 9 AM – 10 PM",
+    }
+    for k, v in updates.items():
+        res = client.put(f"/api/admin/settings/{k}", headers=_auth_header(admin_token), json={"value": v})
+        assert res.status_code == 200
+
+    boot_settings = client.get("/api/public/bootstrap").json()["settings"]
+    for k, v in updates.items():
+        assert boot_settings[k] == v
+
+
+
 
 
 
