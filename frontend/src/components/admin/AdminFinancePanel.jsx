@@ -1,12 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Pencil, Plus, Receipt, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Landmark, Pencil, Plus, Receipt, Trash2, X } from 'lucide-react';
 import { apiRequest } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { StatusBadge } from '../StatusBadge';
+import { getSafarGoAccountTitle } from '../../utils/paymentAccounts';
 
 export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
+  const { bootstrap } = useAuth();
   const [balances, setBalances] = useState([]);
   const [ledger, setLedger] = useState([]);
+  const [settlementRequests, setSettlementRequests] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [pricing, setPricing] = useState([]);
+  const [payAccounts, setPayAccounts] = useState({
+    payment_account_title: 'SafarGo',
+    payment_easypaisa: '',
+    payment_upaisa: '',
+    payment_jazzcash: '',
+    payment_bank_name: '',
+    payment_bank_account: '',
+  });
+
+  useEffect(() => {
+    const s = bootstrap?.settings || {};
+    setPayAccounts({
+      payment_account_title: getSafarGoAccountTitle(s),
+      payment_easypaisa: s.payment_easypaisa || '',
+      payment_upaisa: s.payment_upaisa || '',
+      payment_jazzcash: s.payment_jazzcash || '',
+      payment_bank_name: s.payment_bank_name || '',
+      payment_bank_account: s.payment_bank_account || '',
+    });
+  }, [bootstrap?.settings]);
 
   const [settForm, setSettForm] = useState({
     rider_id: '',
@@ -31,21 +56,65 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
 
   const loadFinanceData = async () => {
     try {
-      const [bal, led, exp, prc] = await Promise.all([
+      const [bal, led, exp, prc, reqs] = await Promise.all([
         apiRequest('/api/finance/rider-balances'),
         apiRequest('/api/finance/ledger'),
         apiRequest('/api/finance/expenses'),
         apiRequest('/api/admin/pricing'),
+        apiRequest('/api/finance/settlement-requests'),
       ]);
       setBalances(bal);
       setLedger(led);
       setExpenses(exp);
       setPricing(prc);
+      setSettlementRequests(reqs);
       if (!settForm.rider_id && bal.length > 0) {
         setSettForm((prev) => ({ ...prev, rider_id: String(bal[0].rider_id) }));
       }
     } catch (e) {
       onNotify(e.message, true);
+    }
+  };
+
+  const handleSavePayAccounts = async (e) => {
+    e.preventDefault();
+    try {
+      const sanitizedTitle = getSafarGoAccountTitle({ payment_account_title: payAccounts.payment_account_title });
+      const entries = [
+        ['payment_account_title', sanitizedTitle],
+        ['payment_easypaisa', payAccounts.payment_easypaisa.trim()],
+        ['payment_upaisa', payAccounts.payment_upaisa.trim()],
+        ['payment_jazzcash', payAccounts.payment_jazzcash.trim()],
+        ['payment_bank_name', payAccounts.payment_bank_name.trim()],
+        ['payment_bank_account', payAccounts.payment_bank_account.trim()],
+      ];
+      await Promise.all(
+        entries.map(([key, value]) => apiRequest(`/api/admin/settings/${key}`, { method: 'PUT', body: { value } }))
+      );
+      onNotify('SafarGo receiving payment accounts saved!');
+      if (onRefreshBootstrap) await onRefreshBootstrap();
+    } catch (err) {
+      onNotify(err.message, true);
+    }
+  };
+
+  const handleApproveSettlementReq = async (reqId) => {
+    try {
+      await apiRequest(`/api/finance/settlement-requests/${reqId}/mark-paid`, { method: 'POST' });
+      onNotify('Payment confirmed as PAID and rider balance updated!');
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
+    }
+  };
+
+  const handleRejectSettlementReq = async (reqId) => {
+    try {
+      await apiRequest(`/api/finance/settlement-requests/${reqId}/reject`, { method: 'POST' });
+      onNotify('Settlement proof rejected.');
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
     }
   };
 
@@ -444,10 +513,113 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   // Default: settlements & lain-dain ledger
   return (
     <div className="space-y-5">
+      {/* SafarGo Digital Payment Accounts Setup (Always Branded as SafarGo — Never Admin Personal Name) */}
+      <form onSubmit={handleSavePayAccounts} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+            <Landmark className="w-4 h-4 text-[#009E4D]" />
+            SafarGo Payment Receiving Accounts (Bank / EasyPaisa / UPaisa / JazzCash)
+          </div>
+          <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#008741] font-bold">
+            Public Sender Title: {getSafarGoAccountTitle(payAccounts)}
+          </span>
+        </div>
+        <p className="text-slate-500">
+          When customers or captains send digital payments, they see <strong>Account Title: SafarGo</strong> instead of Admin&apos;s personal name.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <input
+            type="text"
+            placeholder="EasyPaisa Account #"
+            value={payAccounts.payment_easypaisa}
+            onChange={(e) => setPayAccounts({ ...payAccounts, payment_easypaisa: e.target.value })}
+            className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+          />
+          <input
+            type="text"
+            placeholder="UPaisa Account #"
+            value={payAccounts.payment_upaisa}
+            onChange={(e) => setPayAccounts({ ...payAccounts, payment_upaisa: e.target.value })}
+            className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+          />
+          <input
+            type="text"
+            placeholder="JazzCash Account #"
+            value={payAccounts.payment_jazzcash}
+            onChange={(e) => setPayAccounts({ ...payAccounts, payment_jazzcash: e.target.value })}
+            className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+          />
+          <input
+            type="text"
+            placeholder="Bank Name (e.g. Meezan / HBL)"
+            value={payAccounts.payment_bank_name}
+            onChange={(e) => setPayAccounts({ ...payAccounts, payment_bank_name: e.target.value })}
+            className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
+          />
+          <input
+            type="text"
+            placeholder="Bank Account / IBAN #"
+            value={payAccounts.payment_bank_account}
+            onChange={(e) => setPayAccounts({ ...payAccounts, payment_bank_account: e.target.value })}
+            className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+          />
+        </div>
+        <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">
+          Save SafarGo Payment Accounts
+        </button>
+      </form>
+
+      {/* Captain Submitted Payment Proofs */}
+      {settlementRequests.length > 0 && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-2.5 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-extrabold text-sm text-slate-900">
+              Captain Payments Sent to SafarGo ({settlementRequests.filter((r) => r.status === 'pending').length} pending)
+            </span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {settlementRequests.map((req) => (
+              <div key={req.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-slate-900">
+                    {req.rider_name} ({req.rider_phone}) · <span className="uppercase">{req.payment_channel}</span> → SafarGo
+                  </div>
+                  <div className="text-slate-500 mono-num">
+                    Rs. {req.amount} {req.reference_no ? `· TID/Ref: ${req.reference_no}` : ''} {req.note ? `· ${req.note}` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge value={req.status} />
+                  {req.status === 'pending' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveSettlementReq(req.id)}
+                        className="px-3 py-1.5 rounded-lg bg-[#009E4D] hover:bg-[#008741] text-white font-bold inline-flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Confirm Paid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectSettlementReq(req.id)}
+                        className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 font-bold"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSettlement} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
         <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
           <Receipt className="w-4 h-4 text-[#009E4D]" />
-          Record Rider Cash Collection / Settlement (Lain-Dain)
+          Record Captain Payment / Settlement (Lain-Dain → Paid)
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <select
@@ -468,8 +640,8 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             onChange={(e) => setSettForm({ ...settForm, entry_type: e.target.value })}
             className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
           >
-            <option value="settlement_to_admin">Rider Paid Admin (Collect Cash)</option>
-            <option value="payout_to_rider">Admin Paid Rider (Digital Payout)</option>
+            <option value="settlement_to_admin">Captain Paid SafarGo (Collect)</option>
+            <option value="payout_to_rider">SafarGo Paid Captain (Payout)</option>
             <option value="adjustment_reduce">Manual Adjust (Reduce Due)</option>
             <option value="adjustment_add">Manual Adjust (Add Due)</option>
           </select>
@@ -491,14 +663,15 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
           >
             <option value="cash">Cash Handover</option>
-            <option value="easypaisa">EasyPaisa</option>
-            <option value="jazzcash">JazzCash</option>
-            <option value="bank">Bank Transfer</option>
+            <option value="easypaisa">EasyPaisa (SafarGo)</option>
+            <option value="upaisa">UPaisa (SafarGo)</option>
+            <option value="jazzcash">JazzCash (SafarGo)</option>
+            <option value="bank">Bank Transfer (SafarGo)</option>
           </select>
 
           <input
             type="text"
-            placeholder="Ref # / Note"
+            placeholder="TID / Ref # / Note"
             value={settForm.note}
             onChange={(e) => setSettForm({ ...settForm, note: e.target.value })}
             className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
@@ -508,7 +681,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           type="submit"
           className="px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
         >
-          Confirm &amp; Update Rider Ledger
+          Confirm &amp; Mark Paid
         </button>
       </form>
 
@@ -546,6 +719,9 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     <span className={r.is_over_limit ? 'text-rose-600' : r.balance_due_to_admin > 0 ? 'text-amber-600' : 'text-emerald-600'}>
                       Rs. {r.balance_due_to_admin}
                     </span>
+                    {r.balance_due_to_admin <= 0 && r.total_settled_to_admin > 0 && (
+                      <div className="mt-0.5"><StatusBadge value="paid" /></div>
+                    )}
                     {r.is_over_limit && <div className="text-[10px] text-rose-600">OVER LIMIT!</div>}
                   </td>
                   <td className="p-3.5">
@@ -580,8 +756,12 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           {ledger.map((e) => (
             <div key={e.id} className="p-3.5 flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-slate-900">
-                  {e.rider_name} ·{' '}
+                <div className="flex flex-wrap items-center gap-1.5 font-bold text-slate-900">
+                  <span>{e.rider_name}</span>
+                  {(e.entry_type === 'settlement_to_admin' || e.entry_type === 'payout_to_rider') && (
+                    <StatusBadge value="paid" />
+                  )}
+                  <span>·</span>{' '}
                   {editingLedgerId === e.id ? (
                     <span className="inline-flex gap-1.5 items-center mt-1">
                       <input
@@ -605,7 +785,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                   )}
                 </div>
                 <div className="text-[11px] text-slate-500 mono-num">
-                  {new Date(e.created_at).toLocaleString()} · Channel: {e.payment_channel} · By: {e.recorded_by}
+                  {new Date(e.created_at).toLocaleString()} · Channel: {e.payment_channel} · Processed by: SafarGo
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">

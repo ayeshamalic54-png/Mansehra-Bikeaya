@@ -181,7 +181,10 @@ def create_manual_booking(
         promo_code=payload.promo_code,
         wait_minutes=payload.wait_minutes,
     )
-    fare = float(round(payload.custom_fare)) if payload.custom_fare else est["estimated_fare"]
+    base_before_discount = float(round(payload.custom_fare)) if payload.custom_fare else round(est["estimated_fare"] + est["discount_amount"], 2)
+    manual_discount = float(payload.discount_amount or 0.0)
+    total_discount = round(manual_discount + float(est["discount_amount"] or 0.0), 2)
+    fare = float(round(max(10.0, base_before_discount - total_discount)))
 
     rider_rp = None
     initial_status = "pending"
@@ -213,8 +216,8 @@ def create_manual_booking(
         drop_lat=payload.drop_lat if payload.drop_lat is not None else (d_zone_row.lat if d_zone_row else None),
         drop_lng=payload.drop_lng if payload.drop_lng is not None else (d_zone_row.lng if d_zone_row else None),
         distance_km=payload.distance_km,
-        estimated_fare=est["estimated_fare"],
-        discount_amount=est["discount_amount"],
+        estimated_fare=fare,
+        discount_amount=total_discount,
         promo_code=est["applied_promo"],
         wait_minutes=est["wait_minutes"],
         wait_charge=est["wait_charge"],
@@ -225,6 +228,8 @@ def create_manual_booking(
         rider_earning=net,
         payment_method=payload.payment_method,
         payment_collector="rider" if payload.payment_method == "cash" else "admin",
+        payment_status="submitted" if (payload.payment_method != "cash" and payload.payment_reference) else "pending",
+        payment_reference=payload.payment_reference.strip() if payload.payment_reference else None,
         status=initial_status,
         receiver_name=payload.receiver_name,
         receiver_phone=payload.receiver_phone,
@@ -341,9 +346,15 @@ def admin_edit_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    old_discount = float(booking.discount_amount or 0.0)
+    old_final = float(booking.final_fare or 0.0)
     updates = payload.model_dump(exclude_unset=True)
     for field, val in updates.items():
         setattr(booking, field, val)
+
+    if "discount_amount" in updates and "final_fare" not in updates:
+        gross_before = old_final + old_discount
+        booking.final_fare = float(round(max(10.0, gross_before - float(booking.discount_amount or 0.0))))
 
     # Recompute commission & ledger entry if fare or payment collector changed
     rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
@@ -358,21 +369,47 @@ def admin_edit_booking(
     if booking.status == "completed" and booking.rider_id:
         ledger = db.query(LedgerEntry).filter(LedgerEntry.booking_id == booking.id).first()
         if ledger:
+            ledger.payment_channel = booking.payment_method
             if booking.payment_collector == "rider":
                 ledger.entry_type = "commission_due"
                 ledger.amount = booking.commission_amount
                 ledger.signed_delta = booking.commission_amount
-                ledger.note = f"Ride {booking.booking_code} (Edited): Cash Rs.{booking.final_fare:.0f}, Comm due Rs.{booking.commission_amount:.2f}"
+                ledger.note = f"Ride {booking.booking_code} (Edited): Cash Rs.{booking.final_fare:.0f}, SafarGo comm Rs.{booking.commission_amount:.2f}"
             else:
                 ledger.entry_type = "digital_payout_credit"
                 ledger.amount = booking.rider_earning
                 ledger.signed_delta = -booking.rider_earning
-                ledger.note = f"Ride {booking.booking_code} (Edited): Digital Rs.{booking.final_fare:.0f}, Rider credit Rs.{booking.rider_earning:.2f}"
+                ledger.note = f"Ride {booking.booking_code} (Edited): Digital to SafarGo Rs.{booking.final_fare:.0f}, Captain credit Rs.{booking.rider_earning:.2f}"
         db.commit()
         recalculate_rider_ledger_balances(db, booking.rider_id)
     else:
         db.commit()
 
+    db.refresh(booking)
+    return serialize_booking(booking)
+
+
+@router.post("/bookings/{booking_id}/mark-paid")
+def admin_mark_booking_paid(
+    booking_id: int,
+    payload: Optional[AdminBookingUpdate] = None,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.customer), joinedload(Booking.rider).joinedload(User.rider_profile))
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if payload and payload.payment_method:
+        booking.payment_method = payload.payment_method
+    if payload and payload.payment_reference is not None:
+        booking.payment_reference = payload.payment_reference
+    booking.payment_status = "paid"
+    db.commit()
     db.refresh(booking)
     return serialize_booking(booking)
 

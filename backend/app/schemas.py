@@ -66,7 +66,8 @@ class BookingCreate(BaseModel):
     drop_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     distance_km: float = Field(3.0, ge=0.5, le=300.0)
     wait_minutes: int = Field(0, ge=0, le=300)
-    payment_method: str = Field("cash", pattern="^(cash|easypaisa|jazzcash|wallet)$")
+    payment_method: str = Field("cash", pattern="^(cash|easypaisa|upaisa|jazzcash|bank|wallet)$")
+    payment_reference: Optional[str] = Field(None, max_length=80)
     promo_code: Optional[str] = None
     receiver_name: Optional[str] = None
     receiver_phone: Optional[str] = None
@@ -74,11 +75,17 @@ class BookingCreate(BaseModel):
     customer_notes: Optional[str] = None
 
 
+class BookingPaymentSubmit(BaseModel):
+    payment_method: str = Field(..., pattern="^(easypaisa|upaisa|jazzcash|bank)$")
+    payment_reference: str = Field(..., min_length=2, max_length=80)
+
+
 class AdminManualBookingCreate(BookingCreate):
     customer_phone: str = Field(..., min_length=7, max_length=32)
     customer_name: Optional[str] = "Walk-in / Phone Customer"
     rider_id: Optional[int] = None
     custom_fare: Optional[float] = Field(None, ge=10)
+    discount_amount: float = Field(0.0, ge=0)
 
 
 class BookingAssignRider(BaseModel):
@@ -172,9 +179,12 @@ class AdminBookingUpdate(BaseModel):
     distance_km: Optional[float] = Field(None, ge=0.5, le=300.0)
     wait_minutes: Optional[int] = Field(None, ge=0, le=300)
     wait_charge: Optional[float] = Field(None, ge=0)
+    discount_amount: Optional[float] = Field(None, ge=0)
     final_fare: Optional[float] = Field(None, ge=10)
-    payment_method: Optional[str] = Field(None, pattern="^(cash|easypaisa|jazzcash|wallet)$")
+    payment_method: Optional[str] = Field(None, pattern="^(cash|easypaisa|upaisa|jazzcash|bank|wallet)$")
     payment_collector: Optional[str] = Field(None, pattern="^(rider|admin)$")
+    payment_status: Optional[str] = Field(None, pattern="^(pending|submitted|paid)$")
+    payment_reference: Optional[str] = Field(None, max_length=80)
     receiver_name: Optional[str] = None
     receiver_phone: Optional[str] = None
     cod_amount: Optional[float] = Field(None, ge=0)
@@ -185,9 +195,16 @@ class SettlementCreate(BaseModel):
     rider_id: int
     amount: float = Field(..., gt=0)
     entry_type: str = Field("settlement_to_admin", pattern="^(settlement_to_admin|payout_to_rider|adjustment_reduce|adjustment_add)$")
-    payment_channel: str = Field("cash", pattern="^(cash|easypaisa|jazzcash|bank|system)$")
+    payment_channel: str = Field("cash", pattern="^(cash|easypaisa|upaisa|jazzcash|bank|system)$")
     reference_no: Optional[str] = None
     note: Optional[str] = None
+
+
+class RiderSettlementSubmit(BaseModel):
+    amount: float = Field(..., gt=0)
+    payment_channel: str = Field(..., pattern="^(cash|easypaisa|upaisa|jazzcash|bank)$")
+    reference_no: Optional[str] = Field(None, max_length=80)
+    note: Optional[str] = Field(None, max_length=255)
 
 
 class ExpenseCreate(BaseModel):
@@ -207,7 +224,7 @@ class ExpenseUpdate(BaseModel):
 
 
 class LedgerEntryUpdate(BaseModel):
-    payment_channel: Optional[str] = Field(None, pattern="^(cash|easypaisa|jazzcash|bank|system)$")
+    payment_channel: Optional[str] = Field(None, pattern="^(cash|easypaisa|upaisa|jazzcash|bank|system)$")
     reference_no: Optional[str] = None
     note: Optional[str] = None
 
@@ -281,4 +298,4 @@ class ReleaseUpdate(BaseModel):
 
 
 class SystemSettingUpdate(BaseModel):
-    value: str = Field(..., min_length=1, max_length=255)
+    value: str = Field("", max_length=255)

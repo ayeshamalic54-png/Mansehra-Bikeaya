@@ -21,8 +21,15 @@ import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
+import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
 import { SUPPORT_CATEGORIES, getSupportCategoryMeta } from '../utils/supportCategories';
+import {
+  DIGITAL_PAYMENT_CHANNELS,
+  PAYMENT_METHOD_OPTIONS,
+  formatPaymentMethodLabel,
+  getRidePaymentBadgeState,
+} from '../utils/paymentAccounts';
 
 export function CustomerApp({ onOpenDownloads }) {
   const { user, bootstrap, logout } = useAuth();
@@ -42,6 +49,7 @@ export function CustomerApp({ onOpenDownloads }) {
   const [nearbyCaptains, setNearbyCaptains] = useState([]);
   const [distanceKm, setDistanceKm] = useState(2.3);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentReference, setPaymentReference] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
@@ -52,6 +60,15 @@ export function CustomerApp({ onOpenDownloads }) {
   const [promoError, setPromoError] = useState('');
   const [bookings, setBookings] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [payModalId, setPayModalId] = useState(null);
+  const [payDraft, setPayDraft] = useState({ payment_method: 'easypaisa', payment_reference: '' });
+  const [seenReplies, setSeenReplies] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`safargo_seen_replies_${user?.id || 'guest'}`) || '{}');
+    } catch {
+      return {};
+    }
+  });
   const [ticketForm, setTicketForm] = useState({
     category: 'feedback',
     booking_id: '',
@@ -67,6 +84,36 @@ export function CustomerApp({ onOpenDownloads }) {
   const [ratingTargetId, setRatingTargetId] = useState(null);
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingFeedback, setRatingFeedback] = useState('');
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      setSeenReplies(JSON.parse(localStorage.getItem(`safargo_seen_replies_${user.id}`) || '{}'));
+    } catch {
+      setSeenReplies({});
+    }
+  }, [user?.id]);
+
+  // Clear Support unread badge automatically as soon as Customer views Support tab
+  useEffect(() => {
+    if (tab !== 'support' || !user?.id || tickets.length === 0) return;
+    const next = { ...seenReplies };
+    let changed = false;
+    for (const t of tickets) {
+      if (t.admin_reply && next[String(t.id)] !== t.admin_reply) {
+        next[String(t.id)] = t.admin_reply;
+        changed = true;
+      }
+    }
+    if (changed) {
+      setSeenReplies(next);
+      try {
+        localStorage.setItem(`safargo_seen_replies_${user.id}`, JSON.stringify(next));
+      } catch {
+        // ignore storage quota errors
+      }
+    }
+  }, [tab, tickets, user?.id]);
 
   const loadBookings = async () => {
     try {
@@ -182,6 +229,7 @@ export function CustomerApp({ onOpenDownloads }) {
           drop_lng: dropLng,
           distance_km: Number(distanceKm),
           payment_method: paymentMethod,
+          payment_reference: paymentMethod !== 'cash' ? (paymentReference.trim() || null) : null,
           promo_code: promoCode.trim() || null,
           receiver_name: serviceType === 'parcel' ? receiverName || null : null,
           receiver_phone: serviceType === 'parcel' ? receiverPhone || null : null,
@@ -192,6 +240,7 @@ export function CustomerApp({ onOpenDownloads }) {
       setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest SafarGo captain...`);
       setPickupAddress('');
       setDropAddress('');
+      setPaymentReference('');
       setPromoCode('');
       setCustomerNotes('');
       await loadBookings();
@@ -201,6 +250,26 @@ export function CustomerApp({ onOpenDownloads }) {
       setErrMsg(err.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSubmitRidePayment = async (e) => {
+    e.preventDefault();
+    if (!payModalId) return;
+    try {
+      await apiRequest(`/api/bookings/${payModalId}/submit-payment`, {
+        method: 'POST',
+        body: {
+          payment_method: payDraft.payment_method,
+          payment_reference: payDraft.payment_reference,
+        },
+      });
+      setPayModalId(null);
+      setPayDraft({ payment_method: 'easypaisa', payment_reference: '' });
+      setStatusMsg('Payment details sent to SafarGo! Status updates to Paid once confirmed.');
+      await loadBookings();
+    } catch (err) {
+      setErrMsg(err.message);
     }
   };
 
@@ -265,7 +334,9 @@ export function CustomerApp({ onOpenDownloads }) {
     }
   };
 
-  const repliedTicketsCount = tickets.filter((t) => Boolean(t.admin_reply)).length;
+  const unreadRepliesCount = tickets.filter(
+    (t) => Boolean(t.admin_reply) && seenReplies[String(t.id)] !== t.admin_reply
+  ).length;
 
   const activeRides = bookings.filter((b) =>
     ['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status)
@@ -315,9 +386,9 @@ export function CustomerApp({ onOpenDownloads }) {
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Support</span>
-              {repliedTicketsCount > 0 && (
+              {unreadRepliesCount > 0 && (
                 <span className="px-1.5 py-0.5 leading-none rounded-full bg-white text-[#008741] text-[10px] font-extrabold mono-num">
-                  {repliedTicketsCount}
+                  {unreadRepliesCount}
                 </span>
               )}
             </button>
@@ -469,9 +540,11 @@ export function CustomerApp({ onOpenDownloads }) {
                     onChange={(e) => setPaymentMethod(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
-                    <option value="cash">Cash to Captain (Bike / Car)</option>
-                    <option value="easypaisa">EasyPaisa (to Admin Source)</option>
-                    <option value="jazzcash">JazzCash (to Admin Source)</option>
+                    {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -487,6 +560,23 @@ export function CustomerApp({ onOpenDownloads }) {
                 </div>
               </div>
 
+              {paymentMethod !== 'cash' && (
+                <div className="space-y-2.5">
+                  <SafarGoPayBox
+                    settings={bootstrap.settings}
+                    selectedChannel={paymentMethod}
+                    amount={estimate?.estimated_fare ?? fallbackFare}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Transaction Ref / TID (optional now — or submit later after sending)"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+                  />
+                </div>
+              )}
+
               <input
                 type="text"
                 placeholder="Instructions for captain (optional)"
@@ -499,10 +589,22 @@ export function CustomerApp({ onOpenDownloads }) {
             {/* Fare & Submit Box */}
             <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <div className="text-xs text-slate-400">Guaranteed Total Fare</div>
+                <div className="text-xs text-slate-400">
+                  {estimate?.discount_amount > 0 ? 'Total Net Fare (After Discount)' : 'Guaranteed Total Fare'}
+                </div>
+                {estimate?.discount_amount > 0 && (
+                  <div className="text-xs text-slate-400 line-through mono-num">
+                    Original: Rs. {(Number(estimate.estimated_fare) + Number(estimate.discount_amount)).toFixed(0)}
+                  </div>
+                )}
                 <div className="text-3xl font-extrabold mono-num text-[#009E4D]">
                   Rs. {estimate?.estimated_fare ?? fallbackFare}
                 </div>
+                {estimate?.discount_amount > 0 && (
+                  <div className="text-xs text-emerald-300 font-bold">
+                    Discount Applied: -Rs. {estimate.discount_amount}
+                  </div>
+                )}
                 <div className="text-[11px] text-slate-300 mt-0.5">
                   Wait Policy: First {estimate?.wait_free_minutes ?? activeRule?.wait_free_minutes ?? 5} min free, then Rs.{' '}
                   {estimate?.wait_charge_per_min ?? activeRule?.wait_charge_per_min ?? 10}/min
@@ -510,11 +612,6 @@ export function CustomerApp({ onOpenDownloads }) {
                 {estimate?.city_slab_applied && (
                   <div className="text-[11px] text-emerald-300 font-semibold mt-0.5">
                     Mansehra In-City Slab: Rs. {estimate.city_flat_fare} up to {estimate.city_flat_km} km, then Rs. {estimate.per_km_rate}/km
-                  </div>
-                )}
-                {estimate?.discount_amount > 0 && (
-                  <div className="text-xs text-teal-600 font-semibold">
-                    Promo saved Rs. {estimate.discount_amount}
                   </div>
                 )}
               </div>
@@ -635,11 +732,38 @@ export function CustomerApp({ onOpenDownloads }) {
                     )
                   )}
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="mono-num font-extrabold text-sm text-slate-900">
-                      Fare: Rs. {b.final_fare} <span className="font-normal text-slate-500">({b.payment_method})</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div className="space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2 mono-num font-extrabold text-sm text-slate-900">
+                        <span>Fare: Rs. {b.final_fare}</span>
+                        <span className="font-normal text-xs text-slate-500">({formatPaymentMethodLabel(b.payment_method)})</span>
+                        {b.status !== 'cancelled' && <StatusBadge value={getRidePaymentBadgeState(b)} />}
+                      </div>
+                      {Number(b.discount_amount || 0) > 0 && (
+                        <div className="text-[11px] font-semibold text-[#008741] mono-num">
+                          Original Rs. {(Number(b.final_fare) + Number(b.discount_amount)).toFixed(0)} · Discount -Rs. {b.discount_amount} → Net Rs. {b.final_fare}
+                        </div>
+                      )}
+                      {b.payment_reference && (
+                        <div className="text-[11px] text-slate-500 mono-num">TID / Ref: {b.payment_reference}</div>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {b.status !== 'cancelled' && b.payment_status !== 'paid' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPayModalId(payModalId === b.id ? null : b.id);
+                            setPayDraft({
+                              payment_method: b.payment_method !== 'cash' ? b.payment_method : 'easypaisa',
+                              payment_reference: b.payment_reference || '',
+                            });
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[#008741] font-bold hover:bg-emerald-100"
+                        >
+                          {b.payment_status === 'submitted' ? 'Update Payment Ref' : 'Pay to SafarGo'}
+                        </button>
+                      )}
                       {['pending', 'assigned', 'arrived'].includes(b.status) && (
                         <button
                           onClick={() => handleCancel(b.id)}
@@ -672,6 +796,50 @@ export function CustomerApp({ onOpenDownloads }) {
                       </button>
                     </div>
                   </div>
+
+                  {payModalId === b.id && (
+                    <form onSubmit={handleSubmitRidePayment} className="p-3.5 rounded-xl bg-slate-50 border border-emerald-200 space-y-2.5">
+                      <SafarGoPayBox
+                        settings={bootstrap.settings}
+                        selectedChannel={payDraft.payment_method}
+                        amount={b.final_fare}
+                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <select
+                          value={payDraft.payment_method}
+                          onChange={(e) => setPayDraft({ ...payDraft, payment_method: e.target.value })}
+                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white font-bold"
+                        >
+                          {DIGITAL_PAYMENT_CHANNELS.map((ch) => (
+                            <option key={ch.id} value={ch.id}>
+                              {ch.shortLabel} → SafarGo
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          required
+                          minLength={2}
+                          placeholder="Transaction ID / Bank Ref #"
+                          value={payDraft.payment_reference}
+                          onChange={(e) => setPayDraft({ ...payDraft, payment_reference: e.target.value })}
+                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white mono-num"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" className="px-4 py-1.5 rounded-lg bg-[#009E4D] text-white font-bold">
+                          Submit Payment Proof
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPayModalId(null)}
+                          className="px-3 py-1.5 rounded-lg bg-white border border-slate-200"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </form>
+                  )}
 
                   {ratingTargetId === b.id && (
                     <form onSubmit={handleRate} className="p-3 rounded-xl bg-teal-50 border border-teal-200 space-y-2">
@@ -737,19 +905,32 @@ export function CustomerApp({ onOpenDownloads }) {
               </button>
             </div>
 
+            <SafarGoPayBox settings={bootstrap.settings} selectedChannel="easypaisa" />
+
             <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100">
               {completedRides.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">No completed receipts yet.</div>
               ) : (
                 completedRides.map((b) => (
-                  <div key={b.id} className="p-4 flex items-center justify-between text-xs">
+                  <div key={b.id} className="p-4 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <div className="font-bold mono-num text-slate-900">{b.booking_code} · {b.service_type}</div>
                       <div className="text-slate-500">{b.pickup_zone} → {b.drop_zone}</div>
+                      {Number(b.discount_amount || 0) > 0 && (
+                        <div className="text-[11px] font-semibold text-[#008741] mono-num">
+                          Subtotal Rs. {(Number(b.final_fare) + Number(b.discount_amount)).toFixed(0)} − Discount Rs. {b.discount_amount}
+                        </div>
+                      )}
+                      {b.payment_reference && (
+                        <div className="text-[11px] text-slate-400 mono-num">Ref: {b.payment_reference}</div>
+                      )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-right space-y-1">
                       <div className="font-extrabold mono-num text-sm text-[#009E4D]">Rs. {b.final_fare}</div>
-                      <div className="text-slate-500 uppercase">{b.payment_method}</div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-slate-500">{formatPaymentMethodLabel(b.payment_method)}</span>
+                        <StatusBadge value={getRidePaymentBadgeState(b)} />
+                      </div>
                     </div>
                   </div>
                 ))
@@ -933,7 +1114,7 @@ export function CustomerApp({ onOpenDownloads }) {
             { id: 'book', label: 'Book', icon: Bike },
             { id: 'rides', label: 'My Rides', icon: CheckCircle2 },
             { id: 'payments', label: 'Payments', icon: CreditCard },
-            { id: 'support', label: 'Support', icon: MessageSquare, badge: repliedTicketsCount },
+            { id: 'support', label: 'Support', icon: MessageSquare, badge: unreadRepliesCount },
           ].map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;

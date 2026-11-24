@@ -261,13 +261,14 @@ def complete_booking_and_post_ledger(
         signed_delta = commission_amount
         entry_type = "commission_due"
         ledger_amount = commission_amount
-        note = f"Ride {booking.booking_code}: Cash collected Rs.{final_fare:.0f}, Admin commission due Rs.{commission_amount:.2f}"
+        booking.payment_status = "paid"
+        note = f"Ride {booking.booking_code}: Cash collected Rs.{final_fare:.0f}, SafarGo commission Rs.{commission_amount:.2f}"
     else:
-        # Admin collected digital payment -> admin owes rider their net earning
+        # Digital payment to SafarGo -> admin owes rider their net earning
         signed_delta = -rider_earning
         entry_type = "digital_payout_credit"
         ledger_amount = rider_earning
-        note = f"Ride {booking.booking_code}: Digital payment to Admin Rs.{final_fare:.0f}, Rider earning credit Rs.{rider_earning:.2f}"
+        note = f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, Captain credit Rs.{rider_earning:.2f}"
 
     new_balance = round(rider_profile.balance_due_to_admin + signed_delta, 2)
     rider_profile.balance_due_to_admin = new_balance
@@ -304,16 +305,16 @@ def post_rider_settlement(
     if entry_type == "settlement_to_admin":
         signed_delta = -clean_amount
         rider_profile.total_settled_to_admin = round(rider_profile.total_settled_to_admin + clean_amount, 2)
-        default_note = f"Rider paid Rs.{clean_amount:.2f} commission via {payment_channel}"
+        default_note = f"Captain paid Rs.{clean_amount:.2f} commission to SafarGo via {payment_channel} (Paid)"
     elif entry_type == "payout_to_rider":
         signed_delta = clean_amount
-        default_note = f"Admin paid Rs.{clean_amount:.2f} digital payout to rider via {payment_channel}"
+        default_note = f"SafarGo paid Rs.{clean_amount:.2f} payout to captain via {payment_channel} (Paid)"
     elif entry_type == "adjustment_reduce":
         signed_delta = -clean_amount
-        default_note = f"Admin reduced rider due by Rs.{clean_amount:.2f}"
+        default_note = f"SafarGo reduced due by Rs.{clean_amount:.2f}"
     else:  # adjustment_add
         signed_delta = clean_amount
-        default_note = f"Admin added rider due of Rs.{clean_amount:.2f}"
+        default_note = f"SafarGo added due of Rs.{clean_amount:.2f}"
 
     new_balance = round(rider_profile.balance_due_to_admin + signed_delta, 2)
     rider_profile.balance_due_to_admin = new_balance

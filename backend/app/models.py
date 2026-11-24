@@ -149,8 +149,10 @@ class Booking(Base):
     commission_amount = Column(Float, default=0.0, nullable=False)
     rider_earning = Column(Float, default=0.0, nullable=False)
 
-    payment_method = Column(String(32), nullable=False, default="cash")  # cash | easypaisa | jazzcash | wallet
+    payment_method = Column(String(32), nullable=False, default="cash")  # cash | easypaisa | upaisa | jazzcash | bank | wallet
     payment_collector = Column(String(20), nullable=False, default="rider")  # rider | admin
+    payment_status = Column(String(24), nullable=False, default="pending")  # pending | submitted | paid
+    payment_reference = Column(String(80), nullable=True)
     status = Column(String(32), nullable=False, default="pending", index=True)
     # pending | assigned | arrived | in_progress | completed | cancelled
 
@@ -247,3 +249,19 @@ class SystemSetting(Base):
     key = Column(String(80), primary_key=True)
     value = Column(String(255), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class RiderSettlementRequest(Base):
+    __tablename__ = "rider_settlement_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rider_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    payment_channel = Column(String(32), nullable=False)  # easypaisa | upaisa | jazzcash | bank | cash
+    reference_no = Column(String(80), nullable=True)
+    note = Column(String(255), nullable=True)
+    status = Column(String(24), nullable=False, default="pending")  # pending | paid | rejected
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+
+    rider = relationship("User")

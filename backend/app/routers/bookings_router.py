@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user, require_roles
 from app.database import get_db
 from app.models import Booking, MansehraZone, PromoCode, RiderProfile, SupportTicket, User
-from app.schemas import BookingCreate, BookingRatingCreate, SupportTicketCreate
+from app.schemas import BookingCreate, BookingPaymentSubmit, BookingRatingCreate, SupportTicketCreate
 from app.services.finance import estimate_booking_fare
 
 router = APIRouter(prefix="/api", tags=["Customer Bookings & Support"])
@@ -66,6 +66,8 @@ def serialize_booking(b: Booking) -> dict:
         "rider_earning": b.rider_earning,
         "payment_method": b.payment_method,
         "payment_collector": b.payment_collector,
+        "payment_status": getattr(b, "payment_status", "pending") or "pending",
+        "payment_reference": getattr(b, "payment_reference", None),
         "status": b.status,
         "receiver_name": b.receiver_name,
         "receiver_phone": b.receiver_phone,
@@ -131,6 +133,8 @@ def create_customer_booking(
         rider_earning=est["estimated_rider_earning"],
         payment_method=payload.payment_method,
         payment_collector=collector,
+        payment_status="submitted" if (payload.payment_method != "cash" and payload.payment_reference) else "pending",
+        payment_reference=payload.payment_reference.strip() if payload.payment_reference else None,
         status="pending",
         receiver_name=payload.receiver_name,
         receiver_phone=payload.receiver_phone,
@@ -139,6 +143,35 @@ def create_customer_booking(
         created_by_admin=False,
     )
     db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return serialize_booking(booking)
+
+
+@router.post("/bookings/{booking_id}/submit-payment")
+def submit_booking_digital_payment(
+    booking_id: int,
+    payload: BookingPaymentSubmit,
+    current_user: User = Depends(require_roles("customer", "admin")),
+    db: Session = Depends(get_db),
+):
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.customer), joinedload(Booking.rider).joinedload(User.rider_profile))
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if current_user.role != "admin" and booking.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if booking.status == "cancelled":
+        raise HTTPException(status_code=400, detail="Cannot pay for a cancelled ride")
+
+    booking.payment_method = payload.payment_method
+    booking.payment_collector = "admin"
+    booking.payment_reference = payload.payment_reference.strip()
+    booking.payment_status = "submitted"
     db.commit()
     db.refresh(booking)
     return serialize_booking(booking)

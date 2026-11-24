@@ -201,6 +201,12 @@ def seed_initial_data(db: Session) -> None:
         "default_credit_limit": "1500",
         "support_phone": "+92 300 1111111",
         "support_whatsapp": "+92 300 1111111",
+        "payment_account_title": "SafarGo",
+        "payment_easypaisa": "",
+        "payment_upaisa": "",
+        "payment_jazzcash": "",
+        "payment_bank_name": "",
+        "payment_bank_account": "",
     }
     for k, v in default_settings.items():
         if not db.query(SystemSetting).filter(SystemSetting.key == k).first():

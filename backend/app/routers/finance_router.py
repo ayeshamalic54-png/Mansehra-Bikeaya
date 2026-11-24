@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import AdminExpense, LedgerEntry, RiderProfile, User
+from app.models import AdminExpense, LedgerEntry, RiderProfile, RiderSettlementRequest, User
 from app.schemas import ExpenseCreate, ExpenseUpdate, LedgerEntryUpdate, SettlementCreate
-from app.services.finance import post_rider_settlement, recalculate_rider_ledger_balances
+from app.services.finance import post_rider_settlement, recalculate_rider_ledger_balances, utcnow
 
 router = APIRouter(prefix="/api/finance", tags=["Finance & Lain-Dain"])
 
@@ -67,7 +67,7 @@ def list_ledger_entries(
             "payment_channel": e.payment_channel,
             "reference_no": e.reference_no,
             "note": e.note,
-            "recorded_by": e.recorded_by.full_name if e.recorded_by else "System",
+            "recorded_by": "SafarGo",
             "created_at": e.created_at,
         }
         for e in rows
@@ -202,3 +202,82 @@ def delete_expense(
     db.delete(exp)
     db.commit()
     return {"deleted": expense_id}
+
+
+@router.get("/settlement-requests")
+def admin_list_settlement_requests(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(RiderSettlementRequest)
+        .options(joinedload(RiderSettlementRequest.rider))
+        .order_by(RiderSettlementRequest.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "rider_id": r.rider_id,
+            "rider_name": r.rider.full_name if r.rider else "Captain",
+            "rider_phone": r.rider.phone if r.rider else "",
+            "amount": r.amount,
+            "payment_channel": r.payment_channel,
+            "reference_no": r.reference_no,
+            "note": r.note,
+            "account_title": "SafarGo",
+            "status": r.status,
+            "created_at": r.created_at,
+            "paid_at": r.paid_at,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/settlement-requests/{req_id}/mark-paid")
+def admin_approve_settlement_request(
+    req_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    req = db.query(RiderSettlementRequest).filter(RiderSettlementRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Settlement request not found")
+    if req.status == "paid":
+        raise HTTPException(status_code=400, detail="Settlement request already marked Paid")
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == req.rider_id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+
+    note_txt = req.note or f"Captain paid Rs.{req.amount:.0f} to SafarGo via {req.payment_channel} (Paid)"
+    post_rider_settlement(
+        db=db,
+        rider_profile=rp,
+        amount=req.amount,
+        entry_type="settlement_to_admin",
+        payment_channel=req.payment_channel,
+        reference_no=req.reference_no,
+        note=note_txt,
+        admin_user=current_user,
+    )
+    req.status = "paid"
+    req.paid_at = utcnow()
+    db.commit()
+    return {"id": req.id, "status": req.status, "balance_after": rp.balance_due_to_admin}
+
+
+@router.post("/settlement-requests/{req_id}/reject")
+def admin_reject_settlement_request(
+    req_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    req = db.query(RiderSettlementRequest).filter(RiderSettlementRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Settlement request not found")
+    if req.status == "paid":
+        raise HTTPException(status_code=400, detail="Paid request cannot be rejected")
+    req.status = "rejected"
+    db.commit()
+    return {"id": req.id, "status": req.status}

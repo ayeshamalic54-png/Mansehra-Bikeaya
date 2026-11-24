@@ -15,14 +15,26 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { SafarGoMap } from '../components/SafarGoMap';
+import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
+import {
+  DIGITAL_PAYMENT_CHANNELS,
+  formatPaymentMethodLabel,
+  getRidePaymentBadgeState,
+} from '../utils/paymentAccounts';
 
 export function RiderApp({ onOpenDownloads }) {
   const { user, bootstrap, refreshMe, logout } = useAuth();
   const [tab, setTab] = useState('duty'); // duty | active | ledger | profile
   const [availableJobs, setAvailableJobs] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
-  const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [] });
+  const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [], settlement_requests: [] });
+  const [commPayForm, setCommPayForm] = useState({
+    amount: '',
+    payment_channel: 'easypaisa',
+    reference_no: '',
+    note: '',
+  });
   const [waitDrafts, setWaitDrafts] = useState({});
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [gpsBanner, setGpsBanner] = useState('');
@@ -328,13 +340,17 @@ export function RiderApp({ onOpenDownloads }) {
                     />
                   )}
 
-                  <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between mono-num">
+                  <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-3 gap-2 mono-num">
                     <div>
-                      <div className="text-slate-500">Customer Fare</div>
-                      <div className="text-base font-extrabold text-slate-900">Rs. {job.final_fare}</div>
+                      <div className="text-[11px] text-slate-500">Customer Fare</div>
+                      <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[11px] text-slate-500">Less Commission</div>
+                      <div className="text-sm font-bold text-amber-700">-Rs. {job.commission_amount}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-slate-500">Your Net Earning</div>
+                      <div className="text-[11px] text-slate-500">Your Actual Net</div>
                       <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
                     </div>
                   </div>
@@ -434,12 +450,23 @@ export function RiderApp({ onOpenDownloads }) {
                     </div>
                   )}
 
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between mono-num font-bold">
-                    <span>
-                      Collect ({job.payment_method}): Rs. {job.final_fare}
-                      {job.wait_charge > 0 && ` (incl. Rs. ${job.wait_charge} wait)`}
-                    </span>
-                    <span className="text-[#008741]">Net: Rs. {job.rider_earning}</span>
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1.5 mono-num font-bold">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        Fare ({formatPaymentMethodLabel(job.payment_method)}): Rs. {job.final_fare}
+                        {job.wait_charge > 0 && ` (incl. Rs. ${job.wait_charge} wait)`}
+                      </span>
+                      <StatusBadge value={getRidePaymentBadgeState(job)} />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-emerald-200/70 text-[11px]">
+                      <span className="text-amber-800">Less SafarGo Commission: -Rs. {job.commission_amount}</span>
+                      <span className="text-sm font-extrabold text-[#008741]">Your Actual Net: Rs. {job.rider_earning}</span>
+                    </div>
+                    {Number(job.discount_amount || 0) > 0 && (
+                      <div className="text-[11px] font-semibold text-teal-800">
+                        Original Rs. {(Number(job.final_fare) + Number(job.discount_amount)).toFixed(0)} · Customer Discount -Rs. {job.discount_amount}
+                      </div>
+                    )}
                   </div>
 
                   {(job.status === 'assigned' || job.status === 'arrived') && (() => {
@@ -498,27 +525,129 @@ export function RiderApp({ onOpenDownloads }) {
         {tab === 'ledger' && (
           <div className="space-y-4">
             <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
-              <div className="text-xs text-slate-400">Net Commission Balance with Admin</div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-400">Net Commission Balance with SafarGo</span>
+                {Number(summary.balance_due_to_admin || 0) <= 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
+                    All Paid ✓
+                  </span>
+                )}
+              </div>
               <div className="text-3xl font-extrabold mono-num text-amber-400">
                 {Number(summary.balance_due_to_admin || 0) >= 0
-                  ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Payable to Admin`
-                  : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} Admin Owes You`}
+                  ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Payable to SafarGo`
+                  : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} SafarGo Owes You`}
               </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
                 <div>
-                  <div className="text-slate-400">Total Trips</div>
-                  <div className="font-bold">{summary.total_trips ?? 0}</div>
+                  <div className="text-slate-400">Gross Fare</div>
+                  <div className="font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
                 </div>
                 <div>
-                  <div className="text-slate-400">Commission</div>
-                  <div className="font-bold">Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
+                  <div className="text-slate-400">Less Commission</div>
+                  <div className="font-bold text-amber-300">-Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
                 </div>
                 <div>
-                  <div className="text-slate-400">Settled</div>
+                  <div className="text-slate-400">Your Actual Net</div>
+                  <div className="font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400">Settled / Paid</div>
                   <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
                 </div>
               </div>
             </div>
+
+            {/* Pay Commission to SafarGo (Bank / EasyPaisa / UPaisa / JazzCash — Branded Strictly as SafarGo) */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setMsg('');
+                setErr('');
+                try {
+                  await apiRequest('/api/riders/settlement-requests', {
+                    method: 'POST',
+                    body: {
+                      amount: Number(commPayForm.amount || summary.balance_due_to_admin || 0),
+                      payment_channel: commPayForm.payment_channel,
+                      reference_no: commPayForm.reference_no.trim() || null,
+                      note: commPayForm.note.trim() || null,
+                    },
+                  });
+                  setCommPayForm({ amount: '', payment_channel: commPayForm.payment_channel, reference_no: '', note: '' });
+                  setMsg('Commission payment sent to SafarGo! It will mark Paid once confirmed.');
+                  await loadAll();
+                } catch (e2) {
+                  setErr(e2.message);
+                }
+              }}
+              className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs"
+            >
+              <div className="font-extrabold text-sm text-slate-900">
+                Send Commission Payment to SafarGo
+              </div>
+              <SafarGoPayBox
+                settings={bootstrap.settings}
+                selectedChannel={commPayForm.payment_channel}
+                amount={commPayForm.amount || (Number(summary.balance_due_to_admin || 0) > 0 ? Number(summary.balance_due_to_admin) : null)}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={commPayForm.payment_channel}
+                  onChange={(e) => setCommPayForm({ ...commPayForm, payment_channel: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
+                >
+                  {DIGITAL_PAYMENT_CHANNELS.map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.shortLabel} → SafarGo
+                    </option>
+                  ))}
+                  <option value="cash">Cash Office Handover</option>
+                </select>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder={Number(summary.balance_due_to_admin || 0) > 0 ? `Amount (Due Rs.${summary.balance_due_to_admin})` : 'Amount (Rs.)'}
+                  value={commPayForm.amount}
+                  onChange={(e) => setCommPayForm({ ...commPayForm, amount: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                />
+                <input
+                  type="text"
+                  required={commPayForm.payment_channel !== 'cash'}
+                  placeholder="TID / Bank Ref #"
+                  value={commPayForm.reference_no}
+                  onChange={(e) => setCommPayForm({ ...commPayForm, reference_no: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
+              >
+                Submit Payment Proof to SafarGo
+              </button>
+            </form>
+
+            {(ledgerData.settlement_requests || []).length > 0 && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
+                <div className="p-4 font-extrabold text-slate-900">Submitted Commission Transfers</div>
+                {ledgerData.settlement_requests.map((r) => (
+                  <div key={r.id} className="p-3.5 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900">
+                        Rs. {r.amount} via <span className="uppercase">{r.payment_channel}</span> → {r.account_title || 'SafarGo'}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mono-num">
+                        {new Date(r.created_at).toLocaleString()} {r.reference_no ? `· Ref: ${r.reference_no}` : ''}
+                      </div>
+                    </div>
+                    <StatusBadge value={r.status} />
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
               <div className="p-4 font-extrabold text-slate-900">Hisab-Kitab Transaction Log</div>
@@ -528,7 +657,12 @@ export function RiderApp({ onOpenDownloads }) {
                 ledgerData.entries.map((e) => (
                   <div key={e.id} className="p-4 flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-bold text-slate-800">{e.note}</div>
+                      <div className="flex flex-wrap items-center gap-2 font-bold text-slate-800">
+                        <span>{e.note}</span>
+                        {(e.entry_type === 'settlement_to_admin' || e.entry_type === 'payout_to_rider') && (
+                          <StatusBadge value="paid" />
+                        )}
+                      </div>
                       <div className="text-[11px] text-slate-500 mono-num">
                         {new Date(e.created_at).toLocaleString()} · {e.payment_channel}
                       </div>

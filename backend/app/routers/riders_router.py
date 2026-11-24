@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import Booking, LedgerEntry, MansehraZone, PricingRule, RiderProfile, User
+from app.models import Booking, LedgerEntry, MansehraZone, PricingRule, RiderProfile, RiderSettlementRequest, User
 from app.routers.bookings_router import serialize_booking
-from app.schemas import BookingStatusUpdate, RiderLocationUpdate
+from app.schemas import BookingStatusUpdate, RiderLocationUpdate, RiderSettlementSubmit
 from app.services.finance import (
     apply_wait_charge_to_booking,
     complete_booking_and_post_ledger,
@@ -235,6 +235,13 @@ def get_my_rider_ledger(
         .limit(100)
         .all()
     )
+    requests = (
+        db.query(RiderSettlementRequest)
+        .filter(RiderSettlementRequest.rider_id == current_user.id)
+        .order_by(RiderSettlementRequest.created_at.desc())
+        .limit(40)
+        .all()
+    )
     return {
         "summary": {
             "balance_due_to_admin": rp.balance_due_to_admin,
@@ -262,4 +269,50 @@ def get_my_rider_ledger(
             }
             for e in entries
         ],
+        "settlement_requests": [
+            {
+                "id": req.id,
+                "amount": req.amount,
+                "payment_channel": req.payment_channel,
+                "reference_no": req.reference_no,
+                "note": req.note,
+                "account_title": "SafarGo",
+                "status": req.status,
+                "created_at": req.created_at,
+                "paid_at": req.paid_at,
+            }
+            for req in requests
+        ],
+    }
+
+
+@router.post("/settlement-requests", status_code=status.HTTP_201_CREATED)
+def submit_rider_settlement_request(
+    payload: RiderSettlementSubmit,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    req = RiderSettlementRequest(
+        rider_id=current_user.id,
+        amount=round(float(payload.amount), 2),
+        payment_channel=payload.payment_channel,
+        reference_no=payload.reference_no.strip() if payload.reference_no else None,
+        note=payload.note.strip() if payload.note else None,
+        status="pending",
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return {
+        "id": req.id,
+        "amount": req.amount,
+        "payment_channel": req.payment_channel,
+        "reference_no": req.reference_no,
+        "note": req.note,
+        "account_title": "SafarGo",
+        "status": req.status,
+        "created_at": req.created_at,
     }

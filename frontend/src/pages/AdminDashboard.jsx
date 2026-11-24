@@ -33,6 +33,7 @@ import { AdminFinancePanel } from '../components/admin/AdminFinancePanel';
 import { AdminOperationsPanel } from '../components/admin/AdminOperationsPanel';
 import { AdminPeoplePanel } from '../components/admin/AdminPeoplePanel';
 import { AdminReportsPanel } from '../components/admin/AdminReportsPanel';
+import { formatPaymentMethodLabel, getRidePaymentBadgeState } from '../utils/paymentAccounts';
 
 const NAV_GROUPS = [
   {
@@ -112,6 +113,7 @@ export function AdminDashboard({ onOpenDownloads }) {
     payment_method: 'cash',
     rider_id: '',
     custom_fare: '',
+    discount_amount: '',
     customer_notes: '',
   });
 
@@ -216,6 +218,17 @@ export function AdminDashboard({ onOpenDownloads }) {
     }
   };
 
+  const handleMarkBookingPaid = async (b) => {
+    try {
+      await apiRequest(`/api/admin/bookings/${b.id}/mark-paid`, { method: 'POST', body: {} });
+      notify(`Payment marked PAID for ${b.booking_code}!`);
+      loadOverviewAndRiders();
+      if (subpage === 'dispatch') loadBookings();
+    } catch (e) {
+      notify(e.message, true);
+    }
+  };
+
   const handleSaveEditedBooking = async (e) => {
     e.preventDefault();
     if (!editingBooking) return;
@@ -229,9 +242,12 @@ export function AdminDashboard({ onOpenDownloads }) {
           drop_zone: editingBooking.drop_zone,
           drop_address: editingBooking.drop_address,
           distance_km: Number(editingBooking.distance_km),
+          discount_amount: Number(editingBooking.discount_amount || 0),
           final_fare: Number(editingBooking.final_fare),
           payment_method: editingBooking.payment_method,
           payment_collector: editingBooking.payment_collector,
+          payment_status: editingBooking.payment_status,
+          payment_reference: editingBooking.payment_reference || null,
           customer_notes: editingBooking.customer_notes || null,
         },
       });
@@ -254,6 +270,7 @@ export function AdminDashboard({ onOpenDownloads }) {
           distance_km: Number(manualForm.distance_km),
           rider_id: manualForm.rider_id ? Number(manualForm.rider_id) : null,
           custom_fare: manualForm.custom_fare ? Number(manualForm.custom_fare) : null,
+          discount_amount: Number(manualForm.discount_amount || 0),
         },
       });
       notify(`Manual booking ${created.booking_code} created!`);
@@ -264,6 +281,7 @@ export function AdminDashboard({ onOpenDownloads }) {
         pickup_address: '',
         drop_address: '',
         custom_fare: '',
+        discount_amount: '',
         customer_notes: '',
       });
       setSubpage('dispatch');
@@ -435,25 +453,68 @@ export function AdminDashboard({ onOpenDownloads }) {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <select
-                    value={editingBooking.service_type}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, service_type: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                  >
-                    <option value="bike_ride">Bike Ride</option>
-                    <option value="car_ride">Car Ride (Intercity)</option>
-                    <option value="parcel">Parcel Delivery</option>
-                    <option value="errand">Bazaar Errand</option>
-                  </select>
-                  <input
-                    type="number"
-                    required
-                    min="10"
-                    placeholder="Final Fare (Rs.)"
-                    value={editingBooking.final_fare}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, final_fare: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
-                  />
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-0.5">Service</label>
+                    <select
+                      value={editingBooking.service_type}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, service_type: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
+                    >
+                      <option value="bike_ride">Bike Ride</option>
+                      <option value="car_ride">Car Ride (Intercity)</option>
+                      <option value="parcel">Parcel Delivery</option>
+                      <option value="errand">Bazaar Errand</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-0.5">
+                      Customer Discount (Rs.) — Less from Total
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Discount (Rs.)"
+                      value={editingBooking.discount_amount ?? 0}
+                      onChange={(e) => {
+                        const newDisc = Math.max(0, Number(e.target.value || 0));
+                        const oldDisc = Number(editingBooking.discount_amount || 0);
+                        const gross = Number(editingBooking.final_fare || 0) + oldDisc;
+                        const netFare = Math.max(10, Math.round(gross - newDisc));
+                        setEditingBooking({
+                          ...editingBooking,
+                          discount_amount: e.target.value,
+                          final_fare: netFare,
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/60 mono-num font-bold text-[#008741]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-0.5">
+                      Total Payable Fare (After Discount Rs.)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="10"
+                      placeholder="Final Fare (Rs.)"
+                      value={editingBooking.final_fare}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, final_fare: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-0.5">Payment Status</label>
+                    <select
+                      value={editingBooking.payment_status || 'pending'}
+                      onChange={(e) => setEditingBooking({ ...editingBooking, payment_status: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
+                    >
+                      <option value="pending">Payment Pending</option>
+                      <option value="submitted">Payment Sent (Verifying)</option>
+                      <option value="paid">Paid ✓</option>
+                    </select>
+                  </div>
                   <select
                     value={editingBooking.pickup_zone}
                     onChange={(e) => setEditingBooking({ ...editingBooking, pickup_zone: e.target.value })}
@@ -492,18 +553,27 @@ export function AdminDashboard({ onOpenDownloads }) {
                     className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     <option value="cash">Cash</option>
-                    <option value="easypaisa">EasyPaisa</option>
-                    <option value="jazzcash">JazzCash</option>
+                    <option value="easypaisa">EasyPaisa (SafarGo)</option>
+                    <option value="upaisa">UPaisa (SafarGo)</option>
+                    <option value="jazzcash">JazzCash (SafarGo)</option>
+                    <option value="bank">Bank Transfer (SafarGo)</option>
                   </select>
                   <select
                     value={editingBooking.payment_collector}
                     onChange={(e) => setEditingBooking({ ...editingBooking, payment_collector: e.target.value })}
                     className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
-                    <option value="rider">Collected by Rider</option>
-                    <option value="admin">Collected by Admin</option>
+                    <option value="rider">Collected by Captain (Cash)</option>
+                    <option value="admin">Collected by SafarGo (Digital)</option>
                   </select>
                 </div>
+                <input
+                  type="text"
+                  placeholder="TID / Payment Reference #"
+                  value={editingBooking.payment_reference || ''}
+                  onChange={(e) => setEditingBooking({ ...editingBooking, payment_reference: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+                />
                 <input
                   type="text"
                   placeholder="Notes"
@@ -634,9 +704,22 @@ export function AdminDashboard({ onOpenDownloads }) {
                               </select>
                             )}
                           </td>
-                          <td className="p-3.5 mono-num font-bold">Rs. {b.final_fare}</td>
+                          <td className="p-3.5 mono-num">
+                            <div className="font-bold">Rs. {b.final_fare}</div>
+                            {Number(b.discount_amount || 0) > 0 && (
+                              <div className="text-[11px] text-[#008741] font-semibold">
+                                Disc: -Rs. {b.discount_amount}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-slate-500">{formatPaymentMethodLabel(b.payment_method)}</div>
+                          </td>
                           <td className="p-3.5 mono-num font-extrabold text-[#009E4D]">Rs. {b.commission_amount}</td>
-                          <td className="p-3.5"><StatusBadge value={b.status} /></td>
+                          <td className="p-3.5 space-y-1">
+                            <div><StatusBadge value={b.status} /></div>
+                            {b.status !== 'cancelled' && (
+                              <div><StatusBadge value={getRidePaymentBadgeState(b)} /></div>
+                            )}
+                          </td>
                           <td className="p-3.5 whitespace-nowrap space-x-1.5">
                             {b.rider_id && ['assigned', 'arrived', 'in_progress'].includes(b.status) && (
                               <button
@@ -644,6 +727,14 @@ export function AdminDashboard({ onOpenDownloads }) {
                                 className="px-2.5 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
                               >
                                 Complete
+                              </button>
+                            )}
+                            {b.status !== 'cancelled' && b.payment_status !== 'paid' && (
+                              <button
+                                onClick={() => handleMarkBookingPaid(b)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[#008741] font-bold hover:bg-emerald-100"
+                              >
+                                Mark Paid
                               </button>
                             )}
                             <button
@@ -835,9 +926,20 @@ export function AdminDashboard({ onOpenDownloads }) {
                         </td>
                         <td className="p-3.5 mono-num">
                           <div className="font-bold">Rs. {b.final_fare}</div>
+                          {Number(b.discount_amount || 0) > 0 && (
+                            <div className="text-[11px] text-[#008741] font-semibold">
+                              Original Rs. {(Number(b.final_fare) + Number(b.discount_amount)).toFixed(0)} · Disc -Rs. {b.discount_amount}
+                            </div>
+                          )}
                           <div className="text-[#009E4D] font-bold">Comm: Rs. {b.commission_amount}</div>
+                          <div className="text-[11px] text-slate-500">{formatPaymentMethodLabel(b.payment_method)}</div>
                         </td>
-                        <td className="p-3.5"><StatusBadge value={b.status} /></td>
+                        <td className="p-3.5 space-y-1">
+                          <div><StatusBadge value={b.status} /></div>
+                          {b.status !== 'cancelled' && (
+                            <div><StatusBadge value={getRidePaymentBadgeState(b)} /></div>
+                          )}
+                        </td>
                         <td className="p-3.5 space-x-1.5 whitespace-nowrap">
                           {b.rider_id && !['completed', 'cancelled'].includes(b.status) && (
                             <button
@@ -845,6 +947,14 @@ export function AdminDashboard({ onOpenDownloads }) {
                               className="px-2.5 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
                             >
                               Complete
+                            </button>
+                          )}
+                          {b.status !== 'cancelled' && b.payment_status !== 'paid' && (
+                            <button
+                              onClick={() => handleMarkBookingPaid(b)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[#008741] font-bold hover:bg-emerald-100"
+                            >
+                              Mark Paid
                             </button>
                           )}
                           {!['completed', 'cancelled'].includes(b.status) && (
@@ -950,7 +1060,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   if (roadKm) setManualForm((prev) => ({ ...prev, distance_km: roadKm }));
                 }}
               />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <input
                   type="number"
                   step="0.1"
@@ -962,11 +1072,30 @@ export function AdminDashboard({ onOpenDownloads }) {
                 />
                 <input
                   type="number"
-                  placeholder="Override Fare Rs. (optional)"
+                  placeholder="Base/Custom Fare Rs. (opt.)"
                   value={manualForm.custom_fare}
                   onChange={(e) => setManualForm({ ...manualForm, custom_fare: e.target.value })}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
                 />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Customer Discount (Rs.)"
+                  value={manualForm.discount_amount}
+                  onChange={(e) => setManualForm({ ...manualForm, discount_amount: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 mono-num font-bold text-[#008741]"
+                />
+                <select
+                  value={manualForm.payment_method}
+                  onChange={(e) => setManualForm({ ...manualForm, payment_method: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
+                >
+                  <option value="cash">Cash to Captain</option>
+                  <option value="easypaisa">EasyPaisa (SafarGo)</option>
+                  <option value="upaisa">UPaisa (SafarGo)</option>
+                  <option value="jazzcash">JazzCash (SafarGo)</option>
+                  <option value="bank">Bank Transfer (SafarGo)</option>
+                </select>
                 <select
                   value={manualForm.rider_id}
                   onChange={(e) => setManualForm({ ...manualForm, rider_id: e.target.value })}

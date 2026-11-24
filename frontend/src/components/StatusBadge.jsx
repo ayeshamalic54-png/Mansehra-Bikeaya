@@ -10,6 +10,10 @@ const STATUS_STYLES = {
   open: 'bg-rose-50 text-rose-700 border-rose-200',
   in_review: 'bg-amber-50 text-amber-700 border-amber-200',
   resolved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  paid: 'bg-emerald-100 text-[#008741] border-emerald-300 font-extrabold',
+  submitted: 'bg-sky-50 text-sky-700 border-sky-200',
+  rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+  unpaid: 'bg-amber-50 text-amber-800 border-amber-200',
 };
 
 const LABELS = {
@@ -19,6 +23,10 @@ const LABELS = {
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  paid: 'Paid ✓',
+  submitted: 'Payment Sent',
+  unpaid: 'Payment Pending',
+  rejected: 'Rejected',
   bike_ride: 'Bike Ride',
   car_ride: 'Car Ride',
   parcel: 'Parcel',

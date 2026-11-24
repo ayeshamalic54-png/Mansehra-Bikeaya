@@ -49,6 +49,8 @@ def ensure_schema_migrations() -> None:
             ("wait_minutes", "INTEGER NOT NULL DEFAULT 0"),
             ("wait_charge", "FLOAT NOT NULL DEFAULT 0.0"),
             ("arrived_at", ts_type),
+            ("payment_status", "VARCHAR(24) NOT NULL DEFAULT 'pending'"),
+            ("payment_reference", "VARCHAR(80)"),
         ],
     }
     with engine.begin() as conn:
@@ -59,6 +61,13 @@ def ensure_schema_migrations() -> None:
             for col_name, col_def in cols:
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
+        if "bookings" in tables:
+            conn.execute(
+                text(
+                    "UPDATE bookings SET payment_status = 'paid' "
+                    "WHERE status = 'completed' AND payment_status = 'pending' AND payment_collector = 'rider'"
+                )
+            )
 
 
 @asynccontextmanager

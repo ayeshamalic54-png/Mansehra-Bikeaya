@@ -688,6 +688,128 @@ def test_mansehra_chowks_and_roads_distinct_coordinates(client):
     )
 
 
+def test_safargo_digital_payments_paid_status_and_admin_discount(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+    rider_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03112222222", "password": "rider123"},
+    ).json()["access_token"]
+
+    # 1. Admin configures Bank, EasyPaisa, UPaisa under SafarGo account title
+    for key, val in [
+        ("payment_account_title", "SafarGo"),
+        ("payment_easypaisa", "03001234567"),
+        ("payment_upaisa", "03331234567"),
+        ("payment_bank_name", "Meezan Bank"),
+        ("payment_bank_account", "PK00MEZN0001234567"),
+    ]:
+        res = client.put(f"/api/admin/settings/{key}", headers=_auth_header(admin_token), json={"value": val})
+        assert res.status_code == 200
+
+    boot = client.get("/api/public/bootstrap").json()
+    assert boot["settings"]["payment_account_title"] == "SafarGo"
+    assert boot["settings"]["payment_upaisa"] == "03331234567"
+    assert boot["settings"]["payment_bank_account"] == "PK00MEZN0001234567"
+
+    # 2. Customer creates ride with UPaisa -> submits digital payment proof -> Admin applies discount -> marks Paid
+    bk_res = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk",
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Chowk",
+            "distance_km": 4.0,
+            "payment_method": "upaisa",
+        },
+    )
+    assert bk_res.status_code == 201
+    bk = bk_res.json()
+    orig_fare = bk["final_fare"]
+    assert bk["payment_status"] == "pending"
+
+    sub_res = client.post(
+        f"/api/bookings/{bk['id']}/submit-payment",
+        headers=_auth_header(cust_token),
+        json={"payment_method": "bank", "payment_reference": "TID-998877"},
+    )
+    assert sub_res.status_code == 200
+    assert sub_res.json()["payment_status"] == "submitted"
+    assert sub_res.json()["payment_method"] == "bank"
+    assert sub_res.json()["payment_reference"] == "TID-998877"
+
+    # Admin gives Rs. 50 customer discount -> final_fare automatically decreases by 50
+    disc_res = client.patch(
+        f"/api/admin/bookings/{bk['id']}",
+        headers=_auth_header(admin_token),
+        json={"discount_amount": 50.0},
+    )
+    assert disc_res.status_code == 200
+    assert disc_res.json()["discount_amount"] == 50.0
+    assert disc_res.json()["final_fare"] == orig_fare - 50.0
+
+    # Admin marks Paid -> payment_status becomes "paid"
+    paid_res = client.post(f"/api/admin/bookings/{bk['id']}/mark-paid", headers=_auth_header(admin_token), json={})
+    assert paid_res.status_code == 200
+    assert paid_res.json()["payment_status"] == "paid"
+
+    # 3. Admin manual booking with explicit Discount subtracts discount from custom fare
+    man_res = client.post(
+        "/api/admin/bookings/manual",
+        headers=_auth_header(admin_token),
+        json={
+            "customer_phone": "03334444444",
+            "service_type": "car_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk",
+            "drop_zone": "Mansehra — Baidra Road",
+            "drop_address": "Baidra Road",
+            "distance_km": 3.0,
+            "payment_method": "easypaisa",
+            "custom_fare": 400.0,
+            "discount_amount": 80.0,
+        },
+    )
+    assert man_res.status_code == 201
+    assert man_res.json()["discount_amount"] == 80.0
+    assert man_res.json()["final_fare"] == 320.0
+
+    # 4. Captain sends Bank settlement proof to SafarGo -> Admin marks Paid -> ledger uses "SafarGo", never Admin personal name
+    req_res = client.post(
+        "/api/riders/settlement-requests",
+        headers=_auth_header(rider_token),
+        json={"amount": 100.0, "payment_channel": "bank", "reference_no": "BNK-4411"},
+    )
+    assert req_res.status_code == 201
+    assert req_res.json()["account_title"] == "SafarGo"
+    assert req_res.json()["status"] == "pending"
+
+    reqs = client.get("/api/finance/settlement-requests", headers=_auth_header(admin_token)).json()
+    target_req = next(r for r in reqs if r["id"] == req_res.json()["id"])
+    assert target_req["account_title"] == "SafarGo"
+
+    app_res = client.post(
+        f"/api/finance/settlement-requests/{target_req['id']}/mark-paid",
+        headers=_auth_header(admin_token),
+    )
+    assert app_res.status_code == 200
+    assert app_res.json()["status"] == "paid"
+
+    ledger_entries = client.get("/api/finance/ledger", headers=_auth_header(admin_token)).json()
+    assert len(ledger_entries) > 0
+    assert all(e["recorded_by"] == "SafarGo" for e in ledger_entries)
+
+
+
 
 
 
