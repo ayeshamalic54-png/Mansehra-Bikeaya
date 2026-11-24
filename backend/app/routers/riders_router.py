@@ -5,7 +5,12 @@ from app.database import get_db
 from app.models import Booking, LedgerEntry, PricingRule, RiderProfile, User
 from app.routers.bookings_router import serialize_booking
 from app.schemas import BookingStatusUpdate
-from app.services.finance import complete_booking_and_post_ledger, compute_commission, utcnow
+from app.services.finance import (
+    apply_wait_charge_to_booking,
+    complete_booking_and_post_ledger,
+    compute_commission,
+    utcnow,
+)
 
 router = APIRouter(prefix="/api/riders", tags=["Rider Captain"])
 
@@ -151,10 +156,22 @@ def update_rider_job_status(
 
     if payload.status == "arrived":
         booking.status = "arrived"
+        if not booking.arrived_at:
+            booking.arrived_at = utcnow()
         db.commit()
     elif payload.status == "in_progress":
         booking.status = "in_progress"
-        booking.started_at = utcnow()
+        if not booking.started_at:
+            booking.started_at = utcnow()
+        rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
+        rp = booking.rider.rider_profile if booking.rider else None
+        apply_wait_charge_to_booking(booking, rule, wait_minutes_override=payload.wait_minutes)
+        if rule:
+            c_type, c_val, comm, net = compute_commission(booking.final_fare, rule, rp)
+            booking.commission_type_snapshot = c_type
+            booking.commission_rate_snapshot = c_val
+            booking.commission_amount = comm
+            booking.rider_earning = net
         db.commit()
     elif payload.status == "completed":
         booking = complete_booking_and_post_ledger(
@@ -163,6 +180,7 @@ def update_rider_job_status(
             actor=current_user,
             final_fare_override=payload.final_fare_override,
             payment_collector_override=payload.payment_collector,
+            wait_minutes_override=payload.wait_minutes,
         )
 
     db.refresh(booking)

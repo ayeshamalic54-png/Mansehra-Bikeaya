@@ -46,6 +46,49 @@ def compute_commission(
     return c_type, c_val, commission_amount, rider_earning
 
 
+def is_mansehra_in_city_zone(zone: Optional[MansehraZone]) -> bool:
+    if not zone:
+        return False
+    name = (zone.name or "").strip()
+    tag = (zone.area_tag or "").strip()
+    if name.startswith(("Abbottabad —", "Abbottabad (", "Haripur", "Battagram", "Islamabad")):
+        return False
+    if tag.startswith("Abbottabad") or tag in ("Intercity Hub", "Airport Transfer", "Galyat Hills"):
+        return False
+    return float(zone.approx_km_from_center or 0.0) <= 8.0
+
+
+def apply_wait_charge_to_booking(
+    booking: Booking,
+    rule: Optional[PricingRule],
+    wait_minutes_override: Optional[int] = None,
+) -> float:
+    """Compute wait/late fee after free grace minutes and apply delta to final_fare once."""
+    if wait_minutes_override is not None:
+        effective_wait = max(0, int(wait_minutes_override))
+    elif booking.wait_minutes and booking.wait_minutes > 0:
+        effective_wait = int(booking.wait_minutes)
+    elif booking.arrived_at is not None:
+        arrived_utc = booking.arrived_at if booking.arrived_at.tzinfo else booking.arrived_at.replace(tzinfo=timezone.utc)
+        effective_wait = max(0, int((utcnow() - arrived_utc).total_seconds() // 60))
+    else:
+        effective_wait = int(booking.wait_minutes or 0)
+
+    if rule:
+        free_mins = int(rule.wait_free_minutes or 0)
+        rate_per_min = float(rule.wait_charge_per_min or 0.0)
+        new_wait_charge = round(max(0, effective_wait - free_mins) * rate_per_min, 2)
+    else:
+        new_wait_charge = float(booking.wait_charge or 0.0)
+
+    delta = round(new_wait_charge - float(booking.wait_charge or 0.0), 2)
+    booking.wait_minutes = effective_wait
+    booking.wait_charge = new_wait_charge
+    if delta != 0.0:
+        booking.final_fare = float(round(max(10.0, float(booking.final_fare or 0.0) + delta)))
+    return new_wait_charge
+
+
 def estimate_booking_fare(
     db: Session,
     service_type: str,
@@ -53,6 +96,7 @@ def estimate_booking_fare(
     drop_zone_name: str,
     distance_km: float,
     promo_code: Optional[str] = None,
+    wait_minutes: int = 0,
 ) -> dict:
     rule = (
         db.query(PricingRule)
@@ -68,9 +112,33 @@ def estimate_booking_fare(
         (p_zone.surcharge if p_zone else 0.0) + (d_zone.surcharge if d_zone else 0.0), 2
     )
 
-    distance_charge = round(distance_km * rule.per_km_rate, 2)
-    subtotal = round((rule.base_fare + distance_charge + zone_surcharge) * rule.peak_multiplier, 2)
-    raw_fare = max(rule.min_fare, subtotal)
+    flat_km = float(getattr(rule, "city_flat_km", 0.0) or 0.0)
+    flat_fare = float(getattr(rule, "city_flat_fare", 0.0) or 0.0)
+    city_slab_applied = bool(
+        flat_fare > 0
+        and flat_km > 0
+        and is_mansehra_in_city_zone(p_zone)
+        and is_mansehra_in_city_zone(d_zone)
+    )
+
+    if city_slab_applied:
+        if distance_km <= flat_km:
+            base_plus_distance = round(flat_fare, 2)
+        else:
+            base_plus_distance = round(flat_fare + (distance_km - flat_km) * rule.per_km_rate, 2)
+        distance_charge = round(max(0.0, base_plus_distance - rule.base_fare), 2)
+        subtotal = round((base_plus_distance + zone_surcharge) * rule.peak_multiplier, 2)
+    else:
+        distance_charge = round(distance_km * rule.per_km_rate, 2)
+        subtotal = round((rule.base_fare + distance_charge + zone_surcharge) * rule.peak_multiplier, 2)
+
+    free_wait = int(getattr(rule, "wait_free_minutes", 5) or 0)
+    wait_rate = float(getattr(rule, "wait_charge_per_min", 10.0) or 0.0)
+    clean_wait = max(0, int(wait_minutes or 0))
+    billable_wait_minutes = max(0, clean_wait - free_wait)
+    wait_charge = round(billable_wait_minutes * wait_rate, 2)
+
+    raw_fare = max(rule.min_fare, subtotal) + wait_charge
 
     discount_amount = 0.0
     applied_promo = None
@@ -106,6 +174,14 @@ def estimate_booking_fare(
         "distance_charge": distance_charge,
         "zone_surcharge": zone_surcharge,
         "peak_multiplier": rule.peak_multiplier,
+        "city_slab_applied": city_slab_applied,
+        "city_flat_km": flat_km,
+        "city_flat_fare": flat_fare,
+        "wait_free_minutes": free_wait,
+        "wait_charge_per_min": wait_rate,
+        "wait_minutes": clean_wait,
+        "billable_wait_minutes": billable_wait_minutes,
+        "wait_charge": wait_charge,
         "discount_amount": discount_amount,
         "applied_promo": applied_promo,
         "estimated_fare": estimated_fare,
@@ -122,6 +198,7 @@ def complete_booking_and_post_ledger(
     actor: User,
     final_fare_override: Optional[float] = None,
     payment_collector_override: Optional[str] = None,
+    wait_minutes_override: Optional[int] = None,
 ) -> Booking:
     if booking.status == "completed":
         raise HTTPException(status_code=400, detail="Booking is already completed")
@@ -138,7 +215,11 @@ def complete_booking_and_post_ledger(
     if not rule:
         raise HTTPException(status_code=404, detail="Pricing rule missing")
 
-    final_fare = float(round(final_fare_override if final_fare_override is not None else booking.final_fare))
+    if final_fare_override is not None:
+        final_fare = float(round(final_fare_override))
+    else:
+        apply_wait_charge_to_booking(booking, rule, wait_minutes_override=wait_minutes_override)
+        final_fare = float(round(booking.final_fare))
     c_type, c_val, commission_amount, rider_earning = compute_commission(
         final_fare, rule, rider_profile
     )

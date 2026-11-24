@@ -154,6 +154,10 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           base_fare: Number(rule.base_fare),
           per_km_rate: Number(rule.per_km_rate),
           min_fare: Number(rule.min_fare),
+          city_flat_km: Number(rule.city_flat_km || 0),
+          city_flat_fare: Number(rule.city_flat_fare || 0),
+          wait_free_minutes: Number(rule.wait_free_minutes ?? 5),
+          wait_charge_per_min: Number(rule.wait_charge_per_min ?? 10),
           commission_type: rule.commission_type,
           commission_value: Number(rule.commission_value),
           peak_multiplier: Number(rule.peak_multiplier),
@@ -176,9 +180,9 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
     return (
       <div className="space-y-4">
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-[#008741] font-medium">
-          <strong>Live Commission &amp; Fare Control:</strong> Adjust your Admin Commission (% or Fixed Rs.), service name, rates, or enable/pause any service anytime. Past completed rides keep their historical snapshot.
+          <strong>Live Commission &amp; Fare Control:</strong> Adjust Base Fare, Per Km, City Fix Slab (e.g. Mansehra Parcel Rs. 250 / 3 km), Customer Late Wait Fee (Rs./min after free grace min), Commission %, or pause any service anytime.
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {pricing.map((rule, idx) => (
             <div key={rule.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
@@ -234,6 +238,47 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     step="0.1"
                     value={rule.peak_multiplier}
                     onChange={(e) => updateRuleField(idx, 'peak_multiplier', e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-500 font-semibold">Free Wait (min)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rule.wait_free_minutes ?? 5}
+                    onChange={(e) => updateRuleField(idx, 'wait_free_minutes', e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-500 font-semibold">Late Fee / min (Rs.)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rule.wait_charge_per_min ?? 10}
+                    onChange={(e) => updateRuleField(idx, 'wait_charge_per_min', e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-500 font-semibold">City Fix Km (0=off)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={rule.city_flat_km ?? 0}
+                    onChange={(e) => updateRuleField(idx, 'city_flat_km', e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-500 font-semibold">City Fix Fare (Rs.)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rule.city_flat_fare ?? 0}
+                    onChange={(e) => updateRuleField(idx, 'city_flat_fare', e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
                   />
                 </label>

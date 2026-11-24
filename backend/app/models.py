@@ -89,6 +89,10 @@ class PricingRule(Base):
     commission_type = Column(String(20), nullable=False, default="percent")  # percent | fixed
     commission_value = Column(Float, nullable=False, default=15.0)
     peak_multiplier = Column(Float, nullable=False, default=1.0)
+    city_flat_km = Column(Float, nullable=False, default=0.0)
+    city_flat_fare = Column(Float, nullable=False, default=0.0)
+    wait_free_minutes = Column(Integer, nullable=False, default=5)
+    wait_charge_per_min = Column(Float, nullable=False, default=10.0)
     is_active = Column(Boolean, default=True, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -125,6 +129,8 @@ class Booking(Base):
     estimated_fare = Column(Float, nullable=False)
     discount_amount = Column(Float, default=0.0, nullable=False)
     promo_code = Column(String(40), nullable=True)
+    wait_minutes = Column(Integer, default=0, nullable=False)
+    wait_charge = Column(Float, default=0.0, nullable=False)
     final_fare = Column(Float, nullable=False)
 
     # Snapshot at booking/completion time so future rate edits never alter historical reports
@@ -150,6 +156,7 @@ class Booking(Base):
 
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     assigned_at = Column(DateTime(timezone=True), nullable=True)
+    arrived_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 

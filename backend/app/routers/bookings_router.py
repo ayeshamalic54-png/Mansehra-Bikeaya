@@ -49,6 +49,8 @@ def serialize_booking(b: Booking) -> dict:
         "estimated_fare": b.estimated_fare,
         "discount_amount": b.discount_amount,
         "promo_code": b.promo_code,
+        "wait_minutes": b.wait_minutes,
+        "wait_charge": b.wait_charge,
         "final_fare": b.final_fare,
         "commission_type_snapshot": b.commission_type_snapshot,
         "commission_rate_snapshot": b.commission_rate_snapshot,
@@ -67,6 +69,7 @@ def serialize_booking(b: Booking) -> dict:
         "cancelled_reason": b.cancelled_reason,
         "created_at": b.created_at,
         "assigned_at": b.assigned_at,
+        "arrived_at": b.arrived_at,
         "started_at": b.started_at,
         "completed_at": b.completed_at,
     }
@@ -85,6 +88,7 @@ def create_customer_booking(
         drop_zone_name=payload.drop_zone,
         distance_km=payload.distance_km,
         promo_code=payload.promo_code,
+        wait_minutes=payload.wait_minutes,
     )
     if est["applied_promo"]:
         promo = db.query(PromoCode).filter(PromoCode.code == est["applied_promo"]).first()
@@ -104,6 +108,8 @@ def create_customer_booking(
         estimated_fare=est["estimated_fare"],
         discount_amount=est["discount_amount"],
         promo_code=est["applied_promo"],
+        wait_minutes=est["wait_minutes"],
+        wait_charge=est["wait_charge"],
         final_fare=est["estimated_fare"],
         commission_type_snapshot=est["commission_type"],
         commission_rate_snapshot=est["commission_value"],

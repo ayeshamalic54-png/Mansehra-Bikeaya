@@ -51,6 +51,10 @@ def get_public_bootstrap(db: Session = Depends(get_db)):
                 "commission_type": r.commission_type,
                 "commission_value": r.commission_value,
                 "peak_multiplier": r.peak_multiplier,
+                "city_flat_km": r.city_flat_km,
+                "city_flat_fare": r.city_flat_fare,
+                "wait_free_minutes": r.wait_free_minutes,
+                "wait_charge_per_min": r.wait_charge_per_min,
             }
             for r in rules
         ],
@@ -81,6 +85,7 @@ def estimate_fare(payload: FareEstimateRequest, db: Session = Depends(get_db)):
         drop_zone_name=payload.drop_zone,
         distance_km=payload.distance_km,
         promo_code=payload.promo_code,
+        wait_minutes=payload.wait_minutes,
     )
 
 

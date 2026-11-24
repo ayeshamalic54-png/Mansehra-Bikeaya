@@ -29,6 +29,7 @@ class FareEstimateRequest(BaseModel):
     pickup_zone: str = "Main Bazar / Lari Adda"
     drop_zone: str = "Ghazikot Township"
     distance_km: float = Field(3.0, ge=0.5, le=300.0)
+    wait_minutes: int = Field(0, ge=0, le=300)
     promo_code: Optional[str] = None
 
 
@@ -40,6 +41,10 @@ class PricingRuleUpdate(BaseModel):
     commission_type: Optional[str] = Field(None, pattern="^(percent|fixed)$")
     commission_value: Optional[float] = Field(None, ge=0)
     peak_multiplier: Optional[float] = Field(None, ge=0.5, le=5.0)
+    city_flat_km: Optional[float] = Field(None, ge=0, le=100.0)
+    city_flat_fare: Optional[float] = Field(None, ge=0)
+    wait_free_minutes: Optional[int] = Field(None, ge=0, le=120)
+    wait_charge_per_min: Optional[float] = Field(None, ge=0)
     is_active: Optional[bool] = None
 
 
@@ -51,6 +56,7 @@ class BookingCreate(BaseModel):
     drop_zone: str
     drop_address: str = Field(..., min_length=2, max_length=255)
     distance_km: float = Field(3.0, ge=0.5, le=300.0)
+    wait_minutes: int = Field(0, ge=0, le=300)
     payment_method: str = Field("cash", pattern="^(cash|easypaisa|jazzcash|wallet)$")
     promo_code: Optional[str] = None
     receiver_name: Optional[str] = None
@@ -73,6 +79,7 @@ class BookingAssignRider(BaseModel):
 class BookingStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(arrived|in_progress|completed|cancelled)$")
     final_fare_override: Optional[float] = Field(None, ge=10)
+    wait_minutes: Optional[int] = Field(None, ge=0, le=300)
     payment_collector: Optional[str] = Field(None, pattern="^(rider|admin)$")
     cancelled_reason: Optional[str] = None
 
@@ -144,6 +151,8 @@ class AdminBookingUpdate(BaseModel):
     drop_zone: Optional[str] = None
     drop_address: Optional[str] = None
     distance_km: Optional[float] = Field(None, ge=0.5, le=300.0)
+    wait_minutes: Optional[int] = Field(None, ge=0, le=300)
+    wait_charge: Optional[float] = Field(None, ge=0)
     final_fare: Optional[float] = Field(None, ge=10)
     payment_method: Optional[str] = Field(None, pattern="^(cash|easypaisa|jazzcash|wallet)$")
     payment_collector: Optional[str] = Field(None, pattern="^(rider|admin)$")

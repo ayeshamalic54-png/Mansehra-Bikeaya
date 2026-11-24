@@ -83,7 +83,7 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
 
-    # 2. Customer books a 4 km ride (base 60 + 4*25 = 160) with MANSEHRA20 promo -> 140
+    # 2. Customer books a 4 km ride (base 100 + 4*50 = 300) with MANSEHRA20 promo -> 280
     est = client.post(
         "/api/public/estimate",
         json={
@@ -95,7 +95,7 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
         },
     )
     assert est.status_code == 200
-    assert est.json()["estimated_fare"] == 140.0
+    assert est.json()["estimated_fare"] == 280.0
 
     booking_res = client.post(
         "/api/bookings",
@@ -113,10 +113,10 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     )
     assert booking_res.status_code == 201
     booking = booking_res.json()
-    assert booking["final_fare"] == 140.0
+    assert booking["final_fare"] == 280.0
     assert booking["status"] == "pending"
 
-    # 3. Rider accepts & completes ride (15% of 140 = 21.0 admin commission; 119.0 rider earning)
+    # 3. Rider accepts & completes ride (15% of 280 = 42.0 admin commission; 238.0 rider earning)
     acc = client.post(f"/api/riders/jobs/{booking['id']}/accept", headers=_auth_header(rider_token))
     assert acc.status_code == 200
     assert acc.json()["status"] == "assigned"
@@ -128,12 +128,12 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     )
     assert comp.status_code == 200
     done_booking = comp.json()
-    assert done_booking["commission_amount"] == 21.0
-    assert done_booking["rider_earning"] == 119.0
+    assert done_booking["commission_amount"] == 42.0
+    assert done_booking["rider_earning"] == 238.0
 
-    # Check rider ledger increased by +21.0 (from initial seeded 24.0 -> 45.0)
+    # Check rider ledger increased by +42.0 (from initial seeded 24.0 -> 66.0)
     ledger_before = client.get("/api/riders/ledger", headers=_auth_header(rider_token)).json()
-    assert ledger_before["summary"]["balance_due_to_admin"] == 45.0
+    assert ledger_before["summary"]["balance_due_to_admin"] == 66.0
 
     # 4. Admin changes commission rate from 15% to 20% live!
     upd = client.patch(
@@ -144,10 +144,10 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     assert upd.status_code == 200
     assert upd.json()["commission_value"] == 20.0
 
-    # Historical booking keeps 15% snapshot (21.0), while new estimate uses 20%
+    # Historical booking keeps 15% snapshot (42.0), while new estimate uses 20%
     hist_list = client.get("/api/admin/bookings", headers=_auth_header(admin_token)).json()
     past = next(b for b in hist_list if b["id"] == booking["id"])
-    assert past["commission_amount"] == 21.0
+    assert past["commission_amount"] == 42.0
     assert past["commission_rate_snapshot"] == 15.0
 
     new_est = client.post(
@@ -160,16 +160,16 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
         },
     )
     assert new_est.status_code == 200
-    assert new_est.json()["estimated_commission"] == 32.0  # 20% of 160
+    assert new_est.json()["estimated_commission"] == 60.0  # 20% of 300
 
-    # 5. Admin collects cash settlement Rs. 45 from Rider 1 -> balance becomes 0.0
+    # 5. Admin collects cash settlement Rs. 66 from Rider 1 -> balance becomes 0.0
     rider_id = rider_login.json()["user"]["id"]
     sett = client.post(
         "/api/finance/settlements",
         headers=_auth_header(admin_token),
         json={
             "rider_id": rider_id,
-            "amount": 45.0,
+            "amount": 66.0,
             "entry_type": "settlement_to_admin",
             "payment_channel": "cash",
             "note": "Settled at office",
@@ -182,8 +182,8 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     pnl = client.get("/api/reports/pnl", headers=_auth_header(admin_token))
     assert pnl.status_code == 200
     summary = pnl.json()["summary"]
-    assert summary["admin_commission_earned"] == 78.3  # 24.0 + 33.3 (seeded) + 21.0
-    assert summary["net_business_profit"] == 28.3  # 78.3 - 50.0 seeded expense
+    assert summary["admin_commission_earned"] == 99.3  # 24.0 + 33.3 (seeded) + 42.0
+    assert summary["net_business_profit"] == 49.3  # 99.3 - 50.0 seeded expense
 
     csv_res = client.get("/api/reports/export-csv", headers=_auth_header(admin_token))
     assert csv_res.status_code == 200
@@ -352,6 +352,145 @@ def test_car_ride_and_intercity_airport_estimate(client):
     )
     assert atd_local.status_code == 200
     assert atd_local.json()["zone_surcharge"] == 0.0
-    assert atd_local.json()["estimated_fare"] == 160.0
+    assert atd_local.json()["estimated_fare"] == 300.0  # base 100 + 4*50
+
+
+def test_new_fares_mansehra_parcel_slab_and_wait_charges(client):
+    # 1. Bike Ride: base 100 + 50/km
+    bike_est = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Main Bazar / Lari Adda",
+            "drop_zone": "College Doraha",
+            "distance_km": 2.0,
+            "wait_minutes": 8,  # 5 free -> 3 * 10 = Rs. 30 wait charge
+        },
+    ).json()
+    assert bike_est["estimated_fare"] == 230.0  # 100 + 100 + 30
+    assert bike_est["billable_wait_minutes"] == 3
+    assert bike_est["wait_charge"] == 30.0
+
+    # 2. Car Ride: base 150 + 80/km, 5 min free then Rs. 10/min
+    car_est = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Abbottabad — Mandian / KKH",
+            "drop_zone": "Abbottabad — Supply Bazar",
+            "distance_km": 4.0,
+            "wait_minutes": 9,  # 5 free -> 4 * 10 = Rs. 40 wait charge
+        },
+    ).json()
+    assert car_est["estimated_fare"] == 510.0  # 150 + 320 + 40
+    assert car_est["wait_charge"] == 40.0
+
+    # 3. Parcel Mansehra In-City Slab: <=3 km fixed Rs. 250, after 3 km +Rs. 50/km
+    mns_parcel_2 = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "parcel",
+            "pickup_zone": "Main Bazar / Lari Adda",
+            "drop_zone": "Ghazikot Township",
+            "distance_km": 2.0,
+        },
+    ).json()
+    assert mns_parcel_2["city_slab_applied"] is True
+    assert mns_parcel_2["estimated_fare"] == 250.0
+
+    mns_parcel_5 = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "parcel",
+            "pickup_zone": "Main Bazar / Lari Adda",
+            "drop_zone": "Ghazikot Township",
+            "distance_km": 5.0,
+        },
+    ).json()
+    assert mns_parcel_5["city_slab_applied"] is True
+    assert mns_parcel_5["estimated_fare"] == 350.0  # 250 + (5-3)*50
+
+    # Outside Mansehra (e.g. Abbottabad parcel): uses base 100 + 50/km
+    atd_parcel_2 = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "parcel",
+            "pickup_zone": "Abbottabad — Mandian / KKH",
+            "drop_zone": "Abbottabad — Supply Bazar",
+            "distance_km": 2.0,
+        },
+    ).json()
+    assert atd_parcel_2["city_slab_applied"] is False
+    assert atd_parcel_2["estimated_fare"] == 200.0  # 100 + 2*50
+
+    # 4. Rider wait charge added once when starting ride and preserved on completion + Admin dynamic rate edit
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    rider_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03112222222", "password": "rider123"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+
+    b = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Main Bazar / Lari Adda",
+            "pickup_address": "Lari Adda",
+            "drop_zone": "Ghazikot Township",
+            "drop_address": "Sector B",
+            "distance_km": 2.0,
+            "payment_method": "cash",
+        },
+    ).json()
+    assert b["final_fare"] == 310.0  # 150 + 2*80
+
+    assert client.post(f"/api/riders/jobs/{b['id']}/accept", headers=_auth_header(rider_token)).status_code == 200
+    assert client.post(
+        f"/api/riders/jobs/{b['id']}/status",
+        headers=_auth_header(rider_token),
+        json={"status": "arrived"},
+    ).status_code == 200
+    started = client.post(
+        f"/api/riders/jobs/{b['id']}/status",
+        headers=_auth_header(rider_token),
+        json={"status": "in_progress", "wait_minutes": 9},
+    ).json()
+    assert started["wait_charge"] == 40.0
+    assert started["final_fare"] == 350.0  # 310 + 40
+
+    done = client.post(
+        f"/api/riders/jobs/{b['id']}/status",
+        headers=_auth_header(rider_token),
+        json={"status": "completed"},
+    ).json()
+    assert done["wait_charge"] == 40.0
+    assert done["final_fare"] == 350.0  # no double-charging
+
+    # Admin updates car base fare & late fee dynamically
+    patch_car = client.patch(
+        "/api/admin/pricing/car_ride",
+        headers=_auth_header(admin_token),
+        json={"base_fare": 200.0, "wait_charge_per_min": 15.0},
+    )
+    assert patch_car.status_code == 200
+    car_after = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Abbottabad — Mandian / KKH",
+            "drop_zone": "Abbottabad — Supply Bazar",
+            "distance_km": 2.0,
+            "wait_minutes": 7,  # 2 billable * 15 = 30
+        },
+    ).json()
+    assert car_after["estimated_fare"] == 390.0  # 200 + 160 + 30
 
 

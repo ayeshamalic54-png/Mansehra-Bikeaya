@@ -23,6 +23,7 @@ export function LandingPage({ onNavigate }) {
   const [pickupZone, setPickupZone] = useState('Main Bazar / Lari Adda');
   const [dropZone, setDropZone] = useState('Ghazikot Township');
   const [distanceKm, setDistanceKm] = useState(4);
+  const [waitMinutes, setWaitMinutes] = useState(0);
   const [estimate, setEstimate] = useState(null);
 
   const syncDistanceForZones = (nextPickup, nextDrop) => {
@@ -56,6 +57,7 @@ export function LandingPage({ onNavigate }) {
             pickup_zone: pickupZone,
             drop_zone: dropZone,
             distance_km: Number(distanceKm) || 3,
+            wait_minutes: Number(waitMinutes) || 0,
           },
         });
         if (active) setEstimate(res);
@@ -66,7 +68,7 @@ export function LandingPage({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [serviceType, pickupZone, dropZone, distanceKm]);
+  }, [serviceType, pickupZone, dropZone, distanceKm, waitMinutes]);
 
   const services = [
     {
@@ -163,8 +165,8 @@ export function LandingPage({ onNavigate }) {
 
             <div className="grid grid-cols-3 gap-3 pt-2 max-w-lg text-xs">
               <div className="card-elevated rounded-2xl p-3.5">
-                <div className="font-extrabold text-slate-900 text-base mono-num">Rs. 80+</div>
-                <div className="text-slate-500 mt-0.5">City Base Rides</div>
+                <div className="font-extrabold text-slate-900 text-base mono-num">Rs. 100+</div>
+                <div className="text-slate-500 mt-0.5">Bike Base · Car Rs.150+</div>
               </div>
               <div className="card-elevated rounded-2xl p-3.5">
                 <div className="font-extrabold text-[#009E4D] text-base">Verified</div>
@@ -263,22 +265,69 @@ export function LandingPage({ onNavigate }) {
                     className="w-full accent-[#009E4D]"
                   />
                 </div>
+
+                <div>
+                  <div className="flex items-center justify-between font-semibold text-slate-600 mb-1">
+                    <span>Customer Late Wait (Free {estimate?.wait_free_minutes ?? 5}m, then Rs.{estimate?.wait_charge_per_min ?? 10}/m)</span>
+                    <span className="mono-num text-slate-900">{waitMinutes} min</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {[0, 5, 8, 12].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setWaitMinutes(m)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                          Number(waitMinutes) === m
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {m === 0 ? 'On time' : `${m} min`}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min="0"
+                      max="180"
+                      value={waitMinutes}
+                      onChange={(e) => setWaitMinutes(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-16 ml-auto px-2 py-1 rounded-lg border border-slate-200 bg-slate-50/80 text-right mono-num font-bold"
+                    />
+                  </div>
+                </div>
               </div>
 
               {estimate && (
-                <div className="rounded-2xl bg-slate-900 text-white p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-slate-400">Estimated Total Fare</div>
-                    <div className="text-2xl font-extrabold mono-num text-emerald-400">
-                      Rs. {estimate.estimated_fare}
+                <div className="rounded-2xl bg-slate-900 text-white p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-slate-400">Estimated Total Fare</div>
+                      <div className="text-2xl font-extrabold mono-num text-emerald-400">
+                        Rs. {estimate.estimated_fare}
+                      </div>
                     </div>
+                    <button
+                      onClick={() => onNavigate('auth')}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#009E4D] hover:bg-[#008741] text-white transition"
+                    >
+                      Book This Ride →
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onNavigate('auth')}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#009E4D] hover:bg-[#008741] text-white transition"
-                  >
-                    Book This Ride →
-                  </button>
+                  {(estimate.city_slab_applied || estimate.wait_charge > 0) && (
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-800 text-[11px]">
+                      {estimate.city_slab_applied && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">
+                          Mansehra City Slab: Rs.{estimate.city_flat_fare} / {estimate.city_flat_km}km + Rs.{estimate.per_km_rate}/km
+                        </span>
+                      )}
+                      {estimate.wait_charge > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
+                          +{estimate.billable_wait_minutes}m late wait fee: Rs.{estimate.wait_charge}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

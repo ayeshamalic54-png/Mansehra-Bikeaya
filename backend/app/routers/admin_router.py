@@ -41,6 +41,7 @@ from app.schemas import (
     ZoneUpdate,
 )
 from app.services.finance import (
+    apply_wait_charge_to_booking,
     complete_booking_and_post_ledger,
     compute_commission,
     estimate_booking_fare,
@@ -178,6 +179,7 @@ def create_manual_booking(
         drop_zone_name=payload.drop_zone,
         distance_km=payload.distance_km,
         promo_code=payload.promo_code,
+        wait_minutes=payload.wait_minutes,
     )
     fare = float(round(payload.custom_fare)) if payload.custom_fare else est["estimated_fare"]
 
@@ -208,6 +210,8 @@ def create_manual_booking(
         estimated_fare=est["estimated_fare"],
         discount_amount=est["discount_amount"],
         promo_code=est["applied_promo"],
+        wait_minutes=est["wait_minutes"],
+        wait_charge=est["wait_charge"],
         final_fare=fare,
         commission_type_snapshot=c_type,
         commission_rate_snapshot=c_val,
@@ -291,11 +295,24 @@ def admin_update_booking_status(
             actor=current_user,
             final_fare_override=payload.final_fare_override,
             payment_collector_override=payload.payment_collector,
+            wait_minutes_override=payload.wait_minutes,
         )
     else:
         booking.status = payload.status
-        if payload.status == "in_progress" and not booking.started_at:
-            booking.started_at = utcnow()
+        if payload.status == "arrived" and not booking.arrived_at:
+            booking.arrived_at = utcnow()
+        if payload.status == "in_progress":
+            if not booking.started_at:
+                booking.started_at = utcnow()
+            rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
+            rp = booking.rider.rider_profile if booking.rider else None
+            apply_wait_charge_to_booking(booking, rule, wait_minutes_override=payload.wait_minutes)
+            if rule:
+                c_type, c_val, comm, net = compute_commission(booking.final_fare, rule, rp)
+                booking.commission_type_snapshot = c_type
+                booking.commission_rate_snapshot = c_val
+                booking.commission_amount = comm
+                booking.rider_earning = net
         db.commit()
 
     db.refresh(booking)
@@ -706,6 +723,10 @@ def get_all_pricing(
             "commission_type": r.commission_type,
             "commission_value": r.commission_value,
             "peak_multiplier": r.peak_multiplier,
+            "city_flat_km": r.city_flat_km,
+            "city_flat_fare": r.city_flat_fare,
+            "wait_free_minutes": r.wait_free_minutes,
+            "wait_charge_per_min": r.wait_charge_per_min,
             "is_active": r.is_active,
             "updated_at": r.updated_at,
         }
@@ -737,6 +758,10 @@ def update_pricing_rule(
         "commission_type": rule.commission_type,
         "commission_value": rule.commission_value,
         "peak_multiplier": rule.peak_multiplier,
+        "city_flat_km": rule.city_flat_km,
+        "city_flat_fare": rule.city_flat_fare,
+        "wait_free_minutes": rule.wait_free_minutes,
+        "wait_charge_per_min": rule.wait_charge_per_min,
         "is_active": rule.is_active,
     }
 

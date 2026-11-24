@@ -16,11 +16,12 @@ import { useAuth } from '../context/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function RiderApp({ onOpenDownloads }) {
-  const { user, refreshMe, logout } = useAuth();
+  const { user, bootstrap, refreshMe, logout } = useAuth();
   const [tab, setTab] = useState('duty'); // duty | active | ledger | profile
   const [availableJobs, setAvailableJobs] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
   const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [] });
+  const [waitDrafts, setWaitDrafts] = useState({});
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -77,11 +78,20 @@ export function RiderApp({ onOpenDownloads }) {
     setErr('');
     setMsg('');
     try {
+      const draftWait = waitDrafts[bookingId];
+      const body = { status: nextStatus };
+      if ((nextStatus === 'in_progress' || nextStatus === 'completed') && draftWait !== undefined && draftWait !== '') {
+        body.wait_minutes = Math.max(0, Number(draftWait) || 0);
+      }
       const updated = await apiRequest(`/api/riders/jobs/${bookingId}/status`, {
         method: 'POST',
-        body: { status: nextStatus },
+        body,
       });
-      setMsg(`Ride ${updated.booking_code} updated to ${updated.status}.`);
+      setMsg(
+        `Ride ${updated.booking_code} updated to ${updated.status}${
+          updated.wait_charge > 0 ? ` (Late fee Rs. ${updated.wait_charge} added)` : ''
+        }.`
+      );
       await refreshMe();
       await loadAll();
     } catch (e) {
@@ -282,9 +292,34 @@ export function RiderApp({ onOpenDownloads }) {
                   )}
 
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between mono-num font-bold">
-                    <span>Collect ({job.payment_method}): Rs. {job.final_fare}</span>
+                    <span>
+                      Collect ({job.payment_method}): Rs. {job.final_fare}
+                      {job.wait_charge > 0 && ` (incl. Rs. ${job.wait_charge} wait)`}
+                    </span>
                     <span className="text-[#008741]">Net: Rs. {job.rider_earning}</span>
                   </div>
+
+                  {(job.status === 'assigned' || job.status === 'arrived') && (() => {
+                    const jRule = bootstrap.pricing_rules?.find((r) => r.service_type === job.service_type);
+                    const fMin = jRule?.wait_free_minutes ?? 5;
+                    const cPerMin = jRule?.wait_charge_per_min ?? 10;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-semibold text-amber-900">
+                          Customer Wait (min) · Free {fMin}m, then Rs. {cPerMin}/m
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="300"
+                          placeholder="Auto timer"
+                          value={waitDrafts[job.id] ?? ''}
+                          onChange={(e) => setWaitDrafts((prev) => ({ ...prev, [job.id]: e.target.value }))}
+                          className="w-24 px-2 py-1 rounded-lg border border-amber-300 bg-white text-slate-900 mono-num font-bold text-right"
+                        />
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex gap-2">
                     {job.status === 'assigned' && (
