@@ -305,7 +305,7 @@ export function LandingPage({ onNavigate }) {
                   dropLabel={dropZone}
                   nearbyCaptains={nearbyCaptains}
                   heightClass="h-44 sm:h-48"
-                  compact={true}
+                  autoLocate={true}
                   onSelectPoint={({ type, lat, lng, nearestZoneName }) => {
                     if (type === 'pickup') {
                       setPickupLat(lat);

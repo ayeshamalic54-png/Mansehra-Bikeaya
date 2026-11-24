@@ -923,6 +923,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                 dropLabel={manualForm.drop_address || manualForm.drop_zone}
                 nearbyCaptains={liveMap.captains.filter((c) => c.is_online)}
                 heightClass="h-56"
+                autoLocate={false}
                 onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
                   setManualForm((prev) => ({
                     ...prev,
