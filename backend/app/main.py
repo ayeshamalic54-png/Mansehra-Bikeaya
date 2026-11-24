@@ -25,6 +25,16 @@ def ensure_schema_migrations() -> None:
     is_pg = engine.dialect.name == "postgresql"
     ts_type = "TIMESTAMPTZ" if is_pg else "DATETIME"
     column_specs = {
+        "rider_profiles": [
+            ("vehicle_type", "VARCHAR(20) NOT NULL DEFAULT 'bike'"),
+            ("current_lat", "FLOAT"),
+            ("current_lng", "FLOAT"),
+            ("location_updated_at", ts_type),
+        ],
+        "mansehra_zones": [
+            ("lat", "FLOAT"),
+            ("lng", "FLOAT"),
+        ],
         "pricing_rules": [
             ("city_flat_km", "FLOAT NOT NULL DEFAULT 0.0"),
             ("city_flat_fare", "FLOAT NOT NULL DEFAULT 0.0"),
@@ -32,6 +42,10 @@ def ensure_schema_migrations() -> None:
             ("wait_charge_per_min", "FLOAT NOT NULL DEFAULT 10.0"),
         ],
         "bookings": [
+            ("pickup_lat", "FLOAT"),
+            ("pickup_lng", "FLOAT"),
+            ("drop_lat", "FLOAT"),
+            ("drop_lng", "FLOAT"),
             ("wait_minutes", "INTEGER NOT NULL DEFAULT 0"),
             ("wait_charge", "FLOAT NOT NULL DEFAULT 0.0"),
             ("arrived_at", ts_type),

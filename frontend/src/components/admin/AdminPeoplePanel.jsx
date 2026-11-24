@@ -21,6 +21,7 @@ export function AdminPeoplePanel({
     full_name: '',
     phone: '',
     password: 'rider123',
+    vehicle_type: 'bike',
     bike_model: 'Honda CD-70',
     bike_plate: '',
     cnic_number: '',
@@ -62,6 +63,7 @@ export function AdminPeoplePanel({
       full_name: '',
       phone: '',
       password: 'rider123',
+      vehicle_type: 'bike',
       bike_model: 'Honda CD-70',
       bike_plate: '',
       cnic_number: '',
@@ -82,6 +84,7 @@ export function AdminPeoplePanel({
           body: {
             full_name: riderForm.full_name,
             phone: riderForm.phone,
+            vehicle_type: riderForm.vehicle_type,
             bike_model: riderForm.bike_model,
             bike_plate: riderForm.bike_plate,
             cnic_number: riderForm.cnic_number || null,
@@ -103,6 +106,7 @@ export function AdminPeoplePanel({
             full_name: riderForm.full_name,
             phone: riderForm.phone,
             password: riderForm.password,
+            vehicle_type: riderForm.vehicle_type,
             bike_model: riderForm.bike_model,
             bike_plate: riderForm.bike_plate,
             cnic_number: riderForm.cnic_number || null,
@@ -233,7 +237,7 @@ export function AdminPeoplePanel({
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
               <input
                 type="text"
                 required
@@ -250,10 +254,18 @@ export function AdminPeoplePanel({
                 onChange={(e) => setRiderForm({ ...riderForm, phone: e.target.value })}
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
+              <select
+                value={riderForm.vehicle_type}
+                onChange={(e) => setRiderForm({ ...riderForm, vehicle_type: e.target.value })}
+                className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
+              >
+                <option value="bike">Bike Captain</option>
+                <option value="car">Car Captain</option>
+              </select>
               <input
                 type="text"
                 required
-                placeholder="Bike Model (CD-70)"
+                placeholder="Model (CD-70 / Alto)"
                 value={riderForm.bike_model}
                 onChange={(e) => setRiderForm({ ...riderForm, bike_model: e.target.value })}
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
@@ -397,6 +409,7 @@ export function AdminPeoplePanel({
                             full_name: r.full_name,
                             phone: r.phone,
                             password: '',
+                            vehicle_type: r.vehicle_type || 'bike',
                             bike_model: r.bike_model || 'Honda CD-70',
                             bike_plate: r.bike_plate || '',
                             cnic_number: r.cnic_number || '',

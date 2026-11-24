@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.database import get_db
-from app.models import RiderProfile, SystemSetting, User
+from app.models import MansehraZone, RiderProfile, SystemSetting, User
 from app.schemas import LoginRequest, RegisterRequest
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -24,10 +24,14 @@ def serialize_user(user: User) -> dict:
         data["rider_profile"] = {
             "id": rp.id,
             "cnic_number": rp.cnic_number,
+            "vehicle_type": rp.vehicle_type,
             "bike_model": rp.bike_model,
             "bike_plate": rp.bike_plate,
             "license_no": rp.license_no,
             "zone_name": rp.zone_name,
+            "current_lat": rp.current_lat,
+            "current_lng": rp.current_lng,
+            "location_updated_at": rp.location_updated_at,
             "is_verified": rp.is_verified,
             "is_online": rp.is_online,
             "credit_limit": rp.credit_limit,
@@ -69,13 +73,20 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     if payload.role == "rider":
         cap_setting = db.query(SystemSetting).filter(SystemSetting.key == "default_credit_limit").first()
         credit_limit = float(cap_setting.value) if cap_setting else 1500.0
+        z = db.query(MansehraZone).filter(MansehraZone.name == (payload.zone_name or "Main Bazar / Lari Adda")).first()
+        vtype = payload.vehicle_type or (
+            "car" if payload.bike_model and any(w in payload.bike_model.lower() for w in ("alto", "corolla", "civic", "mehran", "cultus", "car", "vitz", "wagon", "hiace")) else "bike"
+        )
         rp = RiderProfile(
             user_id=user.id,
             cnic_number=payload.cnic_number,
-            bike_model=payload.bike_model or "Honda CD-70",
+            vehicle_type=vtype,
+            bike_model=payload.bike_model or ("Suzuki Alto" if vtype == "car" else "Honda CD-70"),
             bike_plate=payload.bike_plate.strip().upper(),
             license_no=payload.license_no,
             zone_name=payload.zone_name or "Main Bazar / Lari Adda",
+            current_lat=z.lat if z else 34.3335,
+            current_lng=z.lng if z else 73.1995,
             is_verified=False,  # Requires Admin verification before going online
             is_online=False,
             credit_limit=credit_limit,

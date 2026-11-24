@@ -32,6 +32,16 @@
   display: none;
 }
 
+.leaflet-container {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  z-index: 1;
+}
+
+.safargo-div-icon {
+  background: transparent;
+  border: none;
+}
+
 @media print {
   .no-print {
     display: none !important;

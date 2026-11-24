@@ -196,6 +196,8 @@ def create_manual_booking(
 
     rule = db.query(PricingRule).filter(PricingRule.service_type == payload.service_type).first()
     c_type, c_val, comm, net = compute_commission(fare, rule, rider_rp)
+    p_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.pickup_zone).first()
+    d_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.drop_zone).first()
 
     booking = Booking(
         booking_code=generate_booking_code(db),
@@ -204,8 +206,12 @@ def create_manual_booking(
         service_type=payload.service_type,
         pickup_zone=payload.pickup_zone,
         pickup_address=payload.pickup_address.strip(),
+        pickup_lat=payload.pickup_lat if payload.pickup_lat is not None else (p_zone_row.lat if p_zone_row else None),
+        pickup_lng=payload.pickup_lng if payload.pickup_lng is not None else (p_zone_row.lng if p_zone_row else None),
         drop_zone=payload.drop_zone,
         drop_address=payload.drop_address.strip(),
+        drop_lat=payload.drop_lat if payload.drop_lat is not None else (d_zone_row.lat if d_zone_row else None),
+        drop_lng=payload.drop_lng if payload.drop_lng is not None else (d_zone_row.lng if d_zone_row else None),
         distance_km=payload.distance_km,
         estimated_fare=est["estimated_fare"],
         discount_amount=est["discount_amount"],
@@ -451,10 +457,14 @@ def list_riders(
             "is_active": u.is_active,
             "created_at": u.created_at,
             "cnic_number": u.rider_profile.cnic_number if u.rider_profile else None,
+            "vehicle_type": u.rider_profile.vehicle_type if u.rider_profile else "bike",
             "bike_model": u.rider_profile.bike_model if u.rider_profile else None,
             "bike_plate": u.rider_profile.bike_plate if u.rider_profile else None,
             "license_no": u.rider_profile.license_no if u.rider_profile else None,
             "zone_name": u.rider_profile.zone_name if u.rider_profile else None,
+            "current_lat": u.rider_profile.current_lat if u.rider_profile else None,
+            "current_lng": u.rider_profile.current_lng if u.rider_profile else None,
+            "location_updated_at": u.rider_profile.location_updated_at if u.rider_profile else None,
             "is_verified": u.rider_profile.is_verified if u.rider_profile else False,
             "is_online": u.rider_profile.is_online if u.rider_profile else False,
             "credit_limit": u.rider_profile.credit_limit if u.rider_profile else 1500.0,
@@ -493,13 +503,17 @@ def admin_create_rider(
     db.commit()
     db.refresh(user)
 
+    z = db.query(MansehraZone).filter(MansehraZone.name == payload.zone_name).first()
     rp = RiderProfile(
         user_id=user.id,
         cnic_number=payload.cnic_number,
+        vehicle_type=payload.vehicle_type,
         bike_model=payload.bike_model,
         bike_plate=payload.bike_plate.strip().upper(),
         license_no=payload.license_no,
         zone_name=payload.zone_name,
+        current_lat=z.lat if z else 34.3335,
+        current_lng=z.lng if z else 73.1995,
         credit_limit=payload.credit_limit,
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
@@ -531,6 +545,8 @@ def update_rider_config(
         user.phone = payload.phone.strip()
     if payload.cnic_number is not None:
         rp.cnic_number = payload.cnic_number
+    if payload.vehicle_type is not None:
+        rp.vehicle_type = payload.vehicle_type
     if payload.bike_model is not None:
         rp.bike_model = payload.bike_model
     if payload.bike_plate is not None:
@@ -545,6 +561,10 @@ def update_rider_config(
             rp.is_online = False
     if payload.zone_name is not None:
         rp.zone_name = payload.zone_name
+    if payload.current_lat is not None and payload.current_lng is not None:
+        rp.current_lat = payload.current_lat
+        rp.current_lng = payload.current_lng
+        rp.location_updated_at = utcnow()
     if payload.credit_limit is not None:
         rp.credit_limit = payload.credit_limit
     if payload.custom_commission_type == "none":
@@ -766,6 +786,88 @@ def update_pricing_rule(
     }
 
 
+@router.get("/live-map")
+def get_admin_live_map(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    zone_coords = {z.name: (z.lat, z.lng) for z in db.query(MansehraZone).all()}
+
+    active_rows = (
+        db.query(Booking)
+        .options(joinedload(Booking.customer), joinedload(Booking.rider))
+        .filter(Booking.status.in_(("pending", "assigned", "arrived", "in_progress")))
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+    active_by_rider = {b.rider_id: b.booking_code for b in active_rows if b.rider_id}
+
+    riders = (
+        db.query(User)
+        .options(joinedload(User.rider_profile))
+        .filter(User.role == "rider")
+        .all()
+    )
+    captains = []
+    for u in riders:
+        rp = u.rider_profile
+        if not rp:
+            continue
+        fallback = zone_coords.get(rp.zone_name, (34.3335, 73.1995))
+        lat = rp.current_lat if rp.current_lat is not None else fallback[0]
+        lng = rp.current_lng if rp.current_lng is not None else fallback[1]
+        if lat is None or lng is None:
+            continue
+        captains.append(
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "phone": u.phone,
+                "vehicle_type": rp.vehicle_type or "bike",
+                "bike_model": rp.bike_model,
+                "bike_plate": rp.bike_plate,
+                "zone_name": rp.zone_name,
+                "is_online": rp.is_online,
+                "is_verified": rp.is_verified,
+                "lat": lat,
+                "lng": lng,
+                "location_updated_at": rp.location_updated_at,
+                "balance_due_to_admin": rp.balance_due_to_admin,
+                "active_booking_code": active_by_rider.get(u.id),
+            }
+        )
+
+    active_bookings = []
+    for b in active_rows:
+        p_fb = zone_coords.get(b.pickup_zone, (34.3335, 73.1995))
+        d_fb = zone_coords.get(b.drop_zone, (34.3310, 73.1970))
+        active_bookings.append(
+            {
+                "id": b.id,
+                "booking_code": b.booking_code,
+                "status": b.status,
+                "service_type": b.service_type,
+                "distance_km": b.distance_km,
+                "final_fare": b.final_fare,
+                "wait_charge": b.wait_charge,
+                "customer_name": b.customer.full_name if b.customer else "Customer",
+                "customer_phone": b.customer.phone if b.customer else None,
+                "rider_id": b.rider_id,
+                "rider_name": b.rider.full_name if b.rider else None,
+                "pickup_zone": b.pickup_zone,
+                "pickup_address": b.pickup_address,
+                "pickup_lat": b.pickup_lat if b.pickup_lat is not None else p_fb[0],
+                "pickup_lng": b.pickup_lng if b.pickup_lng is not None else p_fb[1],
+                "drop_zone": b.drop_zone,
+                "drop_address": b.drop_address,
+                "drop_lat": b.drop_lat if b.drop_lat is not None else d_fb[0],
+                "drop_lng": b.drop_lng if b.drop_lng is not None else d_fb[1],
+            }
+        )
+
+    return {"captains": captains, "active_bookings": active_bookings}
+
+
 @router.get("/zones")
 def admin_list_zones(
     current_user: User = Depends(require_roles("admin")),
@@ -787,6 +889,8 @@ def admin_create_zone(
         area_tag=payload.area_tag,
         approx_km_from_center=payload.approx_km_from_center,
         surcharge=payload.surcharge,
+        lat=payload.lat,
+        lng=payload.lng,
         is_active=True,
     )
     db.add(z)

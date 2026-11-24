@@ -25,9 +25,12 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
+import { SafarGoMap } from '../components/SafarGoMap';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { ZoneOptions } from '../components/ZoneOptions';
+import { resolveSmartRoute } from '../utils/zones';
 import { AdminFinancePanel } from '../components/admin/AdminFinancePanel';
 import { AdminOperationsPanel } from '../components/admin/AdminOperationsPanel';
 import { AdminPeoplePanel } from '../components/admin/AdminPeoplePanel';
@@ -38,6 +41,7 @@ const NAV_GROUPS = [
     group: 'Overview',
     items: [
       { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, badgeCls: 'bg-emerald-500/15 text-emerald-400' },
+      { id: 'livemap', label: 'Live Fleet & Customer Map', icon: MapPin, badgeCls: 'bg-teal-500/15 text-teal-400' },
     ],
   },
   {
@@ -90,6 +94,7 @@ export function AdminDashboard({ onOpenDownloads }) {
   const [bookingSearch, setBookingSearch] = useState('');
   const [riders, setRiders] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [liveMap, setLiveMap] = useState({ captains: [], active_bookings: [] });
   const [editingBooking, setEditingBooking] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -99,9 +104,13 @@ export function AdminDashboard({ onOpenDownloads }) {
     service_type: 'bike_ride',
     pickup_zone: bootstrap.zones?.[0]?.name || 'Main Bazar / Lari Adda',
     pickup_address: '',
+    pickup_lat: 34.3335,
+    pickup_lng: 73.1995,
     drop_zone: bootstrap.zones?.[2]?.name || 'Ghazikot Township',
     drop_address: '',
-    distance_km: 4,
+    drop_lat: 34.3168,
+    drop_lng: 73.1920,
+    distance_km: 3,
     payment_method: 'cash',
     rider_id: '',
     custom_fare: '',
@@ -145,11 +154,28 @@ export function AdminDashboard({ onOpenDownloads }) {
     }
   };
 
+  const loadLiveMap = async () => {
+    try {
+      setLiveMap(await apiRequest('/api/admin/live-map'));
+    } catch {
+      // ignore transient poll errors
+    }
+  };
+
   useEffect(() => {
     loadOverviewAndRiders();
     if (subpage === 'dispatch') loadBookings();
     if (subpage === 'customers') loadCustomers();
+    if (subpage === 'livemap' || subpage === 'overview') {
+      loadLiveMap();
+    }
   }, [subpage, bookingStatusFilter]);
+
+  useEffect(() => {
+    if (subpage !== 'livemap' && subpage !== 'overview') return;
+    const timer = setInterval(loadLiveMap, 6000);
+    return () => clearInterval(timer);
+  }, [subpage]);
 
   const handleAssignRider = async (bookingId, riderId) => {
     if (!riderId) return;
@@ -545,6 +571,25 @@ export function AdminDashboard({ onOpenDownloads }) {
                 />
               </div>
 
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="font-extrabold text-sm text-slate-900">
+                    Live GPS Operations Map (Customers + Bike &amp; Car Captains)
+                  </div>
+                  <div className="text-slate-500 mt-0.5">
+                    Tracking <strong>{liveMap.captains.filter((c) => c.is_online).length}</strong> online captains &amp;{' '}
+                    <strong>{liveMap.active_bookings.length}</strong> active customer rides live.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSubpage('livemap')}
+                  className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold inline-flex items-center gap-1.5"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Open Live Fleet &amp; Customer Map →
+                </button>
+              </div>
+
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
                 <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
                   <span className="font-extrabold text-sm text-slate-900">Recent Rides &amp; Commission Split</span>
@@ -622,6 +667,90 @@ export function AdminDashboard({ onOpenDownloads }) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 1B. ADMIN LIVE FLEET & CUSTOMER GPS MAP */}
+          {subpage === 'livemap' && (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-slate-900">
+                      Live GPS Radar — All Customers &amp; All Bike/Car Captains
+                    </h2>
+                    <p className="text-slate-500">
+                      Pin <strong>C</strong> = Active Customer Pickup · Pin <strong>BIKE/CAR</strong> = Live Captain Location · Auto-refreshes every 6s
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadLiveMap}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold"
+                  >
+                    Refresh GPS
+                  </button>
+                </div>
+
+                <SafarGoMap
+                  captains={liveMap.captains}
+                  activeBookings={liveMap.active_bookings}
+                  heightClass="h-[440px]"
+                  fitSignature={`admin-${liveMap.captains.length}-${liveMap.active_bookings.length}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+                  <div className="font-extrabold text-sm text-slate-900">
+                    Active Customer Pickups ({liveMap.active_bookings.length})
+                  </div>
+                  {liveMap.active_bookings.length === 0 ? (
+                    <div className="text-slate-500 py-4 text-center">No active customer trips right now.</div>
+                  ) : (
+                    liveMap.active_bookings.map((b) => (
+                      <div key={b.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            {b.booking_code} · {b.customer_name} ({b.customer_phone})
+                          </div>
+                          <div className="text-slate-600">
+                            {b.pickup_zone} ({b.pickup_address}) → {b.drop_zone}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mono-num">
+                            {b.distance_km} km · Rs. {b.final_fare} · {b.rider_name ? `Capt: ${b.rider_name}` : 'Waiting Captain'}
+                          </div>
+                        </div>
+                        <StatusBadge value={b.status} />
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+                  <div className="font-extrabold text-sm text-slate-900">
+                    Captain Fleet Locations ({liveMap.captains.length})
+                  </div>
+                  {liveMap.captains.map((c) => (
+                    <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-900">
+                          {c.full_name} · <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">{c.vehicle_type}</span>
+                        </div>
+                        <div className="text-slate-600 mono-num">
+                          {c.bike_model} ({c.bike_plate}) · {c.zone_name}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mono-num">
+                          GPS: {Number(c.lat).toFixed(4)}, {Number(c.lng).toFixed(4)}
+                          {c.active_booking_code ? ` · Trip: ${c.active_booking_code}` : ''}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full font-bold ${c.is_online ? 'bg-emerald-100 text-[#008741]' : 'bg-slate-200 text-slate-600'}`}>
+                        {c.is_online ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -784,10 +913,52 @@ export function AdminDashboard({ onOpenDownloads }) {
                   <option value="errand">Bazaar Errand</option>
                 </select>
               </div>
+              <InteractiveRoutePicker
+                zones={bootstrap.zones}
+                pickupLat={manualForm.pickup_lat}
+                pickupLng={manualForm.pickup_lng}
+                pickupLabel={manualForm.pickup_address || manualForm.pickup_zone}
+                dropLat={manualForm.drop_lat}
+                dropLng={manualForm.drop_lng}
+                dropLabel={manualForm.drop_address || manualForm.drop_zone}
+                nearbyCaptains={liveMap.captains.filter((c) => c.is_online)}
+                heightClass="h-56"
+                onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
+                  setManualForm((prev) => ({
+                    ...prev,
+                    ...(type === 'pickup'
+                      ? {
+                          pickup_lat: lat,
+                          pickup_lng: lng,
+                          pickup_zone: nearestZoneName || prev.pickup_zone,
+                          pickup_address: address || prev.pickup_address,
+                        }
+                      : {
+                          drop_lat: lat,
+                          drop_lng: lng,
+                          drop_zone: nearestZoneName || prev.drop_zone,
+                          drop_address: address || prev.drop_address,
+                        }),
+                  }));
+                }}
+                onRouteResult={({ distanceKm: roadKm }) => {
+                  if (roadKm) setManualForm((prev) => ({ ...prev, distance_km: roadKm }));
+                }}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <select
                   value={manualForm.pickup_zone}
-                  onChange={(e) => setManualForm({ ...manualForm, pickup_zone: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const z = bootstrap.zones.find((item) => item.name === val);
+                    const { distanceKm: nextKm } = resolveSmartRoute(bootstrap.zones, val, manualForm.drop_zone, manualForm.distance_km, manualForm.service_type);
+                    setManualForm((prev) => ({
+                      ...prev,
+                      pickup_zone: val,
+                      ...(z?.lat != null ? { pickup_lat: z.lat, pickup_lng: z.lng } : {}),
+                      ...(nextKm != null ? { distance_km: nextKm } : {}),
+                    }));
+                  }}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
                   <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Pickup: " />
@@ -802,7 +973,17 @@ export function AdminDashboard({ onOpenDownloads }) {
                 />
                 <select
                   value={manualForm.drop_zone}
-                  onChange={(e) => setManualForm({ ...manualForm, drop_zone: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const z = bootstrap.zones.find((item) => item.name === val);
+                    const { distanceKm: nextKm } = resolveSmartRoute(bootstrap.zones, manualForm.pickup_zone, val, manualForm.distance_km, manualForm.service_type);
+                    setManualForm((prev) => ({
+                      ...prev,
+                      drop_zone: val,
+                      ...(z?.lat != null ? { drop_lat: z.lat, drop_lng: z.lng } : {}),
+                      ...(nextKm != null ? { distance_km: nextKm } : {}),
+                    }));
+                  }}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
                   <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Drop: " />
@@ -819,8 +1000,8 @@ export function AdminDashboard({ onOpenDownloads }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input
                   type="number"
-                  step="0.5"
-                  min="1"
+                  step="0.1"
+                  min="0.5"
                   placeholder="Distance (km)"
                   value={manualForm.distance_km}
                   onChange={(e) => setManualForm({ ...manualForm, distance_km: e.target.value })}

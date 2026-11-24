@@ -4,6 +4,7 @@ import {
   Bike,
   CheckCircle2,
   Download,
+  LocateFixed,
   LogOut,
   MapPin,
   Phone,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { SafarGoMap } from '../components/SafarGoMap';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function RiderApp({ onOpenDownloads }) {
@@ -22,6 +24,8 @@ export function RiderApp({ onOpenDownloads }) {
   const [myJobs, setMyJobs] = useState([]);
   const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [] });
   const [waitDrafts, setWaitDrafts] = useState({});
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [gpsBanner, setGpsBanner] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -47,6 +51,36 @@ export function RiderApp({ onOpenDownloads }) {
     const timer = setInterval(loadAll, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  const pushRiderLocation = async (lat, lng) => {
+    try {
+      await apiRequest('/api/riders/location', {
+        method: 'POST',
+        body: { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) },
+      });
+      await refreshMe();
+      setGpsBanner(`Live GPS shared (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    } catch {
+      // ignore background ping failures
+    }
+  };
+
+  // Auto-broadcast Captain GPS when Duty is ONLINE so Customers & Admin see live pin
+  useEffect(() => {
+    if (!rp?.is_online || !navigator.geolocation) return;
+    let lastSent = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastSent < 10000) return;
+        lastSent = now;
+        pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [rp?.is_online]);
 
   const handleToggleOnline = async () => {
     setErr('');
@@ -190,14 +224,58 @@ export function RiderApp({ onOpenDownloads }) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-extrabold text-slate-900">
                 Available Ride &amp; Parcel Requests ({availableJobs.length})
               </h2>
-              <button onClick={loadAll} className="text-xs font-bold text-[#009E4D] underline">
-                Refresh
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLocationPicker((v) => !v)}
+                  className="text-xs font-bold text-teal-700 inline-flex items-center gap-1 underline"
+                >
+                  <LocateFixed className="w-3.5 h-3.5" />
+                  {showLocationPicker ? 'Hide My Map Pin' : 'Update My Map Location'}
+                </button>
+                <button onClick={loadAll} className="text-xs font-bold text-[#009E4D] underline">
+                  Refresh
+                </button>
+              </div>
             </div>
+
+            {showLocationPicker && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900">
+                    Tap map to move your live Captain pin (Customers &amp; Admin see this)
+                  </span>
+                  {gpsBanner && <span className="text-[#009E4D] font-bold">{gpsBanner}</span>}
+                </div>
+                <SafarGoMap
+                  captains={
+                    rp?.current_lat != null
+                      ? [
+                          {
+                            id: user?.id,
+                            display_name: user?.full_name,
+                            vehicle_type: rp?.vehicle_type || 'bike',
+                            bike_model: rp?.bike_model,
+                            bike_plate: rp?.bike_plate,
+                            lat: rp.current_lat,
+                            lng: rp.current_lng,
+                            is_online: rp.is_online,
+                          },
+                        ]
+                      : []
+                  }
+                  interactive={true}
+                  activePinMode="pickup"
+                  onMapPick={(_which, lat, lng) => pushRiderLocation(lat, lng)}
+                  heightClass="h-48"
+                  fitSignature={`${rp?.current_lat}-${rp?.current_lng}`}
+                />
+              </div>
+            )}
 
             {availableJobs.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
@@ -225,6 +303,30 @@ export function RiderApp({ onOpenDownloads }) {
                       <span><strong>Drop:</strong> {job.drop_zone} — {job.drop_address}</span>
                     </div>
                   </div>
+
+                  {job.pickup_lat != null && job.drop_lat != null && (
+                    <SafarGoMap
+                      pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: job.pickup_address || job.pickup_zone }}
+                      drop={{ lat: job.drop_lat, lng: job.drop_lng, label: job.drop_address || job.drop_zone }}
+                      captains={
+                        rp?.current_lat != null
+                          ? [
+                              {
+                                id: user?.id,
+                                display_name: 'You',
+                                vehicle_type: rp?.vehicle_type || 'bike',
+                                bike_model: rp?.bike_model,
+                                lat: rp.current_lat,
+                                lng: rp.current_lng,
+                                is_online: rp?.is_online,
+                              },
+                            ]
+                          : []
+                      }
+                      heightClass="h-40"
+                      fitSignature={`avail-${job.id}-${rp?.current_lat}`}
+                    />
+                  )}
 
                   <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between mono-num">
                     <div>
@@ -274,6 +376,30 @@ export function RiderApp({ onOpenDownloads }) {
                       </div>
                     )}
                   </div>
+
+                  {job.pickup_lat != null && job.drop_lat != null && (
+                    <SafarGoMap
+                      pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: job.pickup_address || job.pickup_zone }}
+                      drop={{ lat: job.drop_lat, lng: job.drop_lng, label: job.drop_address || job.drop_zone }}
+                      captains={
+                        rp?.current_lat != null
+                          ? [
+                              {
+                                id: user?.id,
+                                display_name: 'You',
+                                vehicle_type: rp?.vehicle_type || 'bike',
+                                bike_model: rp?.bike_model,
+                                lat: rp.current_lat,
+                                lng: rp.current_lng,
+                                is_online: rp?.is_online,
+                              },
+                            ]
+                          : []
+                      }
+                      heightClass="h-44"
+                      fitSignature={`active-${job.id}-${job.status}-${rp?.current_lat}`}
+                    />
+                  )}
 
                   {job.customer && (
                     <div className="p-3 rounded-xl bg-slate-50/80 flex items-center justify-between">

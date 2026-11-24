@@ -17,65 +17,82 @@ from app.services.finance import complete_booking_and_post_ledger, utcnow
 
 
 def seed_initial_data(db: Session) -> None:
-    # 1. Full City & Intercity Hubs / Zones (idempotent by zone name)
-    seed_zones = [
+    # 1. Full City & Intercity Hubs / Zones (idempotent by zone name + coordinate backfill)
+    zone_specs = [
         # --- Mansehra City Core & Tehsil ---
-        MansehraZone(name="Main Bazar / Lari Adda", area_tag="City Core", approx_km_from_center=1.0, surcharge=0),
-        MansehraZone(name="Abbottabad Road", area_tag="City Core", approx_km_from_center=2.5, surcharge=0),
-        MansehraZone(name="Ghazikot Township", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
-        MansehraZone(name="Shinkiari Road", area_tag="City North", approx_km_from_center=3.0, surcharge=0),
-        MansehraZone(name="College Doraha", area_tag="Education Hub", approx_km_from_center=2.0, surcharge=0),
-        MansehraZone(name="Kaghan Colony", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
-        MansehraZone(name="Channai", area_tag="Suburb", approx_km_from_center=4.5, surcharge=10),
-        MansehraZone(name="King Abdullah Hospital", area_tag="Medical", approx_km_from_center=2.5, surcharge=0),
-        MansehraZone(name="Hazara University (Dhodial)", area_tag="University", approx_km_from_center=11.0, surcharge=30),
-        MansehraZone(name="Baffa Town", area_tag="Outer Town", approx_km_from_center=12.5, surcharge=40),
-        MansehraZone(name="Mansehra — Kashmir Road", area_tag="Mansehra Core", approx_km_from_center=2.0, surcharge=0),
-        MansehraZone(name="Mansehra — Zafar Road / Pehlwan Bagh", area_tag="Mansehra Core", approx_km_from_center=2.0, surcharge=0),
-        MansehraZone(name="Mansehra — Sabzi Mandi / GT Bypass", area_tag="Mansehra Commercial", approx_km_from_center=3.5, surcharge=0),
-        MansehraZone(name="Mansehra — Data Bypass / Chakal", area_tag="Mansehra Residential", approx_km_from_center=4.0, surcharge=0),
-        MansehraZone(name="Mansehra — Muftiabad / Shahrah-e-Resham", area_tag="Mansehra City", approx_km_from_center=2.5, surcharge=0),
-        MansehraZone(name="Mansehra — Nogazi / Bherkund Road", area_tag="Mansehra Suburb", approx_km_from_center=5.0, surcharge=10),
-        MansehraZone(name="Mansehra — Khaki Road / Kotli Bala", area_tag="Mansehra Suburb", approx_km_from_center=5.5, surcharge=15),
-        MansehraZone(name="Mansehra — Labarkot / Chakia", area_tag="Mansehra Residential", approx_km_from_center=4.5, surcharge=10),
-        MansehraZone(name="Mansehra — Dhangri / KKH", area_tag="Mansehra South", approx_km_from_center=6.0, surcharge=15),
-        MansehraZone(name="Mansehra — Safada / Atter Shisha", area_tag="Mansehra Route", approx_km_from_center=8.5, surcharge=25),
-        MansehraZone(name="Mansehra — Qalandarabad", area_tag="Mansehra Route", approx_km_from_center=12.0, surcharge=40),
-        MansehraZone(name="Mansehra — Shinkiari Town", area_tag="Mansehra Tehsil", approx_km_from_center=18.0, surcharge=60),
-        MansehraZone(name="Mansehra — Pakhal / Chattar Plain / Battal", area_tag="Mansehra North", approx_km_from_center=28.0, surcharge=90),
-        MansehraZone(name="Mansehra — Oghi / Susal Gali", area_tag="Mansehra Tehsil", approx_km_from_center=36.0, surcharge=120),
-        MansehraZone(name="Mansehra — Balakot / Garhi Habibullah", area_tag="Mansehra / Kaghan", approx_km_from_center=40.0, surcharge=150),
-        MansehraZone(name="Mansehra — Lassan Nawab", area_tag="Mansehra Tehsil", approx_km_from_center=16.0, surcharge=50),
+        ("Main Bazar / Lari Adda", "City Core", 1.0, 0, 34.3335, 73.1995),
+        ("Abbottabad Road", "City Core", 2.5, 0, 34.3245, 73.2040),
+        ("Ghazikot Township", "Residential", 3.5, 0, 34.3168, 73.1920),
+        ("Shinkiari Road", "City North", 3.0, 0, 34.3440, 73.2030),
+        ("College Doraha", "Education Hub", 2.0, 0, 34.3375, 73.1945),
+        ("Kaghan Colony", "Residential", 3.5, 0, 34.3395, 73.2090),
+        ("Channai", "Suburb", 4.5, 10, 34.3490, 73.1865),
+        ("King Abdullah Hospital", "Medical", 2.5, 0, 34.3275, 73.1975),
+        ("Hazara University (Dhodial)", "University", 11.0, 30, 34.4328, 73.2610),
+        ("Baffa Town", "Outer Town", 12.5, 40, 34.4368, 73.2255),
+        ("Mansehra — Kashmir Road", "Mansehra Core", 2.0, 0, 34.3360, 73.2035),
+        ("Mansehra — Zafar Road / Pehlwan Bagh", "Mansehra Core", 2.0, 0, 34.3315, 73.1955),
+        ("Mansehra — Sabzi Mandi / GT Bypass", "Mansehra Commercial", 3.5, 0, 34.3220, 73.1885),
+        ("Mansehra — Data Bypass / Chakal", "Mansehra Residential", 4.0, 0, 34.3125, 73.2085),
+        ("Mansehra — Muftiabad / Shahrah-e-Resham", "Mansehra City", 2.5, 0, 34.3390, 73.1998),
+        ("Mansehra — Nogazi / Bherkund Road", "Mansehra Suburb", 5.0, 10, 34.3545, 73.1755),
+        ("Mansehra — Khaki Road / Kotli Bala", "Mansehra Suburb", 5.5, 15, 34.3580, 73.1620),
+        ("Mansehra — Labarkot / Chakia", "Mansehra Residential", 4.5, 10, 34.3110, 73.1835),
+        ("Mansehra — Dhangri / KKH", "Mansehra South", 6.0, 15, 34.2945, 73.2055),
+        ("Mansehra — Safada / Atter Shisha", "Mansehra Route", 8.5, 25, 34.3820, 73.2270),
+        ("Mansehra — Qalandarabad", "Mansehra Route", 12.0, 40, 34.2740, 73.2290),
+        ("Mansehra — Shinkiari Town", "Mansehra Tehsil", 18.0, 60, 34.4620, 73.2685),
+        ("Mansehra — Pakhal / Chattar Plain / Battal", "Mansehra North", 28.0, 90, 34.5810, 73.1535),
+        ("Mansehra — Oghi / Susal Gali", "Mansehra Tehsil", 36.0, 120, 34.5020, 73.0120),
+        ("Mansehra — Balakot / Garhi Habibullah", "Mansehra / Kaghan", 40.0, 150, 34.5480, 73.3525),
+        ("Mansehra — Lassan Nawab", "Mansehra Tehsil", 16.0, 50, 34.3740, 73.0580),
         # --- Abbottabad City, Cantt & Surrounding ---
-        MansehraZone(name="Abbottabad (City / Fawara Chowk)", area_tag="Intercity Hub", approx_km_from_center=25.0, surcharge=100),
-        MansehraZone(name="Abbottabad — Main Bazar / Sabzi Mandi", area_tag="Abbottabad Core", approx_km_from_center=1.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Supply Bazar", area_tag="Abbottabad Core", approx_km_from_center=2.0, surcharge=0),
-        MansehraZone(name="Abbottabad — Cantt / Mall Road / Lady Garden", area_tag="Abbottabad Cantt", approx_km_from_center=2.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Mandian / KKH", area_tag="Abbottabad Commercial", approx_km_from_center=4.0, surcharge=0),
-        MansehraZone(name="Abbottabad — Ayub Medical Complex (AMC)", area_tag="Abbottabad Medical", approx_km_from_center=4.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Jinnahabad", area_tag="Abbottabad Residential", approx_km_from_center=5.0, surcharge=0),
-        MansehraZone(name="Abbottabad — PMA Kakul Road / Kakul", area_tag="Abbottabad Cantt / PMA", approx_km_from_center=6.0, surcharge=10),
-        MansehraZone(name="Abbottabad — Mirpur / Sarban", area_tag="Abbottabad Residential", approx_km_from_center=5.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Nawan Shehr", area_tag="Abbottabad East", approx_km_from_center=5.0, surcharge=0),
-        MansehraZone(name="Abbottabad — Kehal / Sarbhana Road", area_tag="Abbottabad Core", approx_km_from_center=2.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Malikpura / Habibullah Colony", area_tag="Abbottabad Residential", approx_km_from_center=3.0, surcharge=0),
-        MansehraZone(name="Abbottabad — Bilal Town / Salhad", area_tag="Abbottabad South", approx_km_from_center=5.5, surcharge=10),
-        MansehraZone(name="Abbottabad — COMSATS University / Tobe Camp", area_tag="Abbottabad Education", approx_km_from_center=7.0, surcharge=15),
-        MansehraZone(name="Abbottabad — Sethi Masjid / Eidgah Road", area_tag="Abbottabad Core", approx_km_from_center=2.0, surcharge=0),
-        MansehraZone(name="Abbottabad — Muslimabad / Banda Pir Khan", area_tag="Abbottabad North", approx_km_from_center=6.5, surcharge=10),
-        MansehraZone(name="Abbottabad — Sheikhulbandi", area_tag="Abbottabad Residential", approx_km_from_center=4.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Ilyasi Masjid / Thandiani Road", area_tag="Abbottabad Hills", approx_km_from_center=6.0, surcharge=15),
-        MansehraZone(name="Abbottabad — Shimla Hill / Pine View Road", area_tag="Abbottabad Hills", approx_km_from_center=3.5, surcharge=0),
-        MansehraZone(name="Abbottabad — Dhamtour / Murree Road", area_tag="Abbottabad East", approx_km_from_center=8.0, surcharge=20),
-        MansehraZone(name="Abbottabad — Havelian Town", area_tag="Abbottabad Tehsil", approx_km_from_center=15.0, surcharge=50),
-        MansehraZone(name="Abbottabad — Nathia Gali / Dunga Gali", area_tag="Galyat Hills", approx_km_from_center=34.0, surcharge=150),
+        ("Abbottabad (City / Fawara Chowk)", "Intercity Hub", 25.0, 100, 34.1495, 73.2145),
+        ("Abbottabad — Main Bazar / Sabzi Mandi", "Abbottabad Core", 1.5, 0, 34.1465, 73.2125),
+        ("Abbottabad — Supply Bazar", "Abbottabad Core", 2.0, 0, 34.1558, 73.2185),
+        ("Abbottabad — Cantt / Mall Road / Lady Garden", "Abbottabad Cantt", 2.5, 0, 34.1518, 73.2195),
+        ("Abbottabad — Mandian / KKH", "Abbottabad Commercial", 4.0, 0, 34.1852, 73.2315),
+        ("Abbottabad — Ayub Medical Complex (AMC)", "Abbottabad Medical", 4.5, 0, 34.1982, 73.2375),
+        ("Abbottabad — Jinnahabad", "Abbottabad Residential", 5.0, 0, 34.1815, 73.2412),
+        ("Abbottabad — PMA Kakul Road / Kakul", "Abbottabad Cantt / PMA", 6.0, 10, 34.1795, 73.2575),
+        ("Abbottabad — Mirpur / Sarban", "Abbottabad Residential", 5.5, 0, 34.1905, 73.2205),
+        ("Abbottabad — Nawan Shehr", "Abbottabad East", 5.0, 0, 34.1655, 73.2470),
+        ("Abbottabad — Kehal / Sarbhana Road", "Abbottabad Core", 2.5, 0, 34.1395, 73.2215),
+        ("Abbottabad — Malikpura / Habibullah Colony", "Abbottabad Residential", 3.0, 0, 34.1438, 73.2045),
+        ("Abbottabad — Bilal Town / Salhad", "Abbottabad South", 5.5, 10, 34.1225, 73.2015),
+        ("Abbottabad — COMSATS University / Tobe Camp", "Abbottabad Education", 7.0, 15, 34.1975, 73.2435),
+        ("Abbottabad — Sethi Masjid / Eidgah Road", "Abbottabad Core", 2.0, 0, 34.1492, 73.2102),
+        ("Abbottabad — Muslimabad / Banda Pir Khan", "Abbottabad North", 6.5, 10, 34.1705, 73.2255),
+        ("Abbottabad — Sheikhulbandi", "Abbottabad Residential", 4.5, 0, 34.1445, 73.2315),
+        ("Abbottabad — Ilyasi Masjid / Thandiani Road", "Abbottabad Hills", 6.0, 15, 34.1685, 73.2555),
+        ("Abbottabad — Shimla Hill / Pine View Road", "Abbottabad Hills", 3.5, 0, 34.1565, 73.2090),
+        ("Abbottabad — Dhamtour / Murree Road", "Abbottabad East", 8.0, 20, 34.1325, 73.2595),
+        ("Abbottabad — Havelian Town", "Abbottabad Tehsil", 15.0, 50, 34.0535, 73.1595),
+        ("Abbottabad — Nathia Gali / Dunga Gali", "Galyat Hills", 34.0, 150, 34.0728, 73.3812),
         # --- Other Intercity & Airport Hubs ---
-        MansehraZone(name="Haripur (City / GT Road)", area_tag="Intercity Hub", approx_km_from_center=60.0, surcharge=200),
-        MansehraZone(name="Battagram (City Center)", area_tag="Intercity Hub", approx_km_from_center=65.0, surcharge=250),
-        MansehraZone(name="Islamabad Airport (New IIA)", area_tag="Airport Transfer", approx_km_from_center=125.0, surcharge=500),
+        ("Haripur (City / GT Road)", "Intercity Hub", 60.0, 200, 33.9978, 72.9348),
+        ("Battagram (City Center)", "Intercity Hub", 65.0, 250, 34.6775, 73.0255),
+        ("Islamabad Airport (New IIA)", "Airport Transfer", 125.0, 500, 33.5607, 72.8516),
     ]
-    existing_zone_names = {row[0] for row in db.query(MansehraZone.name).all()}
-    new_zones = [z for z in seed_zones if z.name not in existing_zone_names]
+    existing_zones = {z.name: z for z in db.query(MansehraZone).all()}
+    new_zones = []
+    for z_name, z_tag, z_km, z_sur, z_lat, z_lng in zone_specs:
+        if z_name in existing_zones:
+            ez = existing_zones[z_name]
+            if ez.lat is None or ez.lng is None:
+                ez.lat = z_lat
+                ez.lng = z_lng
+        else:
+            new_zones.append(
+                MansehraZone(
+                    name=z_name,
+                    area_tag=z_tag,
+                    approx_km_from_center=z_km,
+                    surcharge=z_sur,
+                    lat=z_lat,
+                    lng=z_lng,
+                )
+            )
     if new_zones:
         db.add_all(new_zones)
 
@@ -214,6 +231,18 @@ def seed_initial_data(db: Session) -> None:
 
     # 6. Default Users & Sample Data (only seed once on fresh empty database)
     if db.query(User).count() > 0:
+        zone_coords = {z.name: (z.lat, z.lng) for z in db.query(MansehraZone).all()}
+        changed = False
+        for idx, rp in enumerate(db.query(RiderProfile).all()):
+            if rp.current_lat is None or rp.current_lng is None:
+                base = zone_coords.get(rp.zone_name, (34.3335, 73.1995))
+                if base[0] is not None:
+                    rp.current_lat = round(base[0] + (idx % 5) * 0.0018, 6)
+                    rp.current_lng = round(base[1] + (idx % 3) * 0.0015, 6)
+                    rp.location_updated_at = utcnow()
+                    changed = True
+        if changed:
+            db.commit()
         return
 
     admin = User(
@@ -243,10 +272,14 @@ def seed_initial_data(db: Session) -> None:
         RiderProfile(
             user_id=rider1.id,
             cnic_number="13503-4821901-1",
+            vehicle_type="bike",
             bike_model="Honda CD-70",
             bike_plate="MNA-4821",
             license_no="MNS-DL-2041",
             zone_name="Ghazikot Township",
+            current_lat=34.3195,
+            current_lng=73.1938,
+            location_updated_at=utcnow(),
             is_verified=True,
             is_online=True,
             credit_limit=1500.0,
@@ -269,10 +302,14 @@ def seed_initial_data(db: Session) -> None:
         RiderProfile(
             user_id=rider2.id,
             cnic_number="13503-9910421-3",
+            vehicle_type="bike",
             bike_model="Honda CG-125",
             bike_plate="MNB-9104",
             license_no="MNS-DL-3192",
             zone_name="Shinkiari Road",
+            current_lat=34.3420,
+            current_lng=73.2022,
+            location_updated_at=utcnow(),
             is_verified=True,
             is_online=True,
             credit_limit=1500.0,

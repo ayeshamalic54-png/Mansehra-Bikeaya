@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import Booking, LedgerEntry, PricingRule, RiderProfile, User
+from app.models import Booking, LedgerEntry, MansehraZone, PricingRule, RiderProfile, User
 from app.routers.bookings_router import serialize_booking
-from app.schemas import BookingStatusUpdate
+from app.schemas import BookingStatusUpdate, RiderLocationUpdate
 from app.services.finance import (
     apply_wait_charge_to_booking,
     complete_booking_and_post_ledger,
@@ -39,11 +39,44 @@ def toggle_online(
                 ),
             )
         rp.is_online = True
+        if rp.current_lat is None or rp.current_lng is None:
+            z = db.query(MansehraZone).filter(MansehraZone.name == rp.zone_name).first()
+            rp.current_lat = z.lat if z and z.lat is not None else 34.3335
+            rp.current_lng = z.lng if z and z.lng is not None else 73.1995
+            rp.location_updated_at = utcnow()
     else:
         rp.is_online = False
 
     db.commit()
-    return {"is_online": rp.is_online, "balance_due_to_admin": rp.balance_due_to_admin}
+    return {
+        "is_online": rp.is_online,
+        "balance_due_to_admin": rp.balance_due_to_admin,
+        "current_lat": rp.current_lat,
+        "current_lng": rp.current_lng,
+    }
+
+
+@router.post("/location")
+def update_rider_location(
+    payload: RiderLocationUpdate,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    rp.current_lat = payload.lat
+    rp.current_lng = payload.lng
+    rp.location_updated_at = utcnow()
+    if payload.is_online is not None and rp.is_verified and rp.balance_due_to_admin <= rp.credit_limit:
+        rp.is_online = payload.is_online
+    db.commit()
+    return {
+        "current_lat": rp.current_lat,
+        "current_lng": rp.current_lng,
+        "location_updated_at": rp.location_updated_at,
+        "is_online": rp.is_online,
+    }
 
 
 @router.get("/available-jobs")

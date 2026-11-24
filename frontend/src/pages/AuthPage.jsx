@@ -13,6 +13,7 @@ export function AuthPage({ onNavigate }) {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [cnic, setCnic] = useState('');
+  const [vehicleType, setVehicleType] = useState('bike');
   const [bikeModel, setBikeModel] = useState('Honda CD-70');
   const [bikePlate, setBikePlate] = useState('');
   const [licenseNo, setLicenseNo] = useState('');
@@ -35,6 +36,7 @@ export function AuthPage({ onNavigate }) {
           password,
           role,
           cnic_number: role === 'rider' ? cnic : null,
+          vehicle_type: role === 'rider' ? vehicleType : null,
           bike_model: role === 'rider' ? bikeModel : null,
           bike_plate: role === 'rider' ? bikePlate : null,
           license_no: role === 'rider' ? licenseNo : null,
@@ -211,7 +213,31 @@ export function AuthPage({ onNavigate }) {
 
                   {role === 'rider' && (
                     <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                      <div className="font-bold text-teal-800">Captain Vehicle Details (Bike / Car)</div>
+                      <div className="flex items-center justify-between">
+                        <div className="font-bold text-teal-800">Captain Vehicle Details</div>
+                        <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVehicleType('bike');
+                              if (bikeModel === 'Suzuki Alto') setBikeModel('Honda CD-70');
+                            }}
+                            className={`px-2.5 py-1 rounded-md ${vehicleType === 'bike' ? 'bg-[#009E4D] text-white' : 'text-slate-600'}`}
+                          >
+                            Motorbike
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVehicleType('car');
+                              if (bikeModel === 'Honda CD-70') setBikeModel('Suzuki Alto');
+                            }}
+                            className={`px-2.5 py-1 rounded-md ${vehicleType === 'car' ? 'bg-[#009E4D] text-white' : 'text-slate-600'}`}
+                          >
+                            Car
+                          </button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="text"

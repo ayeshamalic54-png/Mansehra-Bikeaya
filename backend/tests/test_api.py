@@ -494,3 +494,72 @@ def test_new_fares_mansehra_parcel_slab_and_wait_charges(client):
     assert car_after["estimated_fare"] == 390.0  # 200 + 160 + 30
 
 
+def test_live_gps_nearby_captains_and_admin_live_map(client):
+    # 1. Bootstrap returns GPS coordinates on zones
+    boot = client.get("/api/public/bootstrap").json()
+    assert all(z["lat"] is not None and z["lng"] is not None for z in boot["zones"])
+
+    # 2. Captain updates GPS location & appears in nearby-captains for Customer's home GPS
+    rider_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03112222222", "password": "rider123"},
+    ).json()["access_token"]
+    loc_res = client.post(
+        "/api/riders/location",
+        headers=_auth_header(rider_token),
+        json={"lat": 34.3340, "lng": 73.2001},
+    )
+    assert loc_res.status_code == 200
+    assert loc_res.json()["current_lat"] == 34.334
+
+    nearby = client.get("/api/public/nearby-captains?lat=34.3335&lng=73.1995&service_type=bike_ride")
+    assert nearby.status_code == 200
+    caps = nearby.json()
+    assert len(caps) >= 1
+    assert "phone" not in caps[0]
+    assert caps[0]["lat"] is not None and caps[0]["eta_min"] >= 2
+
+    # 3. Customer books from home GPS pin -> Rider accepts -> Customer sees rider GPS & Admin live-map shows both
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    bk = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Main Bazar / Lari Adda",
+            "pickup_address": "House 14, College St",
+            "pickup_lat": 34.3361,
+            "pickup_lng": 73.1982,
+            "drop_zone": "Ghazikot Township",
+            "drop_address": "Sector C Markaz",
+            "drop_lat": 34.3171,
+            "drop_lng": 73.1915,
+            "distance_km": 2.9,
+            "payment_method": "cash",
+        },
+    ).json()
+    assert bk["pickup_lat"] == 34.3361
+    assert bk["drop_lat"] == 34.3171
+
+    assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(rider_token)).status_code == 200
+
+    my_rides = client.get("/api/bookings/my", headers=_auth_header(cust_token)).json()
+    active_ride = next(r for r in my_rides if r["id"] == bk["id"])
+    assert active_ride["rider"]["current_lat"] == 34.334
+
+    live_map = client.get("/api/admin/live-map", headers=_auth_header(admin_token))
+    assert live_map.status_code == 200
+    lm = live_map.json()
+    assert len(lm["captains"]) >= 2
+    assert any(b["id"] == bk["id"] and b["pickup_lat"] == 34.3361 for b in lm["active_bookings"])
+
+
+

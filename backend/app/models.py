@@ -39,10 +39,14 @@ class RiderProfile(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     cnic_number = Column(String(32), nullable=True)
+    vehicle_type = Column(String(20), nullable=False, default="bike")  # bike | car
     bike_model = Column(String(80), nullable=False, default="Honda CD-70")
     bike_plate = Column(String(32), nullable=False)
     license_no = Column(String(64), nullable=True)
     zone_name = Column(String(100), nullable=False, default="Main Bazar / Lari Adda")
+    current_lat = Column(Float, nullable=True)
+    current_lng = Column(Float, nullable=True)
+    location_updated_at = Column(DateTime(timezone=True), nullable=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     is_online = Column(Boolean, default=False, nullable=False)
 
@@ -74,6 +78,8 @@ class MansehraZone(Base):
     area_tag = Column(String(60), nullable=False, default="City Core")
     approx_km_from_center = Column(Float, default=2.0, nullable=False)
     surcharge = Column(Float, default=0.0, nullable=False)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
 
@@ -122,8 +128,12 @@ class Booking(Base):
     service_type = Column(String(32), nullable=False, default="bike_ride")
     pickup_zone = Column(String(120), nullable=False)
     pickup_address = Column(String(255), nullable=False)
+    pickup_lat = Column(Float, nullable=True)
+    pickup_lng = Column(Float, nullable=True)
     drop_zone = Column(String(120), nullable=False)
     drop_address = Column(String(255), nullable=False)
+    drop_lat = Column(Float, nullable=True)
+    drop_lng = Column(Float, nullable=True)
     distance_km = Column(Float, nullable=False, default=3.0)
 
     estimated_fare = Column(Float, nullable=False)

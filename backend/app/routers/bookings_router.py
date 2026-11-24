@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user, require_roles
 from app.database import get_db
-from app.models import Booking, PromoCode, RiderProfile, SupportTicket, User
+from app.models import Booking, MansehraZone, PromoCode, RiderProfile, SupportTicket, User
 from app.schemas import BookingCreate, BookingRatingCreate, SupportTicketCreate
 from app.services.finance import estimate_booking_fare
 
@@ -23,9 +23,13 @@ def serialize_booking(b: Booking) -> dict:
             "id": b.rider.id,
             "full_name": b.rider.full_name,
             "phone": b.rider.phone,
+            "vehicle_type": rp.vehicle_type if rp else "bike",
             "bike_model": rp.bike_model if rp else None,
             "bike_plate": rp.bike_plate if rp else None,
             "rating_avg": rp.rating_avg if rp else 5.0,
+            "current_lat": rp.current_lat if rp else None,
+            "current_lng": rp.current_lng if rp else None,
+            "location_updated_at": rp.location_updated_at if rp else None,
         }
     return {
         "id": b.id,
@@ -43,8 +47,12 @@ def serialize_booking(b: Booking) -> dict:
         "service_type": b.service_type,
         "pickup_zone": b.pickup_zone,
         "pickup_address": b.pickup_address,
+        "pickup_lat": b.pickup_lat,
+        "pickup_lng": b.pickup_lng,
         "drop_zone": b.drop_zone,
         "drop_address": b.drop_address,
+        "drop_lat": b.drop_lat,
+        "drop_lng": b.drop_lng,
         "distance_km": b.distance_km,
         "estimated_fare": b.estimated_fare,
         "discount_amount": b.discount_amount,
@@ -95,6 +103,8 @@ def create_customer_booking(
         if promo:
             promo.uses_count += 1
 
+    p_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.pickup_zone).first()
+    d_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.drop_zone).first()
     collector = "rider" if payload.payment_method == "cash" else "admin"
     booking = Booking(
         booking_code=generate_booking_code(db),
@@ -102,8 +112,12 @@ def create_customer_booking(
         service_type=payload.service_type,
         pickup_zone=payload.pickup_zone,
         pickup_address=payload.pickup_address.strip(),
+        pickup_lat=payload.pickup_lat if payload.pickup_lat is not None else (p_zone_row.lat if p_zone_row else None),
+        pickup_lng=payload.pickup_lng if payload.pickup_lng is not None else (p_zone_row.lng if p_zone_row else None),
         drop_zone=payload.drop_zone,
         drop_address=payload.drop_address.strip(),
+        drop_lat=payload.drop_lat if payload.drop_lat is not None else (d_zone_row.lat if d_zone_row else None),
+        drop_lng=payload.drop_lng if payload.drop_lng is not None else (d_zone_row.lng if d_zone_row else None),
         distance_km=payload.distance_km,
         estimated_fare=est["estimated_fare"],
         discount_amount=est["discount_amount"],

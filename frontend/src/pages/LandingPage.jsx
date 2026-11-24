@@ -14,6 +14,7 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { ZoneOptions } from '../components/ZoneOptions';
 import { resolveSmartRoute } from '../utils/zones';
 
@@ -22,11 +23,26 @@ export function LandingPage({ onNavigate }) {
   const [serviceType, setServiceType] = useState('bike_ride');
   const [pickupZone, setPickupZone] = useState('Main Bazar / Lari Adda');
   const [dropZone, setDropZone] = useState('Ghazikot Township');
-  const [distanceKm, setDistanceKm] = useState(4);
+  const [pickupLat, setPickupLat] = useState(34.3335);
+  const [pickupLng, setPickupLng] = useState(73.1995);
+  const [dropLat, setDropLat] = useState(34.3168);
+  const [dropLng, setDropLng] = useState(73.1920);
+  const [nearbyCaptains, setNearbyCaptains] = useState([]);
+  const [distanceKm, setDistanceKm] = useState(3);
   const [waitMinutes, setWaitMinutes] = useState(0);
   const [estimate, setEstimate] = useState(null);
 
   const syncDistanceForZones = (nextPickup, nextDrop) => {
+    const p = bootstrap.zones.find((z) => z.name === nextPickup);
+    const d = bootstrap.zones.find((z) => z.name === nextDrop);
+    if (p?.lat != null && p?.lng != null) {
+      setPickupLat(p.lat);
+      setPickupLng(p.lng);
+    }
+    if (d?.lat != null && d?.lng != null) {
+      setDropLat(d.lat);
+      setDropLng(d.lng);
+    }
     const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
       bootstrap.zones,
       nextPickup,
@@ -40,10 +56,39 @@ export function LandingPage({ onNavigate }) {
 
   useEffect(() => {
     if (bootstrap.zones?.length >= 2) {
-      setPickupZone((prev) => prev || bootstrap.zones[0].name);
-      setDropZone((prev) => prev || bootstrap.zones[2]?.name || bootstrap.zones[1].name);
+      const p = bootstrap.zones.find((z) => z.name === pickupZone) || bootstrap.zones[0];
+      const d = bootstrap.zones.find((z) => z.name === dropZone) || bootstrap.zones[2] || bootstrap.zones[1];
+      if (p?.lat != null) {
+        setPickupLat(p.lat);
+        setPickupLng(p.lng);
+      }
+      if (d?.lat != null) {
+        setDropLat(d.lat);
+        setDropLng(d.lng);
+      }
     }
   }, [bootstrap.zones]);
+
+  useEffect(() => {
+    let active = true;
+    const loadNearby = async () => {
+      try {
+        const res = await apiRequest(
+          `/api/public/nearby-captains?lat=${pickupLat}&lng=${pickupLng}&service_type=${serviceType}&radius_km=60`,
+          { auth: false }
+        );
+        if (active) setNearbyCaptains(res || []);
+      } catch {
+        // ignore nearby fetch errors
+      }
+    };
+    loadNearby();
+    const timer = setInterval(loadNearby, 12000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [pickupLat, pickupLng, serviceType]);
 
   useEffect(() => {
     let active = true;
@@ -250,6 +295,33 @@ export function LandingPage({ onNavigate }) {
                   </select>
                 </div>
 
+                <InteractiveRoutePicker
+                  zones={bootstrap.zones}
+                  pickupLat={pickupLat}
+                  pickupLng={pickupLng}
+                  pickupLabel={pickupZone}
+                  dropLat={dropLat}
+                  dropLng={dropLng}
+                  dropLabel={dropZone}
+                  nearbyCaptains={nearbyCaptains}
+                  heightClass="h-44 sm:h-48"
+                  compact={true}
+                  onSelectPoint={({ type, lat, lng, nearestZoneName }) => {
+                    if (type === 'pickup') {
+                      setPickupLat(lat);
+                      setPickupLng(lng);
+                      if (nearestZoneName) setPickupZone(nearestZoneName);
+                    } else {
+                      setDropLat(lat);
+                      setDropLng(lng);
+                      if (nearestZoneName) setDropZone(nearestZoneName);
+                    }
+                  }}
+                  onRouteResult={({ distanceKm: roadKm }) => {
+                    if (roadKm) setDistanceKm(roadKm);
+                  }}
+                />
+
                 <div>
                   <div className="flex justify-between font-semibold text-slate-600 mb-1">
                     <span>Estimated Distance</span>
@@ -258,8 +330,8 @@ export function LandingPage({ onNavigate }) {
                   <input
                     type="range"
                     min="1"
-                    max="150"
-                    step="1"
+                    max="250"
+                    step="0.1"
                     value={distanceKm}
                     onChange={(e) => setDistanceKm(Number(e.target.value))}
                     className="w-full accent-[#009E4D]"

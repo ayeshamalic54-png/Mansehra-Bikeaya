@@ -19,6 +19,8 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
+import { SafarGoMap } from '../components/SafarGoMap';
 import { StatusBadge } from '../components/StatusBadge';
 import { ZoneOptions } from '../components/ZoneOptions';
 import { resolveSmartRoute } from '../utils/zones';
@@ -32,12 +34,27 @@ export function CustomerApp({ onOpenDownloads }) {
   const [serviceType, setServiceType] = useState('bike_ride');
   const [pickupZone, setPickupZone] = useState(bootstrap.zones?.[0]?.name || 'Main Bazar / Lari Adda');
   const [pickupAddress, setPickupAddress] = useState('');
+  const [pickupLat, setPickupLat] = useState(34.3335);
+  const [pickupLng, setPickupLng] = useState(73.1995);
   const [dropZone, setDropZone] = useState(bootstrap.zones?.[2]?.name || 'Ghazikot Township');
   const [dropAddress, setDropAddress] = useState('');
-  const [distanceKm, setDistanceKm] = useState(4.0);
+  const [dropLat, setDropLat] = useState(34.3168);
+  const [dropLng, setDropLng] = useState(73.1920);
+  const [nearbyCaptains, setNearbyCaptains] = useState([]);
+  const [distanceKm, setDistanceKm] = useState(3.0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
 
   const syncDistanceForZones = (nextPickup, nextDrop) => {
+    const p = bootstrap.zones?.find((z) => z.name === nextPickup);
+    const d = bootstrap.zones?.find((z) => z.name === nextDrop);
+    if (p?.lat != null && p?.lng != null) {
+      setPickupLat(p.lat);
+      setPickupLng(p.lng);
+    }
+    if (d?.lat != null && d?.lng != null) {
+      setDropLat(d.lat);
+      setDropLng(d.lng);
+    }
     const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
       bootstrap.zones,
       nextPickup,
@@ -94,6 +111,42 @@ export function CustomerApp({ onOpenDownloads }) {
   }, []);
 
   useEffect(() => {
+    if (bootstrap.zones?.length >= 2) {
+      const p = bootstrap.zones.find((z) => z.name === pickupZone) || bootstrap.zones[0];
+      const d = bootstrap.zones.find((z) => z.name === dropZone) || bootstrap.zones[2] || bootstrap.zones[1];
+      if (p?.lat != null) {
+        setPickupLat(p.lat);
+        setPickupLng(p.lng);
+      }
+      if (d?.lat != null) {
+        setDropLat(d.lat);
+        setDropLng(d.lng);
+      }
+    }
+  }, [bootstrap.zones]);
+
+  useEffect(() => {
+    let active = true;
+    const loadNearby = async () => {
+      try {
+        const res = await apiRequest(
+          `/api/public/nearby-captains?lat=${pickupLat}&lng=${pickupLng}&service_type=${serviceType}&radius_km=60`,
+          { auth: false }
+        );
+        if (active) setNearbyCaptains(res || []);
+      } catch {
+        // ignore nearby error
+      }
+    };
+    loadNearby();
+    const timer = setInterval(loadNearby, 8000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [pickupLat, pickupLng, serviceType]);
+
+  useEffect(() => {
     let active = true;
     (async () => {
       try {
@@ -131,8 +184,12 @@ export function CustomerApp({ onOpenDownloads }) {
           service_type: serviceType,
           pickup_zone: pickupZone,
           pickup_address: pickupAddress,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
           drop_zone: dropZone,
           drop_address: dropAddress,
+          drop_lat: dropLat,
+          drop_lng: dropLng,
           distance_km: Number(distanceKm),
           payment_method: paymentMethod,
           promo_code: promoCode.trim() || null,
@@ -307,6 +364,45 @@ export function CustomerApp({ onOpenDownloads }) {
               })}
             </div>
 
+            {/* Interactive InDrive-style Map + Nearby Captains + GPS */}
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-extrabold text-slate-900">Pin Your Location &amp; Nearby Captains</h2>
+                  <p className="text-[11px] text-slate-500">
+                    Tap <strong>My GPS</strong> at home or click anywhere on the map for Pickup &amp; Drop — route km &amp; fare update live.
+                  </p>
+                </div>
+              </div>
+              <InteractiveRoutePicker
+                zones={bootstrap.zones}
+                pickupLat={pickupLat}
+                pickupLng={pickupLng}
+                pickupLabel={pickupAddress || pickupZone}
+                dropLat={dropLat}
+                dropLng={dropLng}
+                dropLabel={dropAddress || dropZone}
+                nearbyCaptains={nearbyCaptains}
+                heightClass="h-60 sm:h-72"
+                onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
+                  if (type === 'pickup') {
+                    setPickupLat(lat);
+                    setPickupLng(lng);
+                    if (nearestZoneName) setPickupZone(nearestZoneName);
+                    if (address) setPickupAddress(address);
+                  } else {
+                    setDropLat(lat);
+                    setDropLng(lng);
+                    if (nearestZoneName) setDropZone(nearestZoneName);
+                    if (address) setDropAddress(address);
+                  }
+                }}
+                onRouteResult={({ distanceKm: roadKm }) => {
+                  if (roadKm) setDistanceKm(roadKm);
+                }}
+              />
+            </div>
+
             {/* Pickup & Drop Card */}
             <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -373,8 +469,8 @@ export function CustomerApp({ onOpenDownloads }) {
                 <input
                   type="range"
                   min="1"
-                  max="150"
-                  step="1"
+                  max="250"
+                  step="0.1"
                   value={distanceKm}
                   onChange={(e) => setDistanceKm(Number(e.target.value))}
                   className="w-full accent-[#009E4D]"
@@ -526,6 +622,35 @@ export function CustomerApp({ onOpenDownloads }) {
                       </span>
                     </div>
                   </div>
+
+                  {['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status) &&
+                    b.pickup_lat != null &&
+                    b.drop_lat != null && (
+                      <SafarGoMap
+                        pickup={{ lat: b.pickup_lat, lng: b.pickup_lng, label: b.pickup_address || b.pickup_zone }}
+                        drop={{ lat: b.drop_lat, lng: b.drop_lng, label: b.drop_address || b.drop_zone }}
+                        captains={
+                          b.rider?.current_lat != null
+                            ? [
+                                {
+                                  id: b.rider.id,
+                                  display_name: b.rider.full_name,
+                                  vehicle_type: b.rider.vehicle_type,
+                                  bike_model: b.rider.bike_model,
+                                  bike_plate: b.rider.bike_plate,
+                                  lat: b.rider.current_lat,
+                                  lng: b.rider.current_lng,
+                                  is_online: true,
+                                },
+                              ]
+                            : b.status === 'pending'
+                            ? nearbyCaptains
+                            : []
+                        }
+                        heightClass="h-44"
+                        fitSignature={`${b.id}-${b.status}-${b.rider?.current_lat}-${b.rider?.current_lng}`}
+                      />
+                    )}
 
                   {/* Assigned Captain Box */}
                   {b.rider ? (

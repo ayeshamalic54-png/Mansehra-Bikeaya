@@ -12,6 +12,7 @@ class RegisterRequest(BaseModel):
     role: str = Field("customer", pattern="^(customer|rider)$")
     # Rider signup optional fields
     cnic_number: Optional[str] = None
+    vehicle_type: Optional[str] = Field("bike", pattern="^(bike|car)$")
     bike_model: Optional[str] = "Honda CD-70"
     bike_plate: Optional[str] = None
     license_no: Optional[str] = None
@@ -28,6 +29,10 @@ class FareEstimateRequest(BaseModel):
     service_type: str = Field("bike_ride", pattern="^(bike_ride|car_ride|parcel|errand)$")
     pickup_zone: str = "Main Bazar / Lari Adda"
     drop_zone: str = "Ghazikot Township"
+    pickup_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    pickup_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    drop_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    drop_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     distance_km: float = Field(3.0, ge=0.5, le=300.0)
     wait_minutes: int = Field(0, ge=0, le=300)
     promo_code: Optional[str] = None
@@ -53,8 +58,12 @@ class BookingCreate(BaseModel):
     service_type: str = Field("bike_ride", pattern="^(bike_ride|car_ride|parcel|errand)$")
     pickup_zone: str
     pickup_address: str = Field(..., min_length=2, max_length=255)
+    pickup_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    pickup_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     drop_zone: str
     drop_address: str = Field(..., min_length=2, max_length=255)
+    drop_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    drop_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     distance_km: float = Field(3.0, ge=0.5, le=300.0)
     wait_minutes: int = Field(0, ge=0, le=300)
     payment_method: str = Field("cash", pattern="^(cash|easypaisa|jazzcash|wallet)$")
@@ -95,6 +104,7 @@ class AdminCreateRider(BaseModel):
     phone: str = Field(..., min_length=7, max_length=32)
     password: str = Field("123456", min_length=4)
     cnic_number: Optional[str] = None
+    vehicle_type: str = Field("bike", pattern="^(bike|car)$")
     bike_model: str = "Honda CD-70"
     bike_plate: str = Field(..., min_length=2, max_length=32)
     license_no: Optional[str] = None
@@ -109,15 +119,24 @@ class RiderConfigUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=120)
     phone: Optional[str] = Field(None, min_length=7, max_length=32)
     cnic_number: Optional[str] = None
+    vehicle_type: Optional[str] = Field(None, pattern="^(bike|car)$")
     bike_model: Optional[str] = None
     bike_plate: Optional[str] = None
     license_no: Optional[str] = None
     is_verified: Optional[bool] = None
     is_active: Optional[bool] = None
     zone_name: Optional[str] = None
+    current_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    current_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     credit_limit: Optional[float] = Field(None, ge=0)
     custom_commission_type: Optional[str] = Field(None, pattern="^(percent|fixed|none)$")
     custom_commission_value: Optional[float] = Field(None, ge=0)
+
+
+class RiderLocationUpdate(BaseModel):
+    lat: float = Field(..., ge=-90.0, le=90.0)
+    lng: float = Field(..., ge=-180.0, le=180.0)
+    is_online: Optional[bool] = None
 
 
 class AdminPasswordReset(BaseModel):
@@ -198,6 +217,8 @@ class ZoneCreate(BaseModel):
     area_tag: str = "City Core"
     approx_km_from_center: float = Field(2.0, ge=0)
     surcharge: float = Field(0.0, ge=0)
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
 
 
 class ZoneUpdate(BaseModel):
@@ -205,6 +226,8 @@ class ZoneUpdate(BaseModel):
     area_tag: Optional[str] = None
     approx_km_from_center: Optional[float] = Field(None, ge=0)
     surcharge: Optional[float] = Field(None, ge=0)
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     is_active: Optional[bool] = None
 
 

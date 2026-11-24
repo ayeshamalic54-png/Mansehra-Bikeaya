@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models import AppRelease, MansehraZone, PricingRule, SystemSetting
+from app.models import AppRelease, MansehraZone, PricingRule, RiderProfile, SystemSetting, User
 from app.schemas import FareEstimateRequest
-from app.services.finance import estimate_booking_fare
+from app.services.finance import estimate_booking_fare, haversine_km
 
 router = APIRouter(prefix="/api/public", tags=["Public"])
 
@@ -38,6 +39,8 @@ def get_public_bootstrap(db: Session = Depends(get_db)):
                 "area_tag": z.area_tag,
                 "approx_km_from_center": z.approx_km_from_center,
                 "surcharge": z.surcharge,
+                "lat": z.lat,
+                "lng": z.lng,
             }
             for z in zones
         ],
@@ -87,6 +90,51 @@ def estimate_fare(payload: FareEstimateRequest, db: Session = Depends(get_db)):
         promo_code=payload.promo_code,
         wait_minutes=payload.wait_minutes,
     )
+
+
+@router.get("/nearby-captains")
+def get_nearby_captains(
+    lat: float = Query(34.3335, ge=-90.0, le=90.0),
+    lng: float = Query(73.1995, ge=-180.0, le=180.0),
+    service_type: Optional[str] = None,
+    radius_km: float = Query(50.0, ge=1.0, le=250.0),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(User)
+        .options(joinedload(User.rider_profile))
+        .filter(User.role == "rider", User.is_active.is_(True))
+        .all()
+    )
+    out = []
+    for u in rows:
+        rp = u.rider_profile
+        if not rp or not rp.is_verified or not rp.is_online:
+            continue
+        if rp.current_lat is None or rp.current_lng is None:
+            continue
+        if service_type == "car_ride" and rp.vehicle_type != "car":
+            continue
+        dist = haversine_km(lat, lng, rp.current_lat, rp.current_lng)
+        if dist <= radius_km:
+            first_name = (u.full_name or "Captain").split()[0]
+            out.append(
+                {
+                    "rider_id": u.id,
+                    "display_name": f"Capt. {first_name}",
+                    "vehicle_type": rp.vehicle_type or "bike",
+                    "bike_model": rp.bike_model,
+                    "zone_name": rp.zone_name,
+                    "lat": rp.current_lat,
+                    "lng": rp.current_lng,
+                    "distance_km": dist,
+                    "eta_min": max(2, int(round(dist / 0.45))),
+                    "rating_avg": rp.rating_avg,
+                    "location_updated_at": rp.location_updated_at,
+                }
+            )
+    out.sort(key=lambda item: item["distance_km"])
+    return out
 
 
 @router.get("/releases")
