@@ -32,6 +32,8 @@ def seed_initial_data(db: Session) -> None:
         ("Baffa Town", "Outer Town", 12.5, 40, 34.4368, 73.2255),
         ("Mansehra — Kashmir Road", "Mansehra Core", 2.0, 0, 34.3360, 73.2035),
         ("Mansehra — Safdar Road / Dab No. 1", "Mansehra Core", 1.5, 0, 34.3342, 73.2016),
+        ("Mansehra — Pakhwal Chowk", "Mansehra Core", 1.5, 0, 34.3230, 73.1940),
+        ("Mansehra — Nogazia Chowk", "Mansehra Core", 1.5, 0, 34.3270, 73.1930),
         ("Mansehra — Punjab Chowk", "Mansehra Core", 1.5, 0, 34.3328, 73.2008),
         ("Mansehra — Kachehri / Tehsil Road", "Mansehra Core", 1.5, 0, 34.3352, 73.1978),
         ("Mansehra — Zafar Road / Pehlwan Bagh", "Mansehra Core", 2.0, 0, 34.3315, 73.1955),

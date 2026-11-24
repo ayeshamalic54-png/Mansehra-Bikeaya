@@ -29,8 +29,6 @@ import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
-import { ZoneOptions } from '../components/ZoneOptions';
-import { resolveSmartRoute } from '../utils/zones';
 import { AdminFinancePanel } from '../components/admin/AdminFinancePanel';
 import { AdminOperationsPanel } from '../components/admin/AdminOperationsPanel';
 import { AdminPeoplePanel } from '../components/admin/AdminPeoplePanel';
@@ -917,10 +915,10 @@ export function AdminDashboard({ onOpenDownloads }) {
                 zones={bootstrap.zones}
                 pickupLat={manualForm.pickup_lat}
                 pickupLng={manualForm.pickup_lng}
-                pickupLabel={manualForm.pickup_address || manualForm.pickup_zone}
+                pickupText={manualForm.pickup_address}
                 dropLat={manualForm.drop_lat}
                 dropLng={manualForm.drop_lng}
-                dropLabel={manualForm.drop_address || manualForm.drop_zone}
+                dropText={manualForm.drop_address}
                 nearbyCaptains={liveMap.captains.filter((c) => c.is_online)}
                 heightClass="h-56"
                 autoLocate={false}
@@ -942,62 +940,16 @@ export function AdminDashboard({ onOpenDownloads }) {
                         }),
                   }));
                 }}
+                onTextChange={(type, val) => {
+                  setManualForm((prev) => ({
+                    ...prev,
+                    ...(type === 'pickup' ? { pickup_address: val } : { drop_address: val }),
+                  }));
+                }}
                 onRouteResult={({ distanceKm: roadKm }) => {
                   if (roadKm) setManualForm((prev) => ({ ...prev, distance_km: roadKm }));
                 }}
               />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <select
-                  value={manualForm.pickup_zone}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const z = bootstrap.zones.find((item) => item.name === val);
-                    const { distanceKm: nextKm } = resolveSmartRoute(bootstrap.zones, val, manualForm.drop_zone, manualForm.distance_km, manualForm.service_type);
-                    setManualForm((prev) => ({
-                      ...prev,
-                      pickup_zone: val,
-                      ...(z?.lat != null ? { pickup_lat: z.lat, pickup_lng: z.lng } : {}),
-                      ...(nextKm != null ? { distance_km: nextKm } : {}),
-                    }));
-                  }}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
-                >
-                  <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Pickup: " />
-                </select>
-                <input
-                  type="text"
-                  required
-                  placeholder="Pickup exact landmark"
-                  value={manualForm.pickup_address}
-                  onChange={(e) => setManualForm({ ...manualForm, pickup_address: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                />
-                <select
-                  value={manualForm.drop_zone}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const z = bootstrap.zones.find((item) => item.name === val);
-                    const { distanceKm: nextKm } = resolveSmartRoute(bootstrap.zones, manualForm.pickup_zone, val, manualForm.distance_km, manualForm.service_type);
-                    setManualForm((prev) => ({
-                      ...prev,
-                      drop_zone: val,
-                      ...(z?.lat != null ? { drop_lat: z.lat, drop_lng: z.lng } : {}),
-                      ...(nextKm != null ? { distance_km: nextKm } : {}),
-                    }));
-                  }}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
-                >
-                  <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Drop: " />
-                </select>
-                <input
-                  type="text"
-                  required
-                  placeholder="Drop exact landmark"
-                  value={manualForm.drop_address}
-                  onChange={(e) => setManualForm({ ...manualForm, drop_address: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                />
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input
                   type="number"

@@ -1,16 +1,24 @@
 const LOCAL_LANDMARKS = [
+  { id: 'lm-pakhwal', name: 'Pakhwal Chowk, Mansehra', shortName: 'Pakhwal Chowk, Mansehra', lat: 34.3230, lng: 73.1940, zone: 'Mansehra — Pakhwal Chowk' },
+  { id: 'lm-pakhal-ch', name: 'Pakhal Chowk, Mansehra', shortName: 'Pakhal Chowk, Mansehra', lat: 34.3230, lng: 73.1940, zone: 'Mansehra — Pakhwal Chowk' },
+  { id: 'lm-nogazia', name: 'Nogazia Chowk, Mansehra', shortName: 'Nogazia Chowk, Mansehra', lat: 34.3270, lng: 73.1930, zone: 'Mansehra — Nogazia Chowk' },
   { id: 'lm-safdar', name: 'Safdar Road / Dab No. 1, Mansehra', shortName: 'Safdar Road, Mansehra', lat: 34.3342, lng: 73.2016, zone: 'Mansehra — Safdar Road / Dab No. 1' },
   { id: 'lm-opf', name: 'OPF Public School, Safdar Road, Mansehra', shortName: 'OPF School, Safdar Road, Mansehra', lat: 34.3350, lng: 73.2020, zone: 'Mansehra — Safdar Road / Dab No. 1' },
   { id: 'lm-punjab', name: 'Punjab Chowk, Mansehra', shortName: 'Punjab Chowk, Mansehra', lat: 34.3328, lng: 73.2008, zone: 'Mansehra — Punjab Chowk' },
   { id: 'lm-dab2', name: 'Dab No. 2 / Madina Colony, Mansehra', shortName: 'Dab No. 2, Mansehra', lat: 34.3210, lng: 73.1965, zone: 'Ghazikot Township' },
   { id: 'lm-kachehri', name: 'Kachehri / Tehsil Office, Mansehra', shortName: 'Kachehri Road, Mansehra', lat: 34.3352, lng: 73.1978, zone: 'Mansehra — Kachehri / Tehsil Road' },
-  { id: 'lm-ghazi', name: 'Ghazikot Township Markaz, Mansehra', shortName: 'Ghazikot Markaz, Mansehra', lat: 34.3168, lng: 73.1920, zone: 'Ghazikot Township' },
-  { id: 'lm-lari', name: 'Lari Adda / Main Bazar, Mansehra', shortName: 'Lari Adda, Mansehra', lat: 34.3335, lng: 73.1995, zone: 'Main Bazar / Lari Adda' },
+  { id: 'lm-ghazi', name: 'Ghazikot Township Markaz, Mansehra', shortName: 'Ghazikot Township, Mansehra', lat: 34.3168, lng: 73.1920, zone: 'Ghazikot Township' },
+  { id: 'lm-lari', name: 'Lari Adda / Main Bazar, Mansehra', shortName: 'Lari Adda / Main Bazar, Mansehra', lat: 34.3335, lng: 73.1995, zone: 'Main Bazar / Lari Adda' },
   { id: 'lm-kah', name: 'King Abdullah Teaching Hospital, Mansehra', shortName: 'King Abdullah Hospital, Mansehra', lat: 34.3275, lng: 73.1975, zone: 'King Abdullah Hospital' },
   { id: 'lm-fawara', name: 'Fawara Chowk, Main City, Abbottabad', shortName: 'Fawara Chowk, Abbottabad', lat: 34.1495, lng: 73.2145, zone: 'Abbottabad (City / Fawara Chowk)' },
+  { id: 'lm-supply', name: 'Supply Bazar, Abbottabad', shortName: 'Supply Bazar, Abbottabad', lat: 34.1558, lng: 73.2185, zone: 'Abbottabad — Supply Bazar' },
+  { id: 'lm-mandian', name: 'Mandian / KKH, Abbottabad', shortName: 'Mandian, Abbottabad', lat: 34.1852, lng: 73.2315, zone: 'Abbottabad — Mandian / KKH' },
+  { id: 'lm-jinnahabad', name: 'Jinnahabad, Abbottabad', shortName: 'Jinnahabad, Abbottabad', lat: 34.1815, lng: 73.2412, zone: 'Abbottabad — Jinnahabad' },
   { id: 'lm-amc', name: 'Ayub Medical Complex (AMC), Abbottabad', shortName: 'Ayub Medical Complex, Abbottabad', lat: 34.1982, lng: 73.2375, zone: 'Abbottabad — Ayub Medical Complex (AMC)' },
   { id: 'lm-comsats', name: 'COMSATS University, Abbottabad', shortName: 'COMSATS, Abbottabad', lat: 34.1975, lng: 73.2435, zone: 'Abbottabad — COMSATS University / Tobe Camp' },
   { id: 'lm-pma', name: 'PMA Kakul Gate, Abbottabad', shortName: 'PMA Kakul, Abbottabad', lat: 34.1795, lng: 73.2575, zone: 'Abbottabad — PMA Kakul Road / Kakul' },
+  { id: 'lm-haripur', name: 'Haripur City / GT Road', shortName: 'Haripur City', lat: 33.9978, lng: 72.9348, zone: 'Haripur (City / GT Road)' },
+  { id: 'lm-battagram', name: 'Battagram City Center', shortName: 'Battagram City', lat: 34.6775, lng: 73.0255, zone: 'Battagram (City Center)' },
   { id: 'lm-isb', name: 'Islamabad International Airport (New IIA)', shortName: 'Islamabad Airport (New IIA)', lat: 33.5607, lng: 72.8516, zone: 'Islamabad Airport (New IIA)' },
 ];
 
@@ -95,7 +103,7 @@ export async function searchPakistanPlaces(query, zones = [], biasLat = 34.3335,
   const tokens = q.split(/\s+/).filter(Boolean);
   const matchesText = (hay) => tokens.every((t) => hay.toLowerCase().includes(t));
 
-  // 1. Instant local matches: landmarks + seeded 50+ Mansehra/Abbottabad/Intercity zones
+  // 1. Instant local matches across landmarks & seeded DB places
   const localItems = [];
   for (const lm of LOCAL_LANDMARKS) {
     if (matchesText(`${lm.name} ${lm.zone}`)) {
@@ -106,7 +114,7 @@ export async function searchPakistanPlaces(query, zones = [], biasLat = 34.3335,
         lat: lm.lat,
         lng: lm.lng,
         zoneName: lm.zone,
-        badge: 'Local Road',
+        badge: 'Mansehra/Hazara',
       });
     }
   }
@@ -115,17 +123,17 @@ export async function searchPakistanPlaces(query, zones = [], biasLat = 34.3335,
     if (matchesText(`${z.name} ${z.area_tag}`)) {
       localItems.push({
         id: `zone-${z.id}`,
-        label: `${z.name} (${z.area_tag})`,
+        label: z.name,
         shortName: z.name,
         lat: z.lat,
         lng: z.lng,
         zoneName: z.name,
-        badge: 'City Area',
+        badge: z.area_tag || 'Hub',
       });
     }
   }
 
-  // 2. Live OpenStreetMap geocoding biased toward Hazara/KPK + Pakistan fallback
+  // 2. Live multi-provider geocoding: ArcGIS (great for Pakhwal/local Pakistani places) + Photon + Nominatim
   const remoteItems = [];
   const fetchJson = async (url) => {
     try {
@@ -140,22 +148,48 @@ export async function searchPakistanPlaces(query, zones = [], biasLat = 34.3335,
     }
   };
 
-  const [photonData, nominatimLocal] = await Promise.all([
-    fetchJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${biasLat}&lon=${biasLng}&limit=6`),
+  const [arcgisData, photonData, nominatimLocal] = await Promise.all([
     fetchJson(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=pk&viewbox=72.5,34.9,73.9,33.4&bounded=1&limit=5&q=${encodeURIComponent(query)}`
+      `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&countryCode=PAK&location=${biasLng},${biasLat}&maxLocations=5&SingleLine=${encodeURIComponent(query)}`
+    ),
+    fetchJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${biasLat}&lon=${biasLng}&limit=5`),
+    fetchJson(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=pk&viewbox=72.5,34.9,73.9,33.4&bounded=1&limit=4&q=${encodeURIComponent(query)}`
     ),
   ]);
 
+  if (Array.isArray(arcgisData?.candidates)) {
+    for (let i = 0; i < arcgisData.candidates.length; i += 1) {
+      const c = arcgisData.candidates[i];
+      const lat = c.location?.y;
+      const lng = c.location?.x;
+      if (lat == null || lng == null || !c.address) continue;
+      const distKm = haversineKm(biasLat, biasLng, lat, lng);
+      remoteItems.push({
+        id: `arc-${i}-${lat.toFixed(4)}`,
+        label: c.address,
+        shortName: c.address.split(',').slice(0, 2).join(',').trim(),
+        lat: Number(lat),
+        lng: Number(lng),
+        badge: distKm !== null && distKm < 35 ? 'Nearby' : 'Pakistan',
+        _dist: distKm ?? 999,
+      });
+    }
+  }
+
   if (Array.isArray(nominatimLocal)) {
     for (const item of nominatimLocal) {
+      const lat = Number(item.lat);
+      const lng = Number(item.lon);
+      const distKm = haversineKm(biasLat, biasLng, lat, lng);
       remoteItems.push({
         id: `nom-${item.place_id}`,
         label: item.display_name,
         shortName: (item.display_name || '').split(',').slice(0, 2).join(',').trim(),
-        lat: Number(item.lat),
-        lng: Number(item.lon),
+        lat,
+        lng,
         badge: 'Map Pin',
+        _dist: distKm ?? 999,
       });
     }
   }
@@ -183,28 +217,8 @@ export async function searchPakistanPlaces(query, zones = [], biasLat = 34.3335,
     }
   }
 
-  // Fallback to unbounded PK Nominatim only if nothing found yet
-  if (localItems.length === 0 && remoteItems.length === 0) {
-    const nomPk = await fetchJson(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=pk&limit=5&q=${encodeURIComponent(query)}`
-    );
-    if (Array.isArray(nomPk)) {
-      for (const item of nomPk) {
-        remoteItems.push({
-          id: `nompk-${item.place_id}`,
-          label: item.display_name,
-          shortName: (item.display_name || '').split(',').slice(0, 2).join(',').trim(),
-          lat: Number(item.lat),
-          lng: Number(item.lon),
-          badge: 'Pakistan',
-        });
-      }
-    }
-  }
-
   remoteItems.sort((a, b) => (a._dist ?? 999) - (b._dist ?? 999));
 
-  // Merge and deduplicate cleanly by shortName/coords
   const combined = [...localItems, ...remoteItems];
   const seen = new Set();
   const deduped = [];

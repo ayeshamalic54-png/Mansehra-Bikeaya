@@ -15,44 +15,22 @@ import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
-import { ZoneOptions } from '../components/ZoneOptions';
-import { resolveSmartRoute } from '../utils/zones';
 
 export function LandingPage({ onNavigate }) {
   const { bootstrap } = useAuth();
   const [serviceType, setServiceType] = useState('bike_ride');
   const [pickupZone, setPickupZone] = useState('Main Bazar / Lari Adda');
   const [dropZone, setDropZone] = useState('Ghazikot Township');
+  const [pickupText, setPickupText] = useState('Main Bazar / Lari Adda, Mansehra');
+  const [dropText, setDropText] = useState('Ghazikot Township, Mansehra');
   const [pickupLat, setPickupLat] = useState(34.3335);
   const [pickupLng, setPickupLng] = useState(73.1995);
   const [dropLat, setDropLat] = useState(34.3168);
   const [dropLng, setDropLng] = useState(73.1920);
   const [nearbyCaptains, setNearbyCaptains] = useState([]);
-  const [distanceKm, setDistanceKm] = useState(3);
+  const [distanceKm, setDistanceKm] = useState(2.3);
   const [waitMinutes, setWaitMinutes] = useState(0);
   const [estimate, setEstimate] = useState(null);
-
-  const syncDistanceForZones = (nextPickup, nextDrop) => {
-    const p = bootstrap.zones.find((z) => z.name === nextPickup);
-    const d = bootstrap.zones.find((z) => z.name === nextDrop);
-    if (p?.lat != null && p?.lng != null) {
-      setPickupLat(p.lat);
-      setPickupLng(p.lng);
-    }
-    if (d?.lat != null && d?.lng != null) {
-      setDropLat(d.lat);
-      setDropLng(d.lng);
-    }
-    const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
-      bootstrap.zones,
-      nextPickup,
-      nextDrop,
-      distanceKm,
-      serviceType
-    );
-    if (nextKm !== null) setDistanceKm(nextKm);
-    if (suggestedService) setServiceType(suggestedService);
-  };
 
   useEffect(() => {
     if (bootstrap.zones?.length >= 2) {
@@ -265,77 +243,42 @@ export function LandingPage({ onNavigate }) {
               </div>
 
               <div className="space-y-3 text-xs">
-                <div>
-                  <label className="font-semibold text-slate-600 block mb-1">Pickup City / Zone</label>
-                  <select
-                    value={pickupZone}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPickupZone(val);
-                      syncDistanceForZones(val, dropZone);
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
-                  >
-                    <ZoneOptions zones={bootstrap.zones} />
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-600 block mb-1">Drop City / Zone</label>
-                  <select
-                    value={dropZone}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDropZone(val);
-                      syncDistanceForZones(pickupZone, val);
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
-                  >
-                    <ZoneOptions zones={bootstrap.zones} />
-                  </select>
-                </div>
-
                 <InteractiveRoutePicker
                   zones={bootstrap.zones}
                   pickupLat={pickupLat}
                   pickupLng={pickupLng}
-                  pickupLabel={pickupZone}
+                  pickupText={pickupText}
                   dropLat={dropLat}
                   dropLng={dropLng}
-                  dropLabel={dropZone}
+                  dropText={dropText}
                   nearbyCaptains={nearbyCaptains}
                   heightClass="h-44 sm:h-48"
                   autoLocate={true}
-                  onSelectPoint={({ type, lat, lng, nearestZoneName }) => {
+                  onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
                     if (type === 'pickup') {
                       setPickupLat(lat);
                       setPickupLng(lng);
+                      if (address) setPickupText(address);
                       if (nearestZoneName) setPickupZone(nearestZoneName);
                     } else {
                       setDropLat(lat);
                       setDropLng(lng);
+                      if (address) setDropText(address);
                       if (nearestZoneName) setDropZone(nearestZoneName);
                     }
+                  }}
+                  onTextChange={(type, val) => {
+                    if (type === 'pickup') setPickupText(val);
+                    else setDropText(val);
                   }}
                   onRouteResult={({ distanceKm: roadKm }) => {
                     if (roadKm) setDistanceKm(roadKm);
                   }}
                 />
 
-                <div>
-                  <div className="flex justify-between font-semibold text-slate-600 mb-1">
-                    <span>Estimated Distance</span>
-                    <span className="mono-num text-slate-900">{distanceKm} km</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="250"
-                    step="0.1"
-                    value={distanceKm}
-                    onChange={(e) => setDistanceKm(Number(e.target.value))}
-                    className="w-full accent-[#009E4D]"
-                  />
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80 font-semibold text-slate-700">
+                  <span>Calculated Road Distance</span>
+                  <span className="mono-num font-extrabold text-[#009E4D]">{distanceKm} km</span>
                 </div>
 
                 <div>

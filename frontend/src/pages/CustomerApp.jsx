@@ -22,15 +22,13 @@ import { BrandLogo } from '../components/BrandLogo';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { StatusBadge } from '../components/StatusBadge';
-import { ZoneOptions } from '../components/ZoneOptions';
-import { resolveSmartRoute } from '../utils/zones';
 
 export function CustomerApp({ onOpenDownloads }) {
   const { user, bootstrap, logout } = useAuth();
   const [tab, setTab] = useState('book'); // book | rides | payments | menu
   const [rideFilter, setRideFilter] = useState('active'); // active | completed | cancelled
 
-  // Booking form state
+  // Booking form state (pure InDrive Pickup & Drop + silent nearest-zone fare detection)
   const [serviceType, setServiceType] = useState('bike_ride');
   const [pickupZone, setPickupZone] = useState(bootstrap.zones?.[0]?.name || 'Main Bazar / Lari Adda');
   const [pickupAddress, setPickupAddress] = useState('');
@@ -41,30 +39,8 @@ export function CustomerApp({ onOpenDownloads }) {
   const [dropLat, setDropLat] = useState(34.3168);
   const [dropLng, setDropLng] = useState(73.1920);
   const [nearbyCaptains, setNearbyCaptains] = useState([]);
-  const [distanceKm, setDistanceKm] = useState(3.0);
+  const [distanceKm, setDistanceKm] = useState(2.3);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-
-  const syncDistanceForZones = (nextPickup, nextDrop) => {
-    const p = bootstrap.zones?.find((z) => z.name === nextPickup);
-    const d = bootstrap.zones?.find((z) => z.name === nextDrop);
-    if (p?.lat != null && p?.lng != null) {
-      setPickupLat(p.lat);
-      setPickupLng(p.lng);
-    }
-    if (d?.lat != null && d?.lng != null) {
-      setDropLat(d.lat);
-      setDropLng(d.lng);
-    }
-    const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
-      bootstrap.zones,
-      nextPickup,
-      nextDrop,
-      distanceKm,
-      serviceType
-    );
-    if (nextKm !== null) setDistanceKm(nextKm);
-    if (suggestedService) setServiceType(suggestedService);
-  };
   const [promoCode, setPromoCode] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
@@ -176,6 +152,10 @@ export function CustomerApp({ onOpenDownloads }) {
     e.preventDefault();
     setErrMsg('');
     setStatusMsg('');
+    if (!pickupAddress.trim() || !dropAddress.trim()) {
+      setErrMsg('Please set Pickup (or tap GPS) and Drop destination (e.g. Pakhwal Chowk Mansehra).');
+      return;
+    }
     setBusy(true);
     try {
       const created = await apiRequest('/api/bookings', {
@@ -364,26 +344,19 @@ export function CustomerApp({ onOpenDownloads }) {
               })}
             </div>
 
-            {/* Interactive InDrive-style Map + Nearby Captains + GPS */}
+            {/* Pure InDrive Map + Nearby Captains + GPS Pickup/Drop */}
             <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-900">Pin Your Location &amp; Nearby Captains</h2>
-                  <p className="text-[11px] text-slate-500">
-                    Tap <strong>My GPS</strong> at home or click anywhere on the map for Pickup &amp; Drop — route km &amp; fare update live.
-                  </p>
-                </div>
-              </div>
               <InteractiveRoutePicker
                 zones={bootstrap.zones}
                 pickupLat={pickupLat}
                 pickupLng={pickupLng}
-                pickupLabel={pickupAddress || pickupZone}
+                pickupText={pickupAddress}
                 dropLat={dropLat}
                 dropLng={dropLng}
-                dropLabel={dropAddress || dropZone}
+                dropText={dropAddress}
                 nearbyCaptains={nearbyCaptains}
                 heightClass="h-60 sm:h-72"
+                autoLocate={true}
                 onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
                   if (type === 'pickup') {
                     setPickupLat(lat);
@@ -397,84 +370,21 @@ export function CustomerApp({ onOpenDownloads }) {
                     if (address) setDropAddress(address);
                   }
                 }}
+                onTextChange={(type, val) => {
+                  if (type === 'pickup') setPickupAddress(val);
+                  else setDropAddress(val);
+                }}
                 onRouteResult={({ distanceKm: roadKm }) => {
                   if (roadKm) setDistanceKm(roadKm);
                 }}
               />
             </div>
 
-            {/* Pickup & Drop Card */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Pickup City / Area</label>
-                  <select
-                    value={pickupZone}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPickupZone(val);
-                      syncDistanceForZones(val, dropZone);
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
-                  >
-                    <ZoneOptions zones={bootstrap.zones} />
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Pickup Landmark / Street</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Near Lari Adda Gate 1"
-                    value={pickupAddress}
-                    onChange={(e) => setPickupAddress(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Drop City / Area</label>
-                  <select
-                    value={dropZone}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDropZone(val);
-                      syncDistanceForZones(pickupZone, val);
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
-                  >
-                    <ZoneOptions zones={bootstrap.zones} />
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-slate-600 block mb-1">Drop Exact Address</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sector B House 12"
-                    value={dropAddress}
-                    onChange={(e) => setDropAddress(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100">
-                <div className="flex justify-between font-bold text-slate-700 mb-1">
-                  <span>Approximate Route Distance</span>
-                  <span className="mono-num text-[#009E4D]">{distanceKm} km</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="250"
-                  step="0.1"
-                  value={distanceKm}
-                  onChange={(e) => setDistanceKm(Number(e.target.value))}
-                  className="w-full accent-[#009E4D]"
-                />
+            {/* Clean Ride Options Card (Distance auto-computed from Map!) */}
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <span className="font-bold text-slate-700">Calculated Road Distance</span>
+                <span className="mono-num font-extrabold text-[#009E4D] text-sm">{distanceKm} km</span>
               </div>
 
               {serviceType === 'parcel' && (
