@@ -1015,7 +1015,7 @@ def admin_list_tickets(
 ):
     rows = (
         db.query(SupportTicket)
-        .options(joinedload(SupportTicket.user))
+        .options(joinedload(SupportTicket.user), joinedload(SupportTicket.booking))
         .order_by(SupportTicket.created_at.desc())
         .all()
     )
@@ -1026,6 +1026,7 @@ def admin_list_tickets(
             "user_phone": t.user.phone if t.user else "",
             "user_role": t.user.role if t.user else "",
             "booking_id": t.booking_id,
+            "booking_code": t.booking.booking_code if t.booking else None,
             "subject": t.subject,
             "category": t.category,
             "message": t.message,

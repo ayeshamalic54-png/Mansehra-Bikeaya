@@ -217,32 +217,53 @@ def rate_booking(
     return serialize_booking(booking)
 
 
+def _serialize_ticket(t: SupportTicket) -> dict:
+    return {
+        "id": t.id,
+        "booking_id": t.booking_id,
+        "booking_code": t.booking.booking_code if t.booking else None,
+        "subject": t.subject,
+        "category": t.category,
+        "message": t.message,
+        "status": t.status,
+        "admin_reply": t.admin_reply,
+        "created_at": t.created_at,
+    }
+
+
 @router.post("/support/tickets", status_code=status.HTTP_201_CREATED)
 def create_support_ticket(
     payload: SupportTicketCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    linked_booking = None
+    if payload.booking_id is not None:
+        linked_booking = db.query(Booking).filter(Booking.id == payload.booking_id).first()
+        if not linked_booking:
+            raise HTTPException(status_code=404, detail="Selected booking not found")
+        if (
+            current_user.role != "admin"
+            and linked_booking.customer_id != current_user.id
+            and linked_booking.rider_id != current_user.id
+        ):
+            raise HTTPException(status_code=403, detail="Cannot link a booking that does not belong to you")
+
     ticket = SupportTicket(
         user_id=current_user.id,
         booking_id=payload.booking_id,
         subject=payload.subject.strip(),
-        category=payload.category,
+        category=(payload.category or "general").strip().lower()[:40],
         message=payload.message.strip(),
         status="open",
     )
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
-    return {
-        "id": ticket.id,
-        "subject": ticket.subject,
-        "category": ticket.category,
-        "message": ticket.message,
-        "status": ticket.status,
-        "admin_reply": ticket.admin_reply,
-        "created_at": ticket.created_at,
-    }
+    res = _serialize_ticket(ticket)
+    if linked_booking and not res["booking_code"]:
+        res["booking_code"] = linked_booking.booking_code
+    return res
 
 
 @router.get("/support/tickets/my")
@@ -252,20 +273,9 @@ def my_support_tickets(
 ):
     rows = (
         db.query(SupportTicket)
+        .options(joinedload(SupportTicket.booking))
         .filter(SupportTicket.user_id == current_user.id)
         .order_by(SupportTicket.created_at.desc())
         .all()
     )
-    return [
-        {
-            "id": t.id,
-            "booking_id": t.booking_id,
-            "subject": t.subject,
-            "category": t.category,
-            "message": t.message,
-            "status": t.status,
-            "admin_reply": t.admin_reply,
-            "created_at": t.created_at,
-        }
-        for t in rows
-    ]
+    return [_serialize_ticket(t) for t in rows]

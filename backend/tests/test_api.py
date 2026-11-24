@@ -562,4 +562,86 @@ def test_live_gps_nearby_captains_and_admin_live_map(client):
     assert any(b["id"] == bk["id"] and b["pickup_lat"] == 34.3361 for b in lm["active_bookings"])
 
 
+def test_customer_feedback_and_complaint_flow(client):
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    my_rides = client.get("/api/bookings/my", headers=_auth_header(cust_token)).json()
+    assert len(my_rides) >= 1
+    target_ride = my_rides[0]
+
+    # Non-existent booking id returns 404
+    bad_ticket = client.post(
+        "/api/support/tickets",
+        headers=_auth_header(cust_token),
+        json={
+            "booking_id": 999999,
+            "category": "fare_dispute",
+            "subject": "Invalid booking link",
+            "message": "Testing booking ownership validation",
+        },
+    )
+    assert bad_ticket.status_code == 404
+
+    # Customer submits ride-linked fare complaint
+    complaint_res = client.post(
+        "/api/support/tickets",
+        headers=_auth_header(cust_token),
+        json={
+            "booking_id": target_ride["id"],
+            "category": "fare_dispute",
+            "subject": f"Fare review for {target_ride['booking_code']}",
+            "message": "Please verify waiting time charges on this trip.",
+        },
+    )
+    assert complaint_res.status_code == 201
+    complaint = complaint_res.json()
+    assert complaint["category"] == "fare_dispute"
+    assert complaint["booking_id"] == target_ride["id"]
+    assert complaint["booking_code"] == target_ride["booking_code"]
+
+    # Customer submits general positive feedback
+    fb_res = client.post(
+        "/api/support/tickets",
+        headers=_auth_header(cust_token),
+        json={
+            "category": "feedback",
+            "subject": "Great SafarGo pickup speed",
+            "message": "Pakhwal Chowk search and rider arrival worked nicely.",
+        },
+    )
+    assert fb_res.status_code == 201
+    assert fb_res.json()["category"] == "feedback"
+
+    # Admin inspects tickets and replies
+    admin_tickets = client.get("/api/admin/tickets", headers=_auth_header(admin_token))
+    assert admin_tickets.status_code == 200
+    t_list = admin_tickets.json()
+    matched = next(t for t in t_list if t["id"] == complaint["id"])
+    assert matched["booking_code"] == target_ride["booking_code"]
+    assert matched["category"] == "fare_dispute"
+
+    reply_res = client.patch(
+        f"/api/admin/tickets/{complaint['id']}",
+        headers=_auth_header(admin_token),
+        json={"status": "resolved", "admin_reply": "Reviewed wait logs and confirmed exact tariff."},
+    )
+    assert reply_res.status_code == 200
+    assert reply_res.json()["status"] == "resolved"
+
+    # Customer sees admin reply live in my tickets
+    cust_tickets = client.get("/api/support/tickets/my", headers=_auth_header(cust_token)).json()
+    resolved = next(t for t in cust_tickets if t["id"] == complaint["id"])
+    assert resolved["status"] == "resolved"
+    assert "Reviewed wait logs" in resolved["admin_reply"]
+    assert resolved["booking_code"] == target_ride["booking_code"]
+
+
+
 

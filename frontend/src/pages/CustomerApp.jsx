@@ -9,7 +9,7 @@ import {
   HelpCircle,
   LogOut,
   MapPin,
-  Menu,
+  MessageSquare,
   Package,
   Phone,
   Printer,
@@ -22,10 +22,11 @@ import { BrandLogo } from '../components/BrandLogo';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { StatusBadge } from '../components/StatusBadge';
+import { SUPPORT_CATEGORIES, getSupportCategoryMeta } from '../utils/supportCategories';
 
 export function CustomerApp({ onOpenDownloads }) {
   const { user, bootstrap, logout } = useAuth();
-  const [tab, setTab] = useState('book'); // book | rides | payments | menu
+  const [tab, setTab] = useState('book'); // book | rides | payments | support
   const [rideFilter, setRideFilter] = useState('active'); // active | completed | cancelled
 
   // Booking form state (pure InDrive Pickup & Drop + silent nearest-zone fare detection)
@@ -51,7 +52,13 @@ export function CustomerApp({ onOpenDownloads }) {
   const [promoError, setPromoError] = useState('');
   const [bookings, setBookings] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [ticketForm, setTicketForm] = useState({ subject: '', message: '' });
+  const [ticketForm, setTicketForm] = useState({
+    category: 'feedback',
+    booking_id: '',
+    subject: '',
+    message: '',
+  });
+  const [ticketSubmittedMsg, setTicketSubmittedMsg] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [errMsg, setErrMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -82,7 +89,10 @@ export function CustomerApp({ onOpenDownloads }) {
   useEffect(() => {
     loadBookings();
     loadTickets();
-    const timer = setInterval(loadBookings, 6000);
+    const timer = setInterval(() => {
+      loadBookings();
+      loadTickets();
+    }, 6000);
     return () => clearInterval(timer);
   }, []);
 
@@ -221,20 +231,41 @@ export function CustomerApp({ onOpenDownloads }) {
     }
   };
 
+  const openSupportForBooking = (booking) => {
+    setTicketSubmittedMsg('');
+    setTicketForm({
+      category: booking.status === 'cancelled' ? 'ride_complaint' : 'feedback',
+      booking_id: String(booking.id),
+      subject: `Ride ${booking.booking_code}: ${booking.pickup_zone} -> ${booking.drop_zone}`,
+      message: '',
+    });
+    setTab('support');
+  };
+
   const handleTicketSubmit = async (e) => {
     e.preventDefault();
+    setTicketSubmittedMsg('');
     try {
       await apiRequest('/api/support/tickets', {
         method: 'POST',
-        body: { subject: ticketForm.subject, message: ticketForm.message, category: 'customer' },
+        body: {
+          booking_id: ticketForm.booking_id ? Number(ticketForm.booking_id) : null,
+          category: ticketForm.category || 'feedback',
+          subject: ticketForm.subject,
+          message: ticketForm.message,
+        },
       });
-      setTicketForm({ subject: '', message: '' });
-      setStatusMsg('Support ticket submitted to SafarGo Admin.');
+      setTicketForm({ category: 'feedback', booking_id: '', subject: '', message: '' });
+      const msg = 'Your feedback / complaint has been sent to SafarGo Admin Support.';
+      setStatusMsg(msg);
+      setTicketSubmittedMsg(msg);
       await loadTickets();
     } catch (err) {
       setErrMsg(err.message);
     }
   };
+
+  const repliedTicketsCount = tickets.filter((t) => Boolean(t.admin_reply)).length;
 
   const activeRides = bookings.filter((b) =>
     ['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status)
@@ -274,6 +305,22 @@ export function CustomerApp({ onOpenDownloads }) {
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <BrandLogo subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTab('support')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition ${
+                tab === 'support'
+                  ? 'bg-[#009E4D] text-white border-[#009E4D]'
+                  : 'bg-emerald-50 text-[#008741] border-emerald-200 hover:bg-emerald-100/70'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Support</span>
+              {repliedTicketsCount > 0 && (
+                <span className="px-1.5 py-0.5 leading-none rounded-full bg-white text-[#008741] text-[10px] font-extrabold mono-num">
+                  {repliedTicketsCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={onOpenDownloads}
               className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1"
@@ -592,7 +639,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     <div className="mono-num font-extrabold text-sm text-slate-900">
                       Fare: Rs. {b.final_fare} <span className="font-normal text-slate-500">({b.payment_method})</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {['pending', 'assigned', 'arrived'].includes(b.status) && (
                         <button
                           onClick={() => handleCancel(b.id)}
@@ -615,6 +662,14 @@ export function CustomerApp({ onOpenDownloads }) {
                           {b.customer_rating}/5
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => openSupportForBooking(b)}
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-bold hover:bg-emerald-50 hover:text-[#008741] hover:border-emerald-200 inline-flex items-center gap-1"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Feedback / Issue
+                      </button>
                     </div>
                   </div>
 
@@ -703,70 +758,172 @@ export function CustomerApp({ onOpenDownloads }) {
           </div>
         )}
 
-        {/* TAB 4: MENU & SUPPORT */}
-        {tab === 'menu' && (
-          <div className="space-y-4">
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex items-center justify-between">
-              <div>
-                <div className="text-base font-extrabold text-slate-900">{user?.full_name}</div>
-                <div className="text-xs text-slate-500 mono-num">{user?.phone} · Customer Account</div>
+        {/* TAB 4: FEEDBACK, COMPLAINTS & SUPPORT */}
+        {tab === 'support' && (() => {
+          const activeCategoryMeta = getSupportCategoryMeta(ticketForm.category);
+          return (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-extrabold text-slate-900">{user?.full_name}</div>
+                  <div className="text-xs text-slate-500 mono-num">{user?.phone} · Customer Account</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {bootstrap.settings?.support_phone && (
+                    <a
+                      href={`tel:${bootstrap.settings.support_phone}`}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-50 text-[#008741] border border-emerald-200 text-xs font-bold inline-flex items-center gap-1.5 mono-num"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      Helpline
+                    </a>
+                  )}
+                  <button
+                    onClick={onOpenDownloads}
+                    className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Get APK / EXE
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={onOpenDownloads}
-                className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Get APK / EXE
-              </button>
-            </div>
 
-            <form onSubmit={handleTicketSubmit} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
-              <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
-                <HelpCircle className="w-4 h-4 text-[#009E4D]" />
-                Complaint &amp; Support Desk
-              </div>
-              <input
-                type="text"
-                required
-                placeholder="Subject (e.g. Fare question or lost item)"
-                value={ticketForm.subject}
-                onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-              />
-              <textarea
-                rows={3}
-                required
-                placeholder="Describe your issue..."
-                value={ticketForm.message}
-                onChange={(e) => setTicketForm({ ...ticketForm, message: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-              />
-              <button type="submit" className="px-4 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
-                Send to Admin Support
-              </button>
-            </form>
-
-            {tickets.length > 0 && (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5 text-xs">
-                <div className="font-bold text-slate-900">My Support Tickets</div>
-                {tickets.map((t) => (
-                  <div key={t.id} className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1">
-                    <div className="flex justify-between font-bold">
-                      <span>{t.subject}</span>
-                      <StatusBadge value={t.status} />
-                    </div>
-                    <p className="text-slate-600">{t.message}</p>
-                    {t.admin_reply && (
-                      <div className="mt-1 p-2 rounded-lg bg-emerald-50 text-[#008741] font-semibold">
-                        Admin Reply: {t.admin_reply}
-                      </div>
-                    )}
+              <form onSubmit={handleTicketSubmit} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3.5 text-xs">
+                <div>
+                  <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+                    <HelpCircle className="w-4 h-4 text-[#009E4D]" />
+                    Customer Feedback, Complaints &amp; Support
                   </div>
-                ))}
+                  <p className="text-slate-500 mt-0.5">
+                    Share your feedback, report a ride or fare issue, or message SafarGo Admin directly.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700 block">Select Type</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUPPORT_CATEGORIES.map((cat) => {
+                      const active = ticketForm.category === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setTicketForm({ ...ticketForm, category: cat.id })}
+                          className={`px-3 py-1.5 rounded-xl font-bold border transition ${
+                            active
+                              ? 'bg-[#009E4D] text-white border-[#009E4D]'
+                              : 'bg-slate-50/80 text-slate-700 border-slate-200/80 hover:border-emerald-300'
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {bookings.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 block">Related Ride (Optional)</label>
+                    <select
+                      value={ticketForm.booking_id}
+                      onChange={(e) => setTicketForm({ ...ticketForm, booking_id: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-medium"
+                    >
+                      <option value="">General Feedback / Not tied to a ride</option>
+                      {bookings.slice(0, 20).map((b) => (
+                        <option key={b.id} value={String(b.id)}>
+                          {b.booking_code} · {b.pickup_zone} → {b.drop_zone} (Rs. {b.final_fare})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Subject</label>
+                  <input
+                    type="text"
+                    required
+                    minLength={3}
+                    placeholder="Subject (e.g. App feedback, overcharge check, lost item)"
+                    value={ticketForm.subject}
+                    onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Your Feedback or Issue Details</label>
+                  <textarea
+                    rows={3}
+                    required
+                    minLength={5}
+                    placeholder={activeCategoryMeta.placeholder || 'Write your feedback or complaint details...'}
+                    value={ticketForm.message}
+                    onChange={(e) => setTicketForm({ ...ticketForm, message: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
+                  />
+                </div>
+
+                {ticketSubmittedMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[#008741] font-bold">
+                    {ticketSubmittedMsg}
+                  </div>
+                )}
+
+                <button type="submit" className="px-4 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold transition">
+                  Send Feedback / Complaint to Admin
+                </button>
+              </form>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900">My Feedback &amp; Support History</span>
+                  <span className="text-[11px] text-slate-500 mono-num">{tickets.length} submitted</span>
+                </div>
+                {tickets.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/60 text-center text-slate-500">
+                    No feedback or complaints yet. Any message you send appears here with live Admin replies.
+                  </div>
+                ) : (
+                  tickets.map((t) => {
+                    const catMeta = getSupportCategoryMeta(t.category);
+                    return (
+                      <div key={t.id} className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${catMeta.badgeClass}`}>
+                              {catMeta.label}
+                            </span>
+                            {t.booking_code && (
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white border border-slate-200 text-slate-700 mono-num">
+                                {t.booking_code}
+                              </span>
+                            )}
+                          </div>
+                          <StatusBadge value={t.status} />
+                        </div>
+                        <div className="font-bold text-slate-900">{t.subject}</div>
+                        <p className="text-slate-600">{t.message}</p>
+                        {t.created_at && (
+                          <div className="text-[11px] text-slate-400 mono-num">
+                            Sent: {new Date(t.created_at).toLocaleString()}
+                          </div>
+                        )}
+                        {t.admin_reply && (
+                          <div className="mt-1 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200/80 text-[#008741] font-semibold">
+                            SafarGo Admin Reply: {t.admin_reply}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
       </main>
 
       {/* Bottom Mobile Navigation */}
@@ -776,7 +933,7 @@ export function CustomerApp({ onOpenDownloads }) {
             { id: 'book', label: 'Book', icon: Bike },
             { id: 'rides', label: 'My Rides', icon: CheckCircle2 },
             { id: 'payments', label: 'Payments', icon: CreditCard },
-            { id: 'menu', label: 'Menu', icon: Menu },
+            { id: 'support', label: 'Support', icon: MessageSquare, badge: repliedTicketsCount },
           ].map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;
@@ -784,12 +941,17 @@ export function CustomerApp({ onOpenDownloads }) {
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
-                className={`py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
+                className={`relative py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
                   active ? 'border-[#009E4D] text-[#009E4D]' : 'border-transparent text-slate-500'
                 }`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{item.label}</span>
+                {item.badge > 0 && (
+                  <span className="absolute top-1.5 right-6 px-1.5 rounded-full bg-[#009E4D] text-white text-[10px] font-extrabold mono-num">
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}

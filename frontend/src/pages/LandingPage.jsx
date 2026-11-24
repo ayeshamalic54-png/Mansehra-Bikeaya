@@ -5,8 +5,11 @@ import {
   Calculator,
   Car,
   Download,
+  HelpCircle,
+  MessageSquare,
   Monitor,
   Package,
+  Phone,
   ShieldCheck,
   ShoppingBag,
   Smartphone,
@@ -127,6 +130,13 @@ export function LandingPage({ onNavigate }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <BrandLogo subtitle="Bikes · Cars · Parcels · Intercity" />
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => onNavigate('auth')}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100/70 transition"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#009E4D]" />
+              Feedback &amp; Support
+            </button>
             <button
               onClick={() => onNavigate('downloads')}
               className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200/80 hover:bg-slate-200/70 transition"
@@ -391,6 +401,40 @@ export function LandingPage({ onNavigate }) {
             >
               <Monitor className="w-4 h-4 text-emerald-300" />
               Windows (.exe)
+            </button>
+          </div>
+        </section>
+
+        {/* Customer Complaint, Feedback & Support Section */}
+        <section className="card-elevated rounded-3xl p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 border border-emerald-200/70 bg-emerald-50/40">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#008741]">
+              <HelpCircle className="w-4 h-4" />
+              Customer Care, Feedback &amp; Complaints
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              Share Feedback or Report a Ride Issue
+            </h2>
+            <p className="text-sm text-slate-600">
+              Your feedback helps SafarGo improve across every city. Sign in to submit ride complaints, fare checks, lost-item reports, or suggestions directly to Admin Support and receive replies in your app.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {bootstrap.settings?.support_phone && (
+              <a
+                href={`tel:${bootstrap.settings.support_phone}`}
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition mono-num"
+              >
+                <Phone className="w-4 h-4 text-[#009E4D]" />
+                {bootstrap.settings.support_phone}
+              </a>
+            )}
+            <button
+              onClick={() => onNavigate('auth')}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-[#009E4D] hover:bg-[#008741] text-white transition shadow-sm"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Submit Feedback / Complaint
             </button>
           </div>
         </section>

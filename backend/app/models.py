@@ -223,6 +223,7 @@ class SupportTicket(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
     user = relationship("User")
+    booking = relationship("Booking")
 
 
 class AppRelease(Base):
