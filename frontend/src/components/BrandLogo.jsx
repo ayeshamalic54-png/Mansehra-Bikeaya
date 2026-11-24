@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function BrandLogo({ dark = false, subtitle = 'Mansehra Network', size = 'md' }) {
+export function BrandLogo({ dark = false, subtitle = 'Rides · Cars · Parcels', size = 'md' }) {
   const iconBox = size === 'sm' ? 'w-9 h-9 rounded-xl' : 'w-10 h-10 rounded-xl';
   return (
     <div className="flex items-center gap-3 select-none">
@@ -25,9 +25,9 @@ export function BrandLogo({ dark = false, subtitle = 'Mansehra Network', size = 
         </svg>
       </div>
       <div>
-        <div className={`text-[16px] font-extrabold tracking-tight leading-none flex items-center gap-1 ${dark ? 'text-white' : 'text-slate-900'}`}>
-          <span>Mansehra</span>
-          <span className={dark ? 'text-emerald-400' : 'text-[#009E4D]'}>Bikeaya</span>
+        <div className={`text-[17px] font-extrabold tracking-tight leading-none flex items-center ${dark ? 'text-white' : 'text-slate-900'}`}>
+          <span>Bike</span>
+          <span className={dark ? 'text-emerald-400' : 'text-[#009E4D]'}>aya</span>
         </div>
         {subtitle && (
           <div className={`text-[11px] font-medium mt-1 tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>

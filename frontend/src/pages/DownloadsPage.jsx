@@ -67,10 +67,10 @@ export function DownloadsPage({ onBack }) {
             Mobile &amp; Desktop Installers
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 pt-2">
-            Download Mansehra Bikeaya (.APK &amp; .EXE)
+            Download Bikeaya (.APK &amp; .EXE)
           </h1>
           <p className="text-sm text-slate-600">
-            Get the Android mobile installer for Customers &amp; Motorbike Captains or the Windows Desktop application for Admin Dispatch.
+            Get the Android mobile installer for Customers, Bike &amp; Car Captains, or the Windows Desktop application for Admin Dispatch.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ export function DownloadsPage({ onBack }) {
               </div>
               <h2 className="text-xl font-bold text-slate-900">Mobile Customer &amp; Rider App</h2>
               <p className="text-xs sm:text-sm text-slate-600">
-                {latestApk?.release_notes || 'Android installer for booking bike rides, parcel delivery, and captain earnings tracking.'}
+                {latestApk?.release_notes || 'Android installer for booking bike rides, intercity cars, parcel delivery, and captain earnings tracking.'}
               </p>
               <div className="text-xs text-slate-500 mono-num">
                 Downloads: {latestApk?.download_count ?? 0}

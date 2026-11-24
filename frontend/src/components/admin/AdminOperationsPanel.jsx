@@ -291,10 +291,10 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         };
         if (editingZoneId) {
           await apiRequest(`/api/admin/zones/${editingZoneId}`, { method: 'PATCH', body });
-          onNotify('Mansehra zone updated!');
+          onNotify('City / Zone updated!');
         } else {
           await apiRequest('/api/admin/zones', { method: 'POST', body });
-          onNotify('Mansehra zone added!');
+          onNotify('City / Zone added!');
         }
         setEditingZoneId(null);
         setZoneForm({ name: '', area_tag: 'City Area', approx_km_from_center: 3, surcharge: 0 });
@@ -334,7 +334,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         {/* Zones CRUD */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
           <div className="flex justify-between items-center">
-            <span className="font-extrabold text-sm">Mansehra Zones</span>
+            <span className="font-extrabold text-sm">Cities &amp; Zones</span>
             {editingZoneId && (
               <button onClick={() => setEditingZoneId(null)} className="text-slate-500">Cancel Edit</button>
             )}

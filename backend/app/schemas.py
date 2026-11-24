@@ -25,10 +25,10 @@ class LoginRequest(BaseModel):
 
 # --- Pricing & Estimation ---
 class FareEstimateRequest(BaseModel):
-    service_type: str = Field("bike_ride", pattern="^(bike_ride|parcel|errand)$")
+    service_type: str = Field("bike_ride", pattern="^(bike_ride|car_ride|parcel|errand)$")
     pickup_zone: str = "Main Bazar / Lari Adda"
     drop_zone: str = "Ghazikot Township"
-    distance_km: float = Field(3.0, ge=0.5, le=120.0)
+    distance_km: float = Field(3.0, ge=0.5, le=300.0)
     promo_code: Optional[str] = None
 
 
@@ -45,12 +45,12 @@ class PricingRuleUpdate(BaseModel):
 
 # --- Bookings ---
 class BookingCreate(BaseModel):
-    service_type: str = Field("bike_ride", pattern="^(bike_ride|parcel|errand)$")
+    service_type: str = Field("bike_ride", pattern="^(bike_ride|car_ride|parcel|errand)$")
     pickup_zone: str
     pickup_address: str = Field(..., min_length=2, max_length=255)
     drop_zone: str
     drop_address: str = Field(..., min_length=2, max_length=255)
-    distance_km: float = Field(3.0, ge=0.5, le=120.0)
+    distance_km: float = Field(3.0, ge=0.5, le=300.0)
     payment_method: str = Field("cash", pattern="^(cash|easypaisa|jazzcash|wallet)$")
     promo_code: Optional[str] = None
     receiver_name: Optional[str] = None
@@ -138,12 +138,12 @@ class AdminCustomerUpdate(BaseModel):
 
 
 class AdminBookingUpdate(BaseModel):
-    service_type: Optional[str] = Field(None, pattern="^(bike_ride|parcel|errand)$")
+    service_type: Optional[str] = Field(None, pattern="^(bike_ride|car_ride|parcel|errand)$")
     pickup_zone: Optional[str] = None
     pickup_address: Optional[str] = None
     drop_zone: Optional[str] = None
     drop_address: Optional[str] = None
-    distance_km: Optional[float] = Field(None, ge=0.5, le=120.0)
+    distance_km: Optional[float] = Field(None, ge=0.5, le=300.0)
     final_fare: Optional[float] = Field(None, ge=10)
     payment_method: Optional[str] = Field(None, pattern="^(cash|easypaisa|jazzcash|wallet)$")
     payment_collector: Optional[str] = Field(None, pattern="^(rider|admin)$")

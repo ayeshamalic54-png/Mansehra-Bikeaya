@@ -191,7 +191,7 @@ export function RiderApp({ onOpenDownloads }) {
 
             {availableJobs.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
-                No pending ride requests right now. Keep Duty ONLINE to receive new Mansehra bookings!
+                No pending ride requests right now. Keep Duty ONLINE to receive new city &amp; intercity bookings!
               </div>
             ) : (
               availableJobs.map((job) => (

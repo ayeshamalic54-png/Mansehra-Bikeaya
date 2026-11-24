@@ -49,7 +49,7 @@ const NAV_GROUPS = [
   {
     group: 'Fleet & Users',
     items: [
-      { id: 'riders', label: 'Motorbike Riders', icon: Bike, badgeCls: 'bg-emerald-500/15 text-emerald-300' },
+      { id: 'riders', label: 'Fleet Captains', icon: Bike, badgeCls: 'bg-emerald-500/15 text-emerald-300' },
       { id: 'customers', label: 'Customers Directory', icon: Users, badgeCls: 'bg-indigo-500/15 text-indigo-400' },
     ],
   },
@@ -72,7 +72,7 @@ const NAV_GROUPS = [
     group: 'Operations & Security',
     items: [
       { id: 'tickets', label: 'Complaints & Support', icon: HelpCircle, badgeCls: 'bg-orange-500/15 text-orange-400' },
-      { id: 'zones', label: 'Mansehra Zones & Promos', icon: MapPin, badgeCls: 'bg-sky-500/15 text-sky-300' },
+      { id: 'zones', label: 'Cities, Zones & Promos', icon: MapPin, badgeCls: 'bg-sky-500/15 text-sky-300' },
       { id: 'settings', label: 'Passwords & Settings', icon: ShieldCheck, badgeCls: 'bg-emerald-500/15 text-emerald-400' },
     ],
   },
@@ -350,7 +350,7 @@ export function AdminDashboard({ onOpenDownloads }) {
             </button>
             <div>
               <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Mansehra Operations
+                Fleet Operations
               </div>
               <h1 className="text-base sm:text-lg font-extrabold text-slate-900 capitalize">
                 {subpage.replace(/_/g, ' ')}
@@ -416,6 +416,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                     className="px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80"
                   >
                     <option value="bike_ride">Bike Ride</option>
+                    <option value="car_ride">Car Ride (Intercity)</option>
                     <option value="parcel">Parcel Delivery</option>
                     <option value="errand">Bazaar Errand</option>
                   </select>
@@ -777,6 +778,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
                 >
                   <option value="bike_ride">Bike Ride</option>
+                  <option value="car_ride">Car Ride (Intercity)</option>
                   <option value="parcel">Parcel Delivery</option>
                   <option value="errand">Bazaar Errand</option>
                 </select>

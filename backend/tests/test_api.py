@@ -41,8 +41,13 @@ def test_health_and_bootstrap(client):
     boot = client.get("/api/public/bootstrap")
     assert boot.status_code == 200
     data = boot.json()
-    assert len(data["zones"]) >= 8
-    assert len(data["pricing_rules"]) == 3
+    assert len(data["zones"]) >= 12
+    assert len(data["pricing_rules"]) == 4
+    rule_types = {r["service_type"] for r in data["pricing_rules"]}
+    assert {"bike_ride", "car_ride", "parcel", "errand"}.issubset(rule_types)
+    zone_names = " | ".join(z["name"] for z in data["zones"])
+    for city in ("Abbottabad", "Haripur", "Battagram", "Islamabad Airport"):
+        assert city in zone_names
     assert len(data["releases"]) == 2
 
 
@@ -306,4 +311,24 @@ def test_seed_idempotent_after_admin_phone_update(client):
         ).status_code
         == 200
     )
+
+
+def test_car_ride_and_intercity_airport_estimate(client):
+    est = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Abbottabad (City / Fawara Chowk)",
+            "drop_zone": "Islamabad Airport (New IIA)",
+            "distance_km": 125.0,
+        },
+    )
+    assert est.status_code == 200
+    data = est.json()
+    assert data["service_type"] == "car_ride"
+    assert data["zone_surcharge"] == 600.0
+    assert data["estimated_fare"] > 5000.0
+    assert data["estimated_commission"] > 0
+    assert data["estimated_rider_earning"] > 0
+
 

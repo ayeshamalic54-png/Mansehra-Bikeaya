@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Bike,
+  Car,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -33,6 +34,20 @@ export function CustomerApp({ onOpenDownloads }) {
   const [dropAddress, setDropAddress] = useState('');
   const [distanceKm, setDistanceKm] = useState(4.0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+
+  const syncDistanceForZones = (nextPickup, nextDrop) => {
+    const p = bootstrap.zones?.find((z) => z.name === nextPickup);
+    const d = bootstrap.zones?.find((z) => z.name === nextDrop);
+    const maxKm = Math.max(p?.approx_km_from_center || 0, d?.approx_km_from_center || 0);
+    if (maxKm >= 15) {
+      setDistanceKm(Math.round(maxKm));
+      if (maxKm >= 40 && serviceType === 'bike_ride') {
+        setServiceType('car_ride');
+      }
+    } else if (distanceKm > 25) {
+      setDistanceKm(4.0);
+    }
+  };
   const [promoCode, setPromoCode] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
@@ -127,7 +142,7 @@ export function CustomerApp({ onOpenDownloads }) {
           customer_notes: customerNotes || null,
         },
       });
-      setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest Mansehra captain...`);
+      setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest Bikeaya captain...`);
       setPickupAddress('');
       setDropAddress('');
       setPromoCode('');
@@ -177,7 +192,7 @@ export function CustomerApp({ onOpenDownloads }) {
         body: { subject: ticketForm.subject, message: ticketForm.message, category: 'customer' },
       });
       setTicketForm({ subject: '', message: '' });
-      setStatusMsg('Support ticket submitted to Mansehra Bikeaya Admin.');
+      setStatusMsg('Support ticket submitted to Bikeaya Admin.');
       await loadTickets();
     } catch (err) {
       setErrMsg(err.message);
@@ -258,9 +273,10 @@ export function CustomerApp({ onOpenDownloads }) {
         {tab === 'book' && (
           <form onSubmit={handleBook} className="space-y-4">
             {/* Bykea-style Service Cards */}
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
                 { id: 'bike_ride', label: 'Bike Ride', sub: 'Sawari', icon: Bike },
+                { id: 'car_ride', label: 'Car Ride', sub: 'City & Intercity', icon: Car },
                 { id: 'parcel', label: 'Parcel', sub: 'Delivery', icon: Package },
                 { id: 'errand', label: 'Bazaar', sub: 'Errand', icon: ShoppingBag },
               ].map((s) => {
@@ -295,10 +311,14 @@ export function CustomerApp({ onOpenDownloads }) {
             <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-600 block mb-1">Pickup Area (Mansehra)</label>
+                  <label className="font-bold text-slate-600 block mb-1">Pickup City / Area</label>
                   <select
                     value={pickupZone}
-                    onChange={(e) => setPickupZone(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPickupZone(val);
+                      syncDistanceForZones(val, dropZone);
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
                     {bootstrap.zones.map((z) => (
@@ -323,10 +343,14 @@ export function CustomerApp({ onOpenDownloads }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
-                  <label className="font-bold text-slate-600 block mb-1">Drop Area (Mansehra)</label>
+                  <label className="font-bold text-slate-600 block mb-1">Drop City / Area</label>
                   <select
                     value={dropZone}
-                    onChange={(e) => setDropZone(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDropZone(val);
+                      syncDistanceForZones(pickupZone, val);
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
                     {bootstrap.zones.map((z) => (
@@ -357,8 +381,8 @@ export function CustomerApp({ onOpenDownloads }) {
                 <input
                   type="range"
                   min="1"
-                  max="25"
-                  step="0.5"
+                  max="150"
+                  step="1"
                   value={distanceKm}
                   onChange={(e) => setDistanceKm(Number(e.target.value))}
                   className="w-full accent-[#009E4D]"
@@ -406,7 +430,7 @@ export function CustomerApp({ onOpenDownloads }) {
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-slate-600 block mb-1">Promo Code (Try MANSEHRA20)</label>
+                  <label className="font-bold text-slate-600 block mb-1">Promo Code (Optional)</label>
                   <input
                     type="text"
                     placeholder="Optional code"
@@ -523,7 +547,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     b.status === 'pending' && (
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-semibold flex items-center gap-2">
                         <Clock className="w-4 h-4 animate-spin" />
-                        Broadcasting to nearby Mansehra motorbike captains...
+                        Broadcasting to nearby Bike &amp; Car captains...
                       </div>
                     )
                   )}

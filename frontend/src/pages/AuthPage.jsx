@@ -53,7 +53,7 @@ export function AuthPage({ onNavigate }) {
       {/* Structured Top Header */}
       <header className="sticky top-0 z-20 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <BrandLogo subtitle="Mansehra Ride & Parcel Portal" />
+          <BrandLogo subtitle="Bike · Car · Parcel Portal" />
           <button
             onClick={() => onNavigate('landing')}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 transition"
@@ -77,7 +77,7 @@ export function AuthPage({ onNavigate }) {
               {mode === 'login' ? 'Sign In to Your Portal' : 'Create Your Account'}
             </h1>
             <p className="text-xs text-slate-300 mt-0.5">
-              Customers, Motorbike Captains &amp; Admin access from one place.
+              Passengers, Bike &amp; Car Captains &amp; Admin access from one place.
             </p>
           </div>
 
@@ -168,7 +168,7 @@ export function AuthPage({ onNavigate }) {
                       }`}
                     >
                       <Bike className="w-3.5 h-3.5" />
-                      Bike Captain
+                      Ride Captain
                     </button>
                   </div>
 
@@ -211,12 +211,12 @@ export function AuthPage({ onNavigate }) {
 
                   {role === 'rider' && (
                     <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                      <div className="font-bold text-teal-800">Motorbike Captain Details</div>
+                      <div className="font-bold text-teal-800">Captain Vehicle Details (Bike / Car)</div>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="text"
                           required
-                          placeholder="Bike Model (CD-70)"
+                          placeholder="Vehicle (CD-70 / Alto / Corolla)"
                           value={bikeModel}
                           onChange={(e) => setBikeModel(e.target.value)}
                           className="px-3 py-2 rounded-lg border border-slate-200 bg-white"

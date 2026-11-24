@@ -28,7 +28,7 @@ export function AdminReportsPanel({ onNotify }) {
     try {
       await downloadAuthenticatedCsv(
         `/api/reports/export-csv?start_date=${startDate}&end_date=${endDate}`,
-        `mansehra_bikeaya_pnl_${startDate}_to_${endDate}.csv`
+        `bikeaya_pnl_${startDate}_to_${endDate}.csv`
       );
       onNotify('CSV statement downloaded!');
     } catch (e) {

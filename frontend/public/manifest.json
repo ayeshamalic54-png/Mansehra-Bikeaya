@@ -1,7 +1,7 @@
 {
-  "name": "Mansehra Bikeaya",
-  "short_name": "Bikeaya MNS",
-  "description": "Fast Motorbike Ride, Parcel Delivery & Rider Dispatch for Mansehra",
+  "name": "Bikeaya",
+  "short_name": "Bikeaya",
+  "description": "Fast Bike Rides, Intercity Cars & Express Parcel Network",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F4F6FB",

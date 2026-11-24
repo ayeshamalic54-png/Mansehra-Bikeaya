@@ -20,6 +20,7 @@ const LABELS = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   bike_ride: 'Bike Ride',
+  car_ride: 'Car Ride',
   parcel: 'Parcel',
   errand: 'Errand',
 };

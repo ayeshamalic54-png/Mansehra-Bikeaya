@@ -17,62 +17,80 @@ from app.services.finance import complete_booking_and_post_ledger, utcnow
 
 
 def seed_initial_data(db: Session) -> None:
-    # 1. Mansehra Zones
-    if db.query(MansehraZone).count() == 0:
-        zones = [
-            MansehraZone(name="Main Bazar / Lari Adda", area_tag="City Core", approx_km_from_center=1.0, surcharge=0),
-            MansehraZone(name="Abbottabad Road", area_tag="City Core", approx_km_from_center=2.5, surcharge=0),
-            MansehraZone(name="Ghazikot Township", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
-            MansehraZone(name="Shinkiari Road", area_tag="City North", approx_km_from_center=3.0, surcharge=0),
-            MansehraZone(name="College Doraha", area_tag="Education Hub", approx_km_from_center=2.0, surcharge=0),
-            MansehraZone(name="Kaghan Colony", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
-            MansehraZone(name="Channai", area_tag="Suburb", approx_km_from_center=4.5, surcharge=10),
-            MansehraZone(name="King Abdullah Hospital", area_tag="Medical", approx_km_from_center=2.5, surcharge=0),
-            MansehraZone(name="Hazara University (Dhodial)", area_tag="University", approx_km_from_center=11.0, surcharge=30),
-            MansehraZone(name="Baffa Town", area_tag="Outer Town", approx_km_from_center=12.5, surcharge=40),
-        ]
-        db.add_all(zones)
+    # 1. City & Intercity Hubs / Zones (idempotent by zone name)
+    seed_zones = [
+        MansehraZone(name="Main Bazar / Lari Adda", area_tag="City Core", approx_km_from_center=1.0, surcharge=0),
+        MansehraZone(name="Abbottabad Road", area_tag="City Core", approx_km_from_center=2.5, surcharge=0),
+        MansehraZone(name="Ghazikot Township", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
+        MansehraZone(name="Shinkiari Road", area_tag="City North", approx_km_from_center=3.0, surcharge=0),
+        MansehraZone(name="College Doraha", area_tag="Education Hub", approx_km_from_center=2.0, surcharge=0),
+        MansehraZone(name="Kaghan Colony", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
+        MansehraZone(name="Channai", area_tag="Suburb", approx_km_from_center=4.5, surcharge=10),
+        MansehraZone(name="King Abdullah Hospital", area_tag="Medical", approx_km_from_center=2.5, surcharge=0),
+        MansehraZone(name="Hazara University (Dhodial)", area_tag="University", approx_km_from_center=11.0, surcharge=30),
+        MansehraZone(name="Baffa Town", area_tag="Outer Town", approx_km_from_center=12.5, surcharge=40),
+        MansehraZone(name="Abbottabad (City / Fawara Chowk)", area_tag="Intercity Hub", approx_km_from_center=25.0, surcharge=100),
+        MansehraZone(name="Haripur (City / GT Road)", area_tag="Intercity Hub", approx_km_from_center=60.0, surcharge=200),
+        MansehraZone(name="Battagram (City Center)", area_tag="Intercity Hub", approx_km_from_center=65.0, surcharge=250),
+        MansehraZone(name="Islamabad Airport (New IIA)", area_tag="Airport Transfer", approx_km_from_center=125.0, surcharge=500),
+    ]
+    existing_zone_names = {row[0] for row in db.query(MansehraZone.name).all()}
+    new_zones = [z for z in seed_zones if z.name not in existing_zone_names]
+    if new_zones:
+        db.add_all(new_zones)
 
-    # 2. Pricing & Commission Rules
-    if db.query(PricingRule).count() == 0:
-        rules = [
-            PricingRule(
-                service_type="bike_ride",
-                display_name="Bike Ride (Sawari)",
-                base_fare=60.0,
-                per_km_rate=25.0,
-                min_fare=80.0,
-                commission_type="percent",
-                commission_value=15.0,
-                peak_multiplier=1.0,
-            ),
-            PricingRule(
-                service_type="parcel",
-                display_name="Parcel Delivery",
-                base_fare=80.0,
-                per_km_rate=30.0,
-                min_fare=100.0,
-                commission_type="percent",
-                commission_value=18.0,
-                peak_multiplier=1.0,
-            ),
-            PricingRule(
-                service_type="errand",
-                display_name="Bazaar Errand",
-                base_fare=100.0,
-                per_km_rate=30.0,
-                min_fare=120.0,
-                commission_type="fixed",
-                commission_value=40.0,
-                peak_multiplier=1.0,
-            ),
-        ]
-        db.add_all(rules)
+    # 2. Pricing & Commission Rules (idempotent by service_type)
+    seed_rules = [
+        PricingRule(
+            service_type="bike_ride",
+            display_name="Bike Ride (Sawari)",
+            base_fare=60.0,
+            per_km_rate=25.0,
+            min_fare=80.0,
+            commission_type="percent",
+            commission_value=15.0,
+            peak_multiplier=1.0,
+        ),
+        PricingRule(
+            service_type="car_ride",
+            display_name="Car Ride (City & Intercity)",
+            base_fare=250.0,
+            per_km_rate=55.0,
+            min_fare=350.0,
+            commission_type="percent",
+            commission_value=15.0,
+            peak_multiplier=1.0,
+        ),
+        PricingRule(
+            service_type="parcel",
+            display_name="Parcel Delivery",
+            base_fare=80.0,
+            per_km_rate=30.0,
+            min_fare=100.0,
+            commission_type="percent",
+            commission_value=18.0,
+            peak_multiplier=1.0,
+        ),
+        PricingRule(
+            service_type="errand",
+            display_name="Bazaar Errand",
+            base_fare=100.0,
+            per_km_rate=30.0,
+            min_fare=120.0,
+            commission_type="fixed",
+            commission_value=40.0,
+            peak_multiplier=1.0,
+        ),
+    ]
+    existing_rule_types = {row[0] for row in db.query(PricingRule.service_type).all()}
+    new_rules = [r for r in seed_rules if r.service_type not in existing_rule_types]
+    if new_rules:
+        db.add_all(new_rules)
 
     # 3. System Settings
     default_settings = {
-        "business_name": "Mansehra Bikeaya",
-        "city": "Mansehra, KPK",
+        "business_name": "Bikeaya",
+        "city": "Hazara & Intercity",
         "default_credit_limit": "1500",
         "support_phone": "+92 300 1111111",
         "support_whatsapp": "+92 300 1111111",

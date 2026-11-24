@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Bike,
   Calculator,
+  Car,
   Download,
   Monitor,
   Package,
@@ -21,6 +22,20 @@ export function LandingPage({ onNavigate }) {
   const [dropZone, setDropZone] = useState('Ghazikot Township');
   const [distanceKm, setDistanceKm] = useState(4);
   const [estimate, setEstimate] = useState(null);
+
+  const syncDistanceForZones = (nextPickup, nextDrop) => {
+    const p = bootstrap.zones.find((z) => z.name === nextPickup);
+    const d = bootstrap.zones.find((z) => z.name === nextDrop);
+    const maxKm = Math.max(p?.approx_km_from_center || 0, d?.approx_km_from_center || 0);
+    if (maxKm >= 15) {
+      setDistanceKm(Math.round(maxKm));
+      if (maxKm >= 40 && serviceType === 'bike_ride') {
+        setServiceType('car_ride');
+      }
+    } else if (distanceKm > 25) {
+      setDistanceKm(4);
+    }
+  };
 
   useEffect(() => {
     if (bootstrap.zones?.length >= 2) {
@@ -57,13 +72,19 @@ export function LandingPage({ onNavigate }) {
     {
       id: 'bike_ride',
       title: 'Bike Ride (Sawari)',
-      desc: 'Beat Mansehra traffic with verified local motorbike captains in minutes.',
+      desc: 'Beat daily traffic with verified motorbike captains in minutes.',
       icon: Bike,
+    },
+    {
+      id: 'car_ride',
+      title: 'Car Ride (Intercity)',
+      desc: 'Comfortable AC cars for city travel, Abbottabad, Haripur, Battagram & Islamabad Airport.',
+      icon: Car,
     },
     {
       id: 'parcel',
       title: 'Parcel & COD Delivery',
-      desc: 'Send documents, shop parcels, or medicines anywhere from Lari Adda to Baffa.',
+      desc: 'Send documents, shop parcels, or medicines quickly across city and intercity routes.',
       icon: Package,
     },
     {
@@ -79,7 +100,7 @@ export function LandingPage({ onNavigate }) {
       {/* Sticky Navbar */}
       <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <BrandLogo subtitle="Mansehra Ride & Parcel Network" />
+          <BrandLogo subtitle="Bikes · Cars · Parcels · Intercity" />
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => onNavigate('downloads')}
@@ -104,16 +125,17 @@ export function LandingPage({ onNavigate }) {
           <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-[#008741] text-xs font-bold">
               <span className="w-2 h-2 rounded-full bg-[#009E4D] animate-pulse" />
-              Live in Mansehra · Ghazikot · Shinkiari Rd · Hazara University
+              Active Across Cities · Abbottabad · Haripur · Battagram · Islamabad Airport
             </div>
 
             <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
-              Fast Motorbike Rides &amp; Parcels Across{' '}
-              <span className="text-[#009E4D]">Mansehra</span>.
+              Fast Bikes,{' '}
+              <span className="text-[#009E4D]">Comfortable Cars</span>{' '}
+              &amp; Express Parcels.
             </h1>
 
             <p className="text-base sm:text-lg text-slate-600 max-w-2xl leading-relaxed">
-              Book verified local bike riders in seconds, track every parcel delivery, and manage transparent rider settlements &amp; profit reports from one unified platform.
+              Book verified motorbike riders or AC cars in seconds for local &amp; intercity travel, send urgent parcels across hubs, and track transparent settlements from one platform.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -165,17 +187,18 @@ export function LandingPage({ onNavigate }) {
                   </span>
                   <div>
                     <div className="text-sm font-bold text-slate-900">Instant Fare Check</div>
-                    <div className="text-xs text-slate-500">Live Mansehra tariff calculator</div>
+                    <div className="text-xs text-slate-500">Live city &amp; intercity tariff calculator</div>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200/70">
-                  Promo: MANSEHRA20
+                  City &amp; Intercity
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   ['bike_ride', 'Bike Ride'],
+                  ['car_ride', 'Car Ride'],
                   ['parcel', 'Parcel'],
                   ['errand', 'Errand'],
                 ].map(([id, label]) => (
@@ -196,10 +219,14 @@ export function LandingPage({ onNavigate }) {
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="font-semibold text-slate-600 block mb-1">Pickup Zone</label>
+                  <label className="font-semibold text-slate-600 block mb-1">Pickup City / Zone</label>
                   <select
                     value={pickupZone}
-                    onChange={(e) => setPickupZone(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPickupZone(val);
+                      syncDistanceForZones(val, dropZone);
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
                   >
                     {bootstrap.zones.map((z) => (
@@ -211,10 +238,14 @@ export function LandingPage({ onNavigate }) {
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-600 block mb-1">Drop Zone</label>
+                  <label className="font-semibold text-slate-600 block mb-1">Drop City / Zone</label>
                   <select
                     value={dropZone}
-                    onChange={(e) => setDropZone(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDropZone(val);
+                      syncDistanceForZones(pickupZone, val);
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
                   >
                     {bootstrap.zones.map((z) => (
@@ -233,8 +264,8 @@ export function LandingPage({ onNavigate }) {
                   <input
                     type="range"
                     min="1"
-                    max="25"
-                    step="0.5"
+                    max="150"
+                    step="1"
                     value={distanceKm}
                     onChange={(e) => setDistanceKm(Number(e.target.value))}
                     className="w-full accent-[#009E4D]"
@@ -263,7 +294,7 @@ export function LandingPage({ onNavigate }) {
         </div>
 
         {/* Service Cards */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {services.map((s) => {
             const Icon = s.icon;
             return (
@@ -285,7 +316,7 @@ export function LandingPage({ onNavigate }) {
               <ShieldCheck className="w-4 h-4" />
               Official Android APK &amp; Windows Desktop Installer
             </div>
-            <h2 className="text-2xl font-extrabold">Take Mansehra Bikeaya Everywhere</h2>
+            <h2 className="text-2xl font-extrabold">Take Bikeaya Everywhere</h2>
             <p className="text-sm text-slate-300">
               Download the Android APK for customers &amp; captains or the Windows Desktop EXE for your central dispatch and accounting office.
             </p>
