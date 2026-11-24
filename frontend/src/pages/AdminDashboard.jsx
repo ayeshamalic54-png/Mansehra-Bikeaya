@@ -27,6 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
+import { ZoneOptions } from '../components/ZoneOptions';
 import { AdminFinancePanel } from '../components/admin/AdminFinancePanel';
 import { AdminOperationsPanel } from '../components/admin/AdminOperationsPanel';
 import { AdminPeoplePanel } from '../components/admin/AdminPeoplePanel';
@@ -789,9 +790,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   onChange={(e) => setManualForm({ ...manualForm, pickup_zone: e.target.value })}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
-                  {bootstrap.zones.map((z) => (
-                    <option key={z.id} value={z.name}>Pickup: {z.name}</option>
-                  ))}
+                  <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Pickup: " />
                 </select>
                 <input
                   type="text"
@@ -806,9 +805,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   onChange={(e) => setManualForm({ ...manualForm, drop_zone: e.target.value })}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                 >
-                  {bootstrap.zones.map((z) => (
-                    <option key={z.id} value={z.name}>Drop: {z.name}</option>
-                  ))}
+                  <ZoneOptions zones={bootstrap.zones} showTag={false} prefix="Drop: " />
                 </select>
                 <input
                   type="text"

@@ -20,6 +20,8 @@ import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { StatusBadge } from '../components/StatusBadge';
+import { ZoneOptions } from '../components/ZoneOptions';
+import { resolveSmartRoute } from '../utils/zones';
 
 export function CustomerApp({ onOpenDownloads }) {
   const { user, bootstrap, logout } = useAuth();
@@ -36,17 +38,15 @@ export function CustomerApp({ onOpenDownloads }) {
   const [paymentMethod, setPaymentMethod] = useState('cash');
 
   const syncDistanceForZones = (nextPickup, nextDrop) => {
-    const p = bootstrap.zones?.find((z) => z.name === nextPickup);
-    const d = bootstrap.zones?.find((z) => z.name === nextDrop);
-    const maxKm = Math.max(p?.approx_km_from_center || 0, d?.approx_km_from_center || 0);
-    if (maxKm >= 15) {
-      setDistanceKm(Math.round(maxKm));
-      if (maxKm >= 40 && serviceType === 'bike_ride') {
-        setServiceType('car_ride');
-      }
-    } else if (distanceKm > 25) {
-      setDistanceKm(4.0);
-    }
+    const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
+      bootstrap.zones,
+      nextPickup,
+      nextDrop,
+      distanceKm,
+      serviceType
+    );
+    if (nextKm !== null) setDistanceKm(nextKm);
+    if (suggestedService) setServiceType(suggestedService);
   };
   const [promoCode, setPromoCode] = useState('');
   const [receiverName, setReceiverName] = useState('');
@@ -321,11 +321,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
-                    {bootstrap.zones.map((z) => (
-                      <option key={z.id} value={z.name}>
-                        {z.name}
-                      </option>
-                    ))}
+                    <ZoneOptions zones={bootstrap.zones} />
                   </select>
                 </div>
                 <div>
@@ -353,11 +349,7 @@ export function CustomerApp({ onOpenDownloads }) {
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-semibold"
                   >
-                    {bootstrap.zones.map((z) => (
-                      <option key={z.id} value={z.name}>
-                        {z.name}
-                      </option>
-                    ))}
+                    <ZoneOptions zones={bootstrap.zones} />
                   </select>
                 </div>
                 <div>

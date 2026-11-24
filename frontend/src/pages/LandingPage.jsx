@@ -14,6 +14,8 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { ZoneOptions } from '../components/ZoneOptions';
+import { resolveSmartRoute } from '../utils/zones';
 
 export function LandingPage({ onNavigate }) {
   const { bootstrap } = useAuth();
@@ -24,17 +26,15 @@ export function LandingPage({ onNavigate }) {
   const [estimate, setEstimate] = useState(null);
 
   const syncDistanceForZones = (nextPickup, nextDrop) => {
-    const p = bootstrap.zones.find((z) => z.name === nextPickup);
-    const d = bootstrap.zones.find((z) => z.name === nextDrop);
-    const maxKm = Math.max(p?.approx_km_from_center || 0, d?.approx_km_from_center || 0);
-    if (maxKm >= 15) {
-      setDistanceKm(Math.round(maxKm));
-      if (maxKm >= 40 && serviceType === 'bike_ride') {
-        setServiceType('car_ride');
-      }
-    } else if (distanceKm > 25) {
-      setDistanceKm(4);
-    }
+    const { distanceKm: nextKm, suggestedService } = resolveSmartRoute(
+      bootstrap.zones,
+      nextPickup,
+      nextDrop,
+      distanceKm,
+      serviceType
+    );
+    if (nextKm !== null) setDistanceKm(nextKm);
+    if (suggestedService) setServiceType(suggestedService);
   };
 
   useEffect(() => {
@@ -125,7 +125,7 @@ export function LandingPage({ onNavigate }) {
           <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-[#008741] text-xs font-bold">
               <span className="w-2 h-2 rounded-full bg-[#009E4D] animate-pulse" />
-              Active Across Cities · Abbottabad · Haripur · Battagram · Islamabad Airport
+              Active Across Cities · Abbottabad · Mansehra · Haripur · Battagram · Islamabad Airport
             </div>
 
             <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
@@ -143,7 +143,7 @@ export function LandingPage({ onNavigate }) {
                 onClick={() => onNavigate('auth')}
                 className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-white bg-[#009E4D] hover:bg-[#008741] shadow-lg shadow-emerald-900/15 transition"
               >
-                Book Motorbike Now
+                Book a Ride Now
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
@@ -229,11 +229,7 @@ export function LandingPage({ onNavigate }) {
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
                   >
-                    {bootstrap.zones.map((z) => (
-                      <option key={z.id} value={z.name}>
-                        {z.name} ({z.area_tag})
-                      </option>
-                    ))}
+                    <ZoneOptions zones={bootstrap.zones} />
                   </select>
                 </div>
 
@@ -248,11 +244,7 @@ export function LandingPage({ onNavigate }) {
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold focus:bg-white focus:outline-none focus:border-[#009E4D]"
                   >
-                    {bootstrap.zones.map((z) => (
-                      <option key={z.id} value={z.name}>
-                        {z.name} ({z.area_tag})
-                      </option>
-                    ))}
+                    <ZoneOptions zones={bootstrap.zones} />
                   </select>
                 </div>
 

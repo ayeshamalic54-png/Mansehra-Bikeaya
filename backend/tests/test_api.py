@@ -41,13 +41,22 @@ def test_health_and_bootstrap(client):
     boot = client.get("/api/public/bootstrap")
     assert boot.status_code == 200
     data = boot.json()
-    assert len(data["zones"]) >= 12
+    assert len(data["zones"]) >= 50
     assert len(data["pricing_rules"]) == 4
     rule_types = {r["service_type"] for r in data["pricing_rules"]}
     assert {"bike_ride", "car_ride", "parcel", "errand"}.issubset(rule_types)
     zone_names = " | ".join(z["name"] for z in data["zones"])
-    for city in ("Abbottabad", "Haripur", "Battagram", "Islamabad Airport"):
-        assert city in zone_names
+    for hub in (
+        "Abbottabad — Mandian / KKH",
+        "Abbottabad — Supply Bazar",
+        "Abbottabad — Jinnahabad",
+        "Mansehra — Kashmir Road",
+        "Mansehra — Balakot / Garhi Habibullah",
+        "Haripur",
+        "Battagram",
+        "Islamabad Airport",
+    ):
+        assert hub in zone_names
     assert len(data["releases"]) == 2
 
 
@@ -330,5 +339,19 @@ def test_car_ride_and_intercity_airport_estimate(client):
     assert data["estimated_fare"] > 5000.0
     assert data["estimated_commission"] > 0
     assert data["estimated_rider_earning"] > 0
+
+    # Local in-city Abbottabad ride has zero intercity surcharge bloat
+    atd_local = client.post(
+        "/api/public/estimate",
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Abbottabad — Mandian / KKH",
+            "drop_zone": "Abbottabad — Supply Bazar",
+            "distance_km": 4.0,
+        },
+    )
+    assert atd_local.status_code == 200
+    assert atd_local.json()["zone_surcharge"] == 0.0
+    assert atd_local.json()["estimated_fare"] == 160.0
 
 

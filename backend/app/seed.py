@@ -17,8 +17,9 @@ from app.services.finance import complete_booking_and_post_ledger, utcnow
 
 
 def seed_initial_data(db: Session) -> None:
-    # 1. City & Intercity Hubs / Zones (idempotent by zone name)
+    # 1. Full City & Intercity Hubs / Zones (idempotent by zone name)
     seed_zones = [
+        # --- Mansehra City Core & Tehsil ---
         MansehraZone(name="Main Bazar / Lari Adda", area_tag="City Core", approx_km_from_center=1.0, surcharge=0),
         MansehraZone(name="Abbottabad Road", area_tag="City Core", approx_km_from_center=2.5, surcharge=0),
         MansehraZone(name="Ghazikot Township", area_tag="Residential", approx_km_from_center=3.5, surcharge=0),
@@ -29,7 +30,46 @@ def seed_initial_data(db: Session) -> None:
         MansehraZone(name="King Abdullah Hospital", area_tag="Medical", approx_km_from_center=2.5, surcharge=0),
         MansehraZone(name="Hazara University (Dhodial)", area_tag="University", approx_km_from_center=11.0, surcharge=30),
         MansehraZone(name="Baffa Town", area_tag="Outer Town", approx_km_from_center=12.5, surcharge=40),
+        MansehraZone(name="Mansehra — Kashmir Road", area_tag="Mansehra Core", approx_km_from_center=2.0, surcharge=0),
+        MansehraZone(name="Mansehra — Zafar Road / Pehlwan Bagh", area_tag="Mansehra Core", approx_km_from_center=2.0, surcharge=0),
+        MansehraZone(name="Mansehra — Sabzi Mandi / GT Bypass", area_tag="Mansehra Commercial", approx_km_from_center=3.5, surcharge=0),
+        MansehraZone(name="Mansehra — Data Bypass / Chakal", area_tag="Mansehra Residential", approx_km_from_center=4.0, surcharge=0),
+        MansehraZone(name="Mansehra — Muftiabad / Shahrah-e-Resham", area_tag="Mansehra City", approx_km_from_center=2.5, surcharge=0),
+        MansehraZone(name="Mansehra — Nogazi / Bherkund Road", area_tag="Mansehra Suburb", approx_km_from_center=5.0, surcharge=10),
+        MansehraZone(name="Mansehra — Khaki Road / Kotli Bala", area_tag="Mansehra Suburb", approx_km_from_center=5.5, surcharge=15),
+        MansehraZone(name="Mansehra — Labarkot / Chakia", area_tag="Mansehra Residential", approx_km_from_center=4.5, surcharge=10),
+        MansehraZone(name="Mansehra — Dhangri / KKH", area_tag="Mansehra South", approx_km_from_center=6.0, surcharge=15),
+        MansehraZone(name="Mansehra — Safada / Atter Shisha", area_tag="Mansehra Route", approx_km_from_center=8.5, surcharge=25),
+        MansehraZone(name="Mansehra — Qalandarabad", area_tag="Mansehra Route", approx_km_from_center=12.0, surcharge=40),
+        MansehraZone(name="Mansehra — Shinkiari Town", area_tag="Mansehra Tehsil", approx_km_from_center=18.0, surcharge=60),
+        MansehraZone(name="Mansehra — Pakhal / Chattar Plain / Battal", area_tag="Mansehra North", approx_km_from_center=28.0, surcharge=90),
+        MansehraZone(name="Mansehra — Oghi / Susal Gali", area_tag="Mansehra Tehsil", approx_km_from_center=36.0, surcharge=120),
+        MansehraZone(name="Mansehra — Balakot / Garhi Habibullah", area_tag="Mansehra / Kaghan", approx_km_from_center=40.0, surcharge=150),
+        MansehraZone(name="Mansehra — Lassan Nawab", area_tag="Mansehra Tehsil", approx_km_from_center=16.0, surcharge=50),
+        # --- Abbottabad City, Cantt & Surrounding ---
         MansehraZone(name="Abbottabad (City / Fawara Chowk)", area_tag="Intercity Hub", approx_km_from_center=25.0, surcharge=100),
+        MansehraZone(name="Abbottabad — Main Bazar / Sabzi Mandi", area_tag="Abbottabad Core", approx_km_from_center=1.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Supply Bazar", area_tag="Abbottabad Core", approx_km_from_center=2.0, surcharge=0),
+        MansehraZone(name="Abbottabad — Cantt / Mall Road / Lady Garden", area_tag="Abbottabad Cantt", approx_km_from_center=2.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Mandian / KKH", area_tag="Abbottabad Commercial", approx_km_from_center=4.0, surcharge=0),
+        MansehraZone(name="Abbottabad — Ayub Medical Complex (AMC)", area_tag="Abbottabad Medical", approx_km_from_center=4.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Jinnahabad", area_tag="Abbottabad Residential", approx_km_from_center=5.0, surcharge=0),
+        MansehraZone(name="Abbottabad — PMA Kakul Road / Kakul", area_tag="Abbottabad Cantt / PMA", approx_km_from_center=6.0, surcharge=10),
+        MansehraZone(name="Abbottabad — Mirpur / Sarban", area_tag="Abbottabad Residential", approx_km_from_center=5.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Nawan Shehr", area_tag="Abbottabad East", approx_km_from_center=5.0, surcharge=0),
+        MansehraZone(name="Abbottabad — Kehal / Sarbhana Road", area_tag="Abbottabad Core", approx_km_from_center=2.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Malikpura / Habibullah Colony", area_tag="Abbottabad Residential", approx_km_from_center=3.0, surcharge=0),
+        MansehraZone(name="Abbottabad — Bilal Town / Salhad", area_tag="Abbottabad South", approx_km_from_center=5.5, surcharge=10),
+        MansehraZone(name="Abbottabad — COMSATS University / Tobe Camp", area_tag="Abbottabad Education", approx_km_from_center=7.0, surcharge=15),
+        MansehraZone(name="Abbottabad — Sethi Masjid / Eidgah Road", area_tag="Abbottabad Core", approx_km_from_center=2.0, surcharge=0),
+        MansehraZone(name="Abbottabad — Muslimabad / Banda Pir Khan", area_tag="Abbottabad North", approx_km_from_center=6.5, surcharge=10),
+        MansehraZone(name="Abbottabad — Sheikhulbandi", area_tag="Abbottabad Residential", approx_km_from_center=4.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Ilyasi Masjid / Thandiani Road", area_tag="Abbottabad Hills", approx_km_from_center=6.0, surcharge=15),
+        MansehraZone(name="Abbottabad — Shimla Hill / Pine View Road", area_tag="Abbottabad Hills", approx_km_from_center=3.5, surcharge=0),
+        MansehraZone(name="Abbottabad — Dhamtour / Murree Road", area_tag="Abbottabad East", approx_km_from_center=8.0, surcharge=20),
+        MansehraZone(name="Abbottabad — Havelian Town", area_tag="Abbottabad Tehsil", approx_km_from_center=15.0, surcharge=50),
+        MansehraZone(name="Abbottabad — Nathia Gali / Dunga Gali", area_tag="Galyat Hills", approx_km_from_center=34.0, surcharge=150),
+        # --- Other Intercity & Airport Hubs ---
         MansehraZone(name="Haripur (City / GT Road)", area_tag="Intercity Hub", approx_km_from_center=60.0, surcharge=200),
         MansehraZone(name="Battagram (City Center)", area_tag="Intercity Hub", approx_km_from_center=65.0, surcharge=250),
         MansehraZone(name="Islamabad Airport (New IIA)", area_tag="Airport Transfer", approx_km_from_center=125.0, surcharge=500),
