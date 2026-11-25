@@ -13,6 +13,7 @@ import {
   Package,
   Phone,
   Printer,
+  ShieldCheck,
   ShoppingBag,
   Star,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ export function CustomerApp({ onOpenDownloads }) {
   const [customerNotes, setCustomerNotes] = useState('');
 
   const [estimate, setEstimate] = useState(null);
+  const [offerFareInput, setOfferFareInput] = useState('');
   const [promoError, setPromoError] = useState('');
   const [bookings, setBookings] = useState([]);
   const [tickets, setTickets] = useState([]);
@@ -136,12 +138,13 @@ export function CustomerApp({ onOpenDownloads }) {
   useEffect(() => {
     loadBookings();
     loadTickets();
+    const hasSearching = bookings.some((b) => b.status === 'pending');
     const timer = setInterval(() => {
       loadBookings();
       loadTickets();
-    }, 6000);
+    }, hasSearching ? 3000 : 6000);
     return () => clearInterval(timer);
-  }, []);
+  }, [bookings.some((b) => b.status === 'pending')]);
 
   useEffect(() => {
     if (bootstrap.zones?.length >= 2) {
@@ -235,14 +238,16 @@ export function CustomerApp({ onOpenDownloads }) {
           receiver_phone: serviceType === 'parcel' ? receiverPhone || null : null,
           cod_amount: serviceType === 'parcel' ? Number(codAmount || 0) : 0,
           customer_notes: customerNotes || null,
+          offer_fare: offerFareInput !== '' ? Number(offerFareInput) : null,
         },
       });
-      setStatusMsg(`Booking ${created.booking_code} confirmed! Finding nearest SafarGo captain...`);
+      setStatusMsg(`Booking ${created.booking_code} broadcasted directly to nearby Captains (No Admin wait)!`);
       setPickupAddress('');
       setDropAddress('');
       setPaymentReference('');
       setPromoCode('');
       setCustomerNotes('');
+      setOfferFareInput('');
       await loadBookings();
       setTab('rides');
       setRideFilter('active');
@@ -250,6 +255,44 @@ export function CustomerApp({ onOpenDownloads }) {
       setErrMsg(err.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleRaiseFare = async (bookingId, newFare) => {
+    setErrMsg('');
+    try {
+      await apiRequest(`/api/bookings/${bookingId}/raise-fare`, {
+        method: 'POST',
+        body: { new_fare: Number(newFare) },
+      });
+      setStatusMsg(`Offer fare updated to Rs. ${newFare}!`);
+      await loadBookings();
+    } catch (err) {
+      setErrMsg(err.message);
+    }
+  };
+
+  const handleAcceptOffer = async (bookingId, offerId) => {
+    setErrMsg('');
+    try {
+      const updated = await apiRequest(`/api/bookings/${bookingId}/offers/${offerId}/accept`, {
+        method: 'POST',
+      });
+      setStatusMsg(`Captain ${updated.rider?.full_name} matched at Rs. ${updated.final_fare}!`);
+      await loadBookings();
+    } catch (err) {
+      setErrMsg(err.message);
+    }
+  };
+
+  const handleDeclineOffer = async (bookingId, offerId) => {
+    try {
+      await apiRequest(`/api/bookings/${bookingId}/offers/${offerId}/decline`, {
+        method: 'POST',
+      });
+      await loadBookings();
+    } catch (err) {
+      setErrMsg(err.message);
     }
   };
 
@@ -368,6 +411,10 @@ export function CustomerApp({ onOpenDownloads }) {
         )
       )
     : 160;
+
+  const suggestedFare = estimate?.estimated_fare ?? fallbackFare;
+  const minOfferFloor = Math.max(50, Math.round(suggestedFare * 0.5));
+  const activeOfferFare = offerFareInput !== '' ? Number(offerFareInput) : suggestedFare;
 
   return (
     <div className="min-h-screen pb-24">
@@ -586,41 +633,98 @@ export function CustomerApp({ onOpenDownloads }) {
               />
             </div>
 
-            {/* Fare & Submit Box */}
-            <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <div className="text-xs text-slate-400">
-                  {estimate?.discount_amount > 0 ? 'Total Net Fare (After Discount)' : 'Guaranteed Total Fare'}
-                </div>
-                {estimate?.discount_amount > 0 && (
-                  <div className="text-xs text-slate-400 line-through mono-num">
-                    Original: Rs. {(Number(estimate.estimated_fare) + Number(estimate.discount_amount)).toFixed(0)}
+            {/* InDrive Fare Offer & Submit Box */}
+            <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold mb-1.5">
+                    DIRECT CAPTAIN BROADCAST · NO ADMIN APPROVAL WAIT
                   </div>
-                )}
-                <div className="text-3xl font-extrabold mono-num text-[#009E4D]">
-                  Rs. {estimate?.estimated_fare ?? fallbackFare}
-                </div>
-                {estimate?.discount_amount > 0 && (
-                  <div className="text-xs text-emerald-300 font-bold">
-                    Discount Applied: -Rs. {estimate.discount_amount}
+                  <div className="text-xs text-slate-400">
+                    {estimate?.discount_amount > 0 ? 'Recommended Net Fare (After Discount)' : 'Recommended Tariff Fare'}
                   </div>
-                )}
-                <div className="text-[11px] text-slate-300 mt-0.5">
-                  Wait Policy: First {estimate?.wait_free_minutes ?? activeRule?.wait_free_minutes ?? 5} min free, then Rs.{' '}
-                  {estimate?.wait_charge_per_min ?? activeRule?.wait_charge_per_min ?? 10}/min
-                </div>
-                {estimate?.city_slab_applied && (
-                  <div className="text-[11px] text-emerald-300 font-semibold mt-0.5">
-                    Mansehra In-City Slab: Rs. {estimate.city_flat_fare} up to {estimate.city_flat_km} km, then Rs. {estimate.per_km_rate}/km
+                  {estimate?.discount_amount > 0 && (
+                    <div className="text-xs text-slate-400 line-through mono-num">
+                      Original: Rs. {(Number(estimate.estimated_fare) + Number(estimate.discount_amount)).toFixed(0)}
+                    </div>
+                  )}
+                  <div className="text-3xl font-extrabold mono-num text-[#009E4D]">
+                    Rs. {activeOfferFare}
                   </div>
-                )}
+                  {offerFareInput !== '' && Number(offerFareInput) !== suggestedFare && (
+                    <div className="text-[11px] text-amber-300 font-bold mono-num">
+                      Your InDrive Offer (Recommended: Rs. {suggestedFare})
+                    </div>
+                  )}
+                  <div className="text-[11px] text-slate-300 mt-0.5">
+                    Wait Policy: First {estimate?.wait_free_minutes ?? activeRule?.wait_free_minutes ?? 5} min free, then Rs.{' '}
+                    {estimate?.wait_charge_per_min ?? activeRule?.wait_charge_per_min ?? 10}/min
+                  </div>
+                  {estimate?.city_slab_applied && (
+                    <div className="text-[11px] text-emerald-300 font-semibold mt-0.5">
+                      Mansehra In-City Slab: Rs. {estimate.city_flat_fare} up to {estimate.city_flat_km} km, then Rs. {estimate.per_km_rate}/km
+                    </div>
+                  )}
+                </div>
+
+                {/* Offer Your Own Kiraya (InDrive Bargaining) */}
+                <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3 space-y-2 sm:w-64">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-200">Your Offer Fare (InDrive)</span>
+                    {offerFareInput !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setOfferFareInput('')}
+                        className="text-emerald-300 underline font-semibold"
+                      >
+                        Reset Rs.{suggestedFare}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setOfferFareInput(String(Math.max(minOfferFloor, activeOfferFare - 20)))}
+                      className="px-2.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-extrabold mono-num"
+                    >
+                      -20
+                    </button>
+                    <input
+                      type="number"
+                      min={minOfferFloor}
+                      max="200000"
+                      placeholder={String(suggestedFare)}
+                      value={offerFareInput}
+                      onChange={(e) => setOfferFareInput(e.target.value)}
+                      className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-600 text-white text-center font-extrabold mono-num text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setOfferFareInput(String(activeOfferFare + 20))}
+                      className="px-2.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-extrabold mono-num"
+                    >
+                      +20
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOfferFareInput(String(activeOfferFare + 50))}
+                      className="px-2.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-xs font-extrabold mono-num"
+                    >
+                      +50
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Min allowed: Rs. {minOfferFloor} · Captains can accept or send counter-offers
+                  </div>
+                </div>
               </div>
+
               <button
                 type="submit"
                 disabled={busy}
-                className="px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-[#009E4D] hover:bg-[#008741] text-white shadow-lg transition disabled:opacity-60"
+                className="w-full px-6 py-3.5 rounded-2xl text-sm font-extrabold bg-[#009E4D] hover:bg-[#008741] text-white shadow-lg transition disabled:opacity-60"
               >
-                {busy ? 'Dispatching...' : 'Confirm & Book Now'}
+                {busy ? 'Broadcasting to Nearby Captains...' : `Find ${serviceType === 'car_ride' ? 'AC Car' : 'Captain'} · Rs. ${activeOfferFare}`}
               </button>
             </div>
           </form>
@@ -706,18 +810,45 @@ export function CustomerApp({ onOpenDownloads }) {
                       />
                     )}
 
-                  {/* Assigned Captain Box */}
+                  {/* Assigned Captain Box OR Direct InDrive Captain Offers */}
                   {b.rider ? (
-                    <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between gap-2">
-                      <div>
-                        <div className="font-bold text-slate-900 text-sm">{b.rider.full_name}</div>
-                        <div className="text-slate-500 mono-num">
-                          {b.rider.bike_model} · {b.rider.bike_plate} · ★ {b.rider.rating_avg}
+                    <div className="p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {b.rider.rider_photo ? (
+                          <img
+                            src={b.rider.rider_photo}
+                            alt={b.rider.full_name}
+                            className="w-12 h-12 rounded-full object-cover border-2 border-[#009E4D] shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-emerald-100 text-[#008741] font-extrabold text-base flex items-center justify-center shrink-0">
+                            {(b.rider.full_name || 'C')[0]}
+                          </div>
+                        )}
+                        {b.rider.vehicle_photo && (
+                          <img
+                            src={b.rider.vehicle_photo}
+                            alt={b.rider.bike_model}
+                            className="w-14 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                        )}
+                        <div>
+                          <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                            <span>{b.rider.full_name}</span>
+                            {b.rider.is_verified && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-100 text-[#008741] text-[10px] font-extrabold">
+                                <ShieldCheck className="w-3 h-3" /> Verified
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-slate-600 mono-num">
+                            {b.rider.vehicle_type === 'car' ? 'AC Car' : 'Bike'}: {b.rider.bike_model} · {b.rider.bike_plate} · ★ {b.rider.rating_avg}
+                          </div>
                         </div>
                       </div>
                       <a
                         href={`tel:${b.rider.phone}`}
-                        className="px-3 py-2 rounded-xl bg-[#009E4D] text-white font-bold inline-flex items-center gap-1"
+                        className="px-3.5 py-2 rounded-xl bg-[#009E4D] text-white font-bold inline-flex items-center gap-1"
                       >
                         <Phone className="w-3.5 h-3.5" />
                         Call
@@ -725,9 +856,97 @@ export function CustomerApp({ onOpenDownloads }) {
                     </div>
                   ) : (
                     b.status === 'pending' && (
-                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-semibold flex items-center gap-2">
-                        <Clock className="w-4 h-4 animate-spin" />
-                        Broadcasting to nearby Bike &amp; Car captains...
+                      <div className="space-y-2.5">
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 font-bold">
+                            <Clock className="w-4 h-4 text-[#009E4D] animate-spin shrink-0" />
+                            <span>
+                              Searching {b.service_type === 'car_ride' ? 'AC Car' : 'Bike & Courier'} Captains directly (No Admin delay)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {[20, 50, 100].map((inc) => (
+                              <button
+                                key={inc}
+                                type="button"
+                                onClick={() => handleRaiseFare(b.id, Number(b.final_fare) + inc)}
+                                className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-[#008741] font-extrabold mono-num hover:bg-emerald-100"
+                              >
+                                Raise +Rs.{inc}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {(() => {
+                          const pendingOffers = (b.offers || []).filter((o) => o.status === 'pending');
+                          if (pendingOffers.length === 0) return null;
+                          return (
+                            <div className="space-y-2">
+                              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">
+                                Incoming Captain Offers ({pendingOffers.length}) — Choose Your Captain:
+                              </div>
+                              {pendingOffers.map((o) => (
+                                <div
+                                  key={o.id}
+                                  className="p-3 rounded-2xl bg-white border-2 border-[#009E4D]/60 shadow-xs flex flex-wrap items-center justify-between gap-3"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    {o.rider?.rider_photo ? (
+                                      <img
+                                        src={o.rider.rider_photo}
+                                        alt={o.rider.full_name}
+                                        className="w-11 h-11 rounded-full object-cover border-2 border-[#009E4D]"
+                                      />
+                                    ) : (
+                                      <div className="w-11 h-11 rounded-full bg-emerald-100 text-[#008741] font-extrabold flex items-center justify-center">
+                                        {(o.rider?.full_name || 'C')[0]}
+                                      </div>
+                                    )}
+                                    {o.rider?.vehicle_photo && (
+                                      <img
+                                        src={o.rider.vehicle_photo}
+                                        alt={o.rider.bike_model}
+                                        className="w-12 h-10 rounded-lg object-cover border border-slate-200"
+                                      />
+                                    )}
+                                    <div>
+                                      <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                        <span>{o.rider?.full_name}</span>
+                                        {o.rider?.is_verified && (
+                                          <ShieldCheck className="w-3.5 h-3.5 text-[#009E4D]" />
+                                        )}
+                                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold">
+                                          ~{o.eta_minutes} min away
+                                        </span>
+                                      </div>
+                                      <div className="text-slate-500 mono-num text-[11px]">
+                                        {o.rider?.vehicle_type === 'car' ? 'AC Car' : 'Bike'}: {o.rider?.bike_model} ({o.rider?.bike_plate}) · ★ {o.rider?.rating_avg} · {o.rider?.total_trips} trips
+                                      </div>
+                                      {o.note && <div className="text-[11px] text-teal-800 font-semibold mt-0.5">“{o.note}”</div>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeclineOffer(b.id, o.id)}
+                                      className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-rose-50 hover:text-rose-600"
+                                    >
+                                      Decline
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAcceptOffer(b.id, o.id)}
+                                      className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold mono-num shadow-sm"
+                                    >
+                                      Accept Rs. {o.offered_fare}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )
                   )}

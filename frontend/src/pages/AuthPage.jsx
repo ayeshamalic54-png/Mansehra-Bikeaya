@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Bike, KeyRound, ShieldCheck, UserPlus } from 'lucide-react';
+import { ArrowLeft, Bike, Car, KeyRound, ShieldCheck, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { CaptainPhotoUploads } from '../components/CaptainPhotoUploads';
 
 export function AuthPage({ onNavigate }) {
   const { login, register, bootstrap } = useAuth();
@@ -18,8 +19,19 @@ export function AuthPage({ onNavigate }) {
   const [bikePlate, setBikePlate] = useState('');
   const [licenseNo, setLicenseNo] = useState('');
   const [zoneName, setZoneName] = useState('Main Bazar / Lari Adda');
+  const [photos, setPhotos] = useState({
+    rider_photo: '',
+    vehicle_photo: '',
+    cnic_front_photo: '',
+    cnic_back_photo: '',
+  });
+  const [showDocUpload, setShowDocUpload] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const handlePhotoChange = (key, dataUrl) => {
+    setPhotos((prev) => ({ ...prev, [key]: dataUrl }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,6 +53,10 @@ export function AuthPage({ onNavigate }) {
           bike_plate: role === 'rider' ? bikePlate : null,
           license_no: role === 'rider' ? licenseNo : null,
           zone_name: role === 'rider' ? zoneName : null,
+          rider_photo: role === 'rider' && photos.rider_photo ? photos.rider_photo : null,
+          vehicle_photo: role === 'rider' && photos.vehicle_photo ? photos.vehicle_photo : null,
+          cnic_front_photo: role === 'rider' && photos.cnic_front_photo ? photos.cnic_front_photo : null,
+          cnic_back_photo: role === 'rider' && photos.cnic_back_photo ? photos.cnic_back_photo : null,
         });
       }
     } catch (err) {
@@ -55,7 +71,7 @@ export function AuthPage({ onNavigate }) {
       {/* Structured Top Header */}
       <header className="sticky top-0 z-20 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <BrandLogo subtitle="Bike · Car · Parcel Portal" />
+          <BrandLogo subtitle="Bike · AC Car · Parcel Portal" />
           <button
             onClick={() => onNavigate('landing')}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200/80 transition"
@@ -68,18 +84,17 @@ export function AuthPage({ onNavigate }) {
 
       {/* Main Centered Auth Card */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md card-elevated rounded-3xl overflow-hidden">
-          {/* Refined Slate-Emerald Card Header */}
+        <div className={`w-full ${mode === 'register' && role === 'rider' ? 'max-w-xl' : 'max-w-md'} card-elevated rounded-3xl overflow-hidden transition-all`}>
           <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950 px-6 py-5 text-white">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 text-emerald-300 text-[11px] font-semibold mb-2">
               <ShieldCheck className="w-3.5 h-3.5" />
-              Secure Account Access
+              SafarGo Secure Account Access
             </div>
             <h1 className="text-lg font-extrabold tracking-tight">
-              {mode === 'login' ? 'Sign In to Your Portal' : 'Create Your Account'}
+              {mode === 'login' ? 'Sign In to Your Portal' : 'Create Your SafarGo Account'}
             </h1>
             <p className="text-xs text-slate-300 mt-0.5">
-              Passengers, Bike &amp; Car Captains &amp; Admin access from one place.
+              Passengers, Bike &amp; AC Car Captains &amp; Admin access from one place.
             </p>
           </div>
 
@@ -170,7 +185,8 @@ export function AuthPage({ onNavigate }) {
                       }`}
                     >
                       <Bike className="w-3.5 h-3.5" />
-                      Ride Captain
+                      <Car className="w-3.5 h-3.5" />
+                      Bike / Car Captain
                     </button>
                   </div>
 
@@ -212,29 +228,39 @@ export function AuthPage({ onNavigate }) {
                   </div>
 
                   {role === 'rider' && (
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="font-bold text-teal-800">Captain Vehicle Details</div>
-                        <div className="inline-flex rounded-lg bg-white border border-slate-200 p-0.5 text-[11px] font-bold">
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-bold text-teal-800">Captain Vehicle &amp; CNIC Details</div>
+                        <div className="inline-flex rounded-xl bg-white border border-slate-200 p-0.5 text-[11px] font-bold">
                           <button
                             type="button"
                             onClick={() => {
                               setVehicleType('bike');
-                              if (bikeModel === 'Suzuki Alto') setBikeModel('Honda CD-70');
+                              if (bikeModel === 'Suzuki Alto' || bikeModel === 'Toyota Corolla') {
+                                setBikeModel('Honda CD-70');
+                              }
                             }}
-                            className={`px-2.5 py-1 rounded-md ${vehicleType === 'bike' ? 'bg-[#009E4D] text-white' : 'text-slate-600'}`}
+                            className={`px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
+                              vehicleType === 'bike' ? 'bg-[#009E4D] text-white' : 'text-slate-600'
+                            }`}
                           >
+                            <Bike className="w-3.5 h-3.5" />
                             Motorbike
                           </button>
                           <button
                             type="button"
                             onClick={() => {
                               setVehicleType('car');
-                              if (bikeModel === 'Honda CD-70') setBikeModel('Suzuki Alto');
+                              if (bikeModel === 'Honda CD-70' || bikeModel === 'Honda CG-125') {
+                                setBikeModel('Suzuki Alto');
+                              }
                             }}
-                            className={`px-2.5 py-1 rounded-md ${vehicleType === 'car' ? 'bg-[#009E4D] text-white' : 'text-slate-600'}`}
+                            className={`px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
+                              vehicleType === 'car' ? 'bg-[#009E4D] text-white' : 'text-slate-600'
+                            }`}
                           >
-                            Car
+                            <Car className="w-3.5 h-3.5" />
+                            AC Car
                           </button>
                         </div>
                       </div>
@@ -242,7 +268,7 @@ export function AuthPage({ onNavigate }) {
                         <input
                           type="text"
                           required
-                          placeholder="Vehicle (CD-70 / Alto / Corolla)"
+                          placeholder={vehicleType === 'car' ? 'Car Model (Alto / Corolla / Vitz)' : 'Bike Model (CD-70 / CG-125)'}
                           value={bikeModel}
                           onChange={(e) => setBikeModel(e.target.value)}
                           className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
@@ -250,10 +276,10 @@ export function AuthPage({ onNavigate }) {
                         <input
                           type="text"
                           required
-                          placeholder="Plate (MNA-1234)"
+                          placeholder={vehicleType === 'car' ? 'Car Plate (MNC-2040)' : 'Bike Plate (MNA-1234)'}
                           value={bikePlate}
                           onChange={(e) => setBikePlate(e.target.value)}
-                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
+                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white uppercase"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -266,7 +292,7 @@ export function AuthPage({ onNavigate }) {
                         />
                         <input
                           type="text"
-                          placeholder="License #"
+                          placeholder="Driving License #"
                           value={licenseNo}
                           onChange={(e) => setLicenseNo(e.target.value)}
                           className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
@@ -279,10 +305,33 @@ export function AuthPage({ onNavigate }) {
                       >
                         {bootstrap.zones.map((z) => (
                           <option key={z.id} value={z.name}>
-                            Primary Zone: {z.name}
+                            Primary Hub: {z.name}
                           </option>
                         ))}
                       </select>
+
+                      <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900">
+                            Verification Photos ({vehicleType === 'car' ? 'Car Captain' : 'Bike Captain'})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowDocUpload((v) => !v)}
+                            className="text-[11px] font-bold text-[#009E4D] underline"
+                          >
+                            {showDocUpload ? 'Upload Later in Profile' : 'Show Photo Uploads'}
+                          </button>
+                        </div>
+                        {showDocUpload && (
+                          <CaptainPhotoUploads
+                            vehicleType={vehicleType}
+                            photos={photos}
+                            onChangePhoto={handlePhotoChange}
+                            compact={true}
+                          />
+                        )}
+                      </div>
                     </div>
                   )}
                 </>

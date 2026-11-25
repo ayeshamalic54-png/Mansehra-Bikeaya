@@ -1,12 +1,97 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#00B259"/>
-      <stop offset="0.55" stop-color="#00964A"/>
-      <stop offset="1" stop-color="#006B35"/>
+    <linearGradient id="sgBg" x1="20" y1="16" x2="492" y2="496" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D96C"/>
+      <stop offset="52%" stop-color="#009547"/>
+      <stop offset="100%" stop-color="#043A22"/>
+    </linearGradient>
+    <radialGradient id="sgHalo" cx="50%" cy="32%" r="58%">
+      <stop offset="0%" stop-color="#FEF08A" stop-opacity="0.34"/>
+      <stop offset="55%" stop-color="#34D399" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sgGold" x1="150" y1="44" x2="380" y2="175" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="55%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#EA580C"/>
+    </linearGradient>
+    <linearGradient id="sgMetal" x1="70" y1="215" x2="440" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="sgVisor" x1="100" y1="220" x2="260" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#065F46"/>
+    </linearGradient>
+    <linearGradient id="sgRoad" x1="40" y1="395" x2="472" y2="445" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#022C22" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0F172A" stop-opacity="0.95"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <path d="M14 17H25L38 32L25 47H14L27 32L14 17Z" fill="#FFFFFF"/>
-  <path d="M31 17H39L52 32L39 47H31L44 32L31 17Z" fill="#A7F3D0"/>
+
+  <!-- Rounded Luxury Icon Canvas -->
+  <rect width="512" height="512" rx="116" fill="url(#sgBg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#sgHalo)"/>
+  <rect x="12" y="12" width="488" height="488" rx="106" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="4"/>
+
+  <!-- Iconic Top SafarGo Speed Crest (GPS Ring + Dual Motion Chevrons) -->
+  <circle cx="256" cy="116" r="64" fill="#042F1E" fill-opacity="0.45" stroke="url(#sgGold)" stroke-width="5"/>
+  <path d="M210 82H244L276 116L244 150H210L242 116L210 82Z" fill="#FFFFFF"/>
+  <path d="M258 82H290L322 116L290 150H258L290 116L258 82Z" fill="url(#sgGold)"/>
+  <!-- Lateral Speed Accent Wings -->
+  <path d="M68 134 C112 106, 152 98, 178 102" stroke="#FDE047" stroke-width="7" stroke-linecap="round" opacity="0.88"/>
+  <path d="M444 134 C400 106, 360 98, 334 102" stroke="#FDE047" stroke-width="7" stroke-linecap="round" opacity="0.88"/>
+
+  <!-- Express Highway Platform -->
+  <path d="M44 416 Q256 374 468 416 L450 452 Q256 416 62 452 Z" fill="url(#sgRoad)"/>
+  <path d="M104 426 Q256 398 408 426" stroke="#FBBF24" stroke-width="6" stroke-dasharray="28 18" stroke-linecap="round"/>
+
+  <!-- LEFT / CENTER: Executive Modern Sedan Car -->
+  <g>
+    <ellipse cx="176" cy="398" rx="110" ry="13" fill="#020617" opacity="0.5"/>
+    <rect x="74" y="346" width="34" height="46" rx="10" fill="#0F172A"/>
+    <rect x="242" y="346" width="34" height="46" rx="10" fill="#0F172A"/>
+    <!-- Sleek Fastback Roof -->
+    <path d="M98 278 C112 232, 138 214, 175 214 C212 214, 238 232, 252 278 Z" fill="url(#sgMetal)"/>
+    <path d="M114 274 C124 242, 144 228, 175 228 C206 228, 226 242, 236 274 Z" fill="url(#sgVisor)"/>
+    <path d="M126 268 L142 234 L158 234 L142 268 Z" fill="#FFFFFF" opacity="0.25"/>
+    <!-- Side Mirrors -->
+    <rect x="64" y="266" width="24" height="14" rx="6" fill="#FFFFFF"/>
+    <rect x="262" y="266" width="24" height="14" rx="6" fill="#FFFFFF"/>
+    <!-- Hood & Bumper -->
+    <path d="M68 308 C68 282, 86 270, 114 270 H236 C264 270, 282 282, 282 308 V352 C282 364, 272 370, 258 370 H92 C78 370, 68 364, 68 352 Z" fill="url(#sgMetal)"/>
+    <path d="M120 278 L130 304 M230 278 L220 304" stroke="#10B981" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+    <!-- Sport Grille -->
+    <rect x="132" y="316" width="86" height="28" rx="10" fill="#0F172A"/>
+    <path d="M144 326 H206 M148 335 H202" stroke="#34D399" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- Sharp LED Headlights -->
+    <path d="M76 306 L116 314 L110 330 L76 324 Z" fill="#FDE047"/>
+    <path d="M274 306 L234 314 L240 330 L274 324 Z" fill="#FDE047"/>
+    <rect x="152" y="352" width="46" height="9" rx="4" fill="#009E4D"/>
+  </g>
+
+  <!-- RIGHT: Sleek Aerodynamic Sport Motorbike (Side-Profile Facing Right) -->
+  <g>
+    <ellipse cx="364" cy="400" rx="88" ry="12" fill="#020617" opacity="0.55"/>
+    <!-- Rear & Front Alloy Wheels -->
+    <circle cx="302" cy="364" r="36" fill="#0F172A" stroke="#FFFFFF" stroke-width="6"/>
+    <circle cx="302" cy="364" r="16" fill="#34D399"/>
+    <circle cx="302" cy="364" r="6" fill="#FFFFFF"/>
+    <circle cx="422" cy="364" r="36" fill="#0F172A" stroke="#FFFFFF" stroke-width="6"/>
+    <circle cx="422" cy="364" r="16" fill="#34D399"/>
+    <circle cx="422" cy="364" r="6" fill="#FFFFFF"/>
+    <!-- Bike Tail Cowl + Gold Express Accent -->
+    <path d="M266 296 L318 292 L342 314 L288 318 Z" fill="#0F172A" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>
+    <!-- Swingarm & Engine Block -->
+    <path d="M302 364 L340 318 L392 318 L374 364 Z" fill="#0F172A" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Sculpted Tank + Front Fairing + Windscreen -->
+    <path d="M332 292 C350 264, 384 264, 408 282 L434 302 L396 322 L340 314 Z" fill="url(#sgMetal)"/>
+    <path d="M374 266 L396 244 L414 266 L392 276 Z" fill="url(#sgVisor)" stroke="#FFFFFF" stroke-width="3"/>
+    <!-- Sport Stripe & Handlebar -->
+    <path d="M342 296 C362 282, 384 282, 402 294" stroke="#F59E0B" stroke-width="6" stroke-linecap="round"/>
+    <!-- Front Telescopic Fork -->
+    <path d="M394 274 L422 364" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+    <!-- Sharp LED Headlight Beam -->
+    <path d="M416 286 L442 294 L428 310 L408 300 Z" fill="#FDE047"/>
+  </g>
 </svg>

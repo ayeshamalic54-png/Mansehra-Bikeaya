@@ -18,7 +18,7 @@ from app.models import (
     SystemSetting,
     User,
 )
-from app.routers.bookings_router import generate_booking_code, serialize_booking
+from app.routers.bookings_router import booking_query_with_relations, generate_booking_code, serialize_booking
 from app.schemas import (
     AdminBookingUpdate,
     AdminCreateRider,
@@ -52,6 +52,10 @@ from app.services.finance import (
 router = APIRouter(prefix="/api/admin", tags=["Admin Command Center"])
 
 
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 @router.get("/overview")
 def admin_overview(
     current_user: User = Depends(require_roles("admin")),
@@ -61,7 +65,7 @@ def admin_overview(
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     all_bookings = db.query(Booking).all()
-    today_bookings = [b for b in all_bookings if b.created_at >= today_start]
+    today_bookings = [b for b in all_bookings if _as_utc(b.created_at) >= today_start]
     completed_all = [b for b in all_bookings if b.status == "completed"]
     completed_today = [b for b in today_bookings if b.status == "completed"]
 
@@ -133,10 +137,7 @@ def list_all_bookings(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Booking).options(
-        joinedload(Booking.customer),
-        joinedload(Booking.rider).joinedload(User.rider_profile),
-    )
+    q = booking_query_with_relations(db)
     if status_filter:
         q = q.filter(Booking.status == status_filter)
     if service_type:
@@ -500,8 +501,15 @@ def list_riders(
 
     out = []
     for u in riders:
+        rp = u.rider_profile
         r_trips = trips_by_rider.get(u.id, [])
         completed_km = round(sum(float(b.distance_km or 0.0) for b in r_trips if b.status == "completed"), 1)
+        has_docs = bool(rp and rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
+        v_status = (getattr(rp, "verification_status", None) if rp else None) or (
+            "verified" if (rp and rp.is_verified) else ("pending" if has_docs else "incomplete")
+        )
+        if rp and rp.is_verified:
+            v_status = "verified"
         out.append(
             {
                 "id": u.id,
@@ -509,22 +517,30 @@ def list_riders(
                 "phone": u.phone,
                 "is_active": u.is_active,
                 "created_at": u.created_at,
-                "cnic_number": u.rider_profile.cnic_number if u.rider_profile else None,
-                "vehicle_type": u.rider_profile.vehicle_type if u.rider_profile else "bike",
-                "bike_model": u.rider_profile.bike_model if u.rider_profile else None,
-                "bike_plate": u.rider_profile.bike_plate if u.rider_profile else None,
-                "license_no": u.rider_profile.license_no if u.rider_profile else None,
-                "zone_name": u.rider_profile.zone_name if u.rider_profile else None,
-                "current_lat": u.rider_profile.current_lat if u.rider_profile else None,
-                "current_lng": u.rider_profile.current_lng if u.rider_profile else None,
-                "location_updated_at": u.rider_profile.location_updated_at if u.rider_profile else None,
-                "is_verified": u.rider_profile.is_verified if u.rider_profile else False,
-                "is_online": u.rider_profile.is_online if u.rider_profile else False,
-                "credit_limit": u.rider_profile.credit_limit if u.rider_profile else 1500.0,
-                "balance_due_to_admin": u.rider_profile.balance_due_to_admin if u.rider_profile else 0.0,
-                "custom_commission_type": u.rider_profile.custom_commission_type if u.rider_profile else None,
-                "custom_commission_value": u.rider_profile.custom_commission_value if u.rider_profile else None,
-                "total_trips": u.rider_profile.total_trips if u.rider_profile else 0,
+                "cnic_number": rp.cnic_number if rp else None,
+                "vehicle_type": rp.vehicle_type if rp else "bike",
+                "bike_model": rp.bike_model if rp else None,
+                "bike_plate": rp.bike_plate if rp else None,
+                "license_no": rp.license_no if rp else None,
+                "zone_name": rp.zone_name if rp else None,
+                "current_lat": rp.current_lat if rp else None,
+                "current_lng": rp.current_lng if rp else None,
+                "location_updated_at": rp.location_updated_at if rp else None,
+                "is_verified": rp.is_verified if rp else False,
+                "verification_status": v_status,
+                "verification_note": getattr(rp, "verification_note", None) if rp else None,
+                "docs_submitted_at": getattr(rp, "docs_submitted_at", None) if rp else None,
+                "has_required_docs": has_docs,
+                "rider_photo": getattr(rp, "rider_photo", None) if rp else None,
+                "vehicle_photo": getattr(rp, "vehicle_photo", None) if rp else None,
+                "cnic_front_photo": getattr(rp, "cnic_front_photo", None) if rp else None,
+                "cnic_back_photo": getattr(rp, "cnic_back_photo", None) if rp else None,
+                "is_online": rp.is_online if rp else False,
+                "credit_limit": rp.credit_limit if rp else 1500.0,
+                "balance_due_to_admin": rp.balance_due_to_admin if rp else 0.0,
+                "custom_commission_type": rp.custom_commission_type if rp else None,
+                "custom_commission_value": rp.custom_commission_value if rp else None,
+                "total_trips": rp.total_trips if rp else 0,
                 "total_distance_km": completed_km,
                 "recent_trips": [
                     {
@@ -542,11 +558,11 @@ def list_riders(
                     }
                     for b in r_trips[:20]
                 ],
-                "total_gross_collected": u.rider_profile.total_gross_collected if u.rider_profile else 0.0,
-                "total_net_earned": u.rider_profile.total_net_earned if u.rider_profile else 0.0,
-                "total_commission_generated": u.rider_profile.total_commission_generated if u.rider_profile else 0.0,
-                "total_settled_to_admin": u.rider_profile.total_settled_to_admin if u.rider_profile else 0.0,
-                "rating_avg": u.rider_profile.rating_avg if u.rider_profile else 5.0,
+                "total_gross_collected": rp.total_gross_collected if rp else 0.0,
+                "total_net_earned": rp.total_net_earned if rp else 0.0,
+                "total_commission_generated": rp.total_commission_generated if rp else 0.0,
+                "total_settled_to_admin": rp.total_settled_to_admin if rp else 0.0,
+                "rating_avg": rp.rating_avg if rp else 5.0,
             }
         )
     return out
@@ -588,6 +604,7 @@ def admin_create_rider(
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
         is_verified=payload.is_verified,
+        verification_status="verified" if payload.is_verified else "incomplete",
         is_online=False,
     )
     db.add(rp)
@@ -623,8 +640,29 @@ def update_rider_config(
         rp.bike_plate = payload.bike_plate.strip().upper()
     if payload.license_no is not None:
         rp.license_no = payload.license_no
+    if payload.verification_note is not None:
+        rp.verification_note = payload.verification_note.strip() or None
+    for p_field in ("rider_photo", "vehicle_photo", "cnic_front_photo", "cnic_back_photo"):
+        pval = getattr(payload, p_field, None)
+        if pval is not None:
+            setattr(rp, p_field, pval.strip() or None)
+    if payload.verification_status is not None:
+        rp.verification_status = payload.verification_status
+        if payload.verification_status == "verified":
+            rp.is_verified = True
+            rp.verification_note = None
+        elif payload.verification_status == "rejected":
+            rp.is_verified = False
+            rp.is_online = False
     if payload.is_verified is not None:
         rp.is_verified = payload.is_verified
+        if payload.is_verified:
+            rp.verification_status = "verified"
+            rp.verification_note = None
+        else:
+            rp.is_online = False
+            if rp.verification_status == "verified":
+                rp.verification_status = "rejected" if payload.verification_note else "pending"
     if payload.is_active is not None:
         user.is_active = payload.is_active
         if not payload.is_active:

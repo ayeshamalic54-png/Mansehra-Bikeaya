@@ -228,46 +228,46 @@ def seed_initial_data(db: Session) -> None:
         )
 
     # 5. App Releases (Download Center entries)
-    apk_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.0.0/MansehraBikeaya.apk"
-    exe_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.0.0/MansehraBikeayaDesk.exe"
+    apk_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.1.0/SafarGo.apk"
+    exe_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.1.0/SafarGoDesk.exe"
     if db.query(AppRelease).count() == 0:
         db.add_all(
             [
                 AppRelease(
                     platform="android_apk",
-                    version="1.0.0",
-                    file_name="MansehraBikeaya.apk",
+                    version="1.1.0",
+                    file_name="SafarGo.apk",
                     download_url=apk_url,
-                    file_size_mb=4.8,
-                    release_notes="Official Android app (.apk) for Customers, Motorbike Captains & Admin connected to live Mansehra Bikeaya.",
+                    file_size_mb=4.9,
+                    release_notes="Official SafarGo Android app (.apk) for Customers, Bike & Car Captains connected live.",
                     is_latest=True,
                 ),
                 AppRelease(
                     platform="windows_exe",
-                    version="1.0.0",
-                    file_name="MansehraBikeayaDesk.exe",
+                    version="1.1.0",
+                    file_name="SafarGoDesk.exe",
                     download_url=exe_url,
                     file_size_mb=16.0,
-                    release_notes="Standalone Windows Desktop app (.exe) for Mansehra Bikeaya Admin Dispatch, Settlements & P&L Reports.",
+                    release_notes="Standalone Windows Desktop app (.exe) for SafarGo Admin Dispatch, Settlements & P&L Reports.",
                     is_latest=True,
                 ),
             ]
         )
     else:
         for rel in db.query(AppRelease).all():
-            if rel.download_url.startswith("#"):
+            if rel.download_url.startswith("#") or rel.version != "1.1.0" or rel.file_name in ("MansehraBikeaya.apk", "MansehraBikeayaDesk.exe"):
                 if rel.platform == "android_apk":
-                    rel.version = "1.0.0"
-                    rel.file_name = "MansehraBikeaya.apk"
+                    rel.version = "1.1.0"
+                    rel.file_name = "SafarGo.apk"
                     rel.download_url = apk_url
-                    rel.file_size_mb = 4.8
-                    rel.release_notes = "Official Android app (.apk) for Customers, Motorbike Captains & Admin connected to live Mansehra Bikeaya."
+                    rel.file_size_mb = 4.9
+                    rel.release_notes = "Official SafarGo Android app (.apk) for Customers, Bike & Car Captains connected live."
                 elif rel.platform == "windows_exe":
-                    rel.version = "1.0.0"
-                    rel.file_name = "MansehraBikeayaDesk.exe"
+                    rel.version = "1.1.0"
+                    rel.file_name = "SafarGoDesk.exe"
                     rel.download_url = exe_url
                     rel.file_size_mb = 16.0
-                    rel.release_notes = "Standalone Windows Desktop app (.exe) for Mansehra Bikeaya Admin Dispatch, Settlements & P&L Reports."
+                    rel.release_notes = "Standalone Windows Desktop app (.exe) for SafarGo Admin Dispatch, Settlements & P&L Reports."
 
     db.commit()
 
@@ -323,6 +323,7 @@ def seed_initial_data(db: Session) -> None:
             current_lng=73.1938,
             location_updated_at=utcnow(),
             is_verified=True,
+            verification_status="verified",
             is_online=True,
             credit_limit=1500.0,
         )
@@ -353,8 +354,40 @@ def seed_initial_data(db: Session) -> None:
             current_lng=73.2022,
             location_updated_at=utcnow(),
             is_verified=True,
+            verification_status="verified",
             is_online=True,
             credit_limit=1500.0,
+        )
+    )
+    db.commit()
+
+    rider3 = User(
+        full_name="Bilawal Tariq",
+        phone="03145555555",
+        email="bilawal.car@safargo.pk",
+        password_hash=hash_password("rider123"),
+        role="rider",
+        is_active=True,
+    )
+    db.add(rider3)
+    db.commit()
+    db.refresh(rider3)
+    db.add(
+        RiderProfile(
+            user_id=rider3.id,
+            cnic_number="13503-7744210-5",
+            vehicle_type="car",
+            bike_model="Suzuki Alto VXR (AC)",
+            bike_plate="MNC-2040",
+            license_no="MNS-DL-4810",
+            zone_name="Mansehra — Punjab Chowk",
+            current_lat=34.3289,
+            current_lng=73.1892,
+            location_updated_at=utcnow(),
+            is_verified=True,
+            verification_status="verified",
+            is_online=True,
+            credit_limit=3000.0,
         )
     )
     db.commit()

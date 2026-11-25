@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bike,
+  Car,
   CheckCircle2,
   Download,
   LocateFixed,
@@ -9,11 +10,13 @@ import {
   MapPin,
   Phone,
   Power,
+  ShieldCheck,
   User,
   Wallet,
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { CaptainPhotoUploads } from '../components/CaptainPhotoUploads';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
@@ -36,17 +39,51 @@ export function RiderApp({ onOpenDownloads }) {
     note: '',
   });
   const [waitDrafts, setWaitDrafts] = useState({});
+  const [offerDrafts, setOfferDrafts] = useState({}); // { [bookingId]: { fare, eta, note } }
+  const [includeOtherVehicles, setIncludeOtherVehicles] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    full_name: user?.full_name || '',
+    vehicle_type: user?.rider_profile?.vehicle_type || 'bike',
+    bike_model: user?.rider_profile?.bike_model || '',
+    bike_plate: user?.rider_profile?.bike_plate || '',
+    cnic_number: user?.rider_profile?.cnic_number || '',
+    license_no: user?.rider_profile?.license_no || '',
+    zone_name: user?.rider_profile?.zone_name || 'Main Bazar / Lari Adda',
+    rider_photo: user?.rider_profile?.rider_photo || '',
+    vehicle_photo: user?.rider_profile?.vehicle_photo || '',
+    cnic_front_photo: user?.rider_profile?.cnic_front_photo || '',
+    cnic_back_photo: user?.rider_profile?.cnic_back_photo || '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [gpsBanner, setGpsBanner] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
   const rp = user?.rider_profile;
+  const isCarCaptain = (rp?.vehicle_type || 'bike') === 'car';
 
-  const loadAll = async () => {
+  useEffect(() => {
+    if (!user) return;
+    setProfileForm({
+      full_name: user.full_name || '',
+      vehicle_type: user.rider_profile?.vehicle_type || 'bike',
+      bike_model: user.rider_profile?.bike_model || '',
+      bike_plate: user.rider_profile?.bike_plate || '',
+      cnic_number: user.rider_profile?.cnic_number || '',
+      license_no: user.rider_profile?.license_no || '',
+      zone_name: user.rider_profile?.zone_name || 'Main Bazar / Lari Adda',
+      rider_photo: user.rider_profile?.rider_photo || '',
+      vehicle_photo: user.rider_profile?.vehicle_photo || '',
+      cnic_front_photo: user.rider_profile?.cnic_front_photo || '',
+      cnic_back_photo: user.rider_profile?.cnic_back_photo || '',
+    });
+  }, [user?.id, user?.rider_profile?.updated_at, user?.rider_profile?.is_verified]);
+
+  const loadAll = async (overrideOther = includeOtherVehicles) => {
     try {
       const [avail, mine, ledger] = await Promise.all([
-        apiRequest('/api/riders/available-jobs'),
+        apiRequest(`/api/riders/available-jobs?include_other_vehicles=${overrideOther ? 'true' : 'false'}`),
         apiRequest('/api/bookings/my'),
         apiRequest('/api/riders/ledger'),
       ]);
@@ -60,9 +97,9 @@ export function RiderApp({ onOpenDownloads }) {
 
   useEffect(() => {
     loadAll();
-    const timer = setInterval(loadAll, 5000);
+    const timer = setInterval(() => loadAll(), 3500);
     return () => clearInterval(timer);
-  }, []);
+  }, [includeOtherVehicles]);
 
   const pushRiderLocation = async (lat, lng) => {
     try {
@@ -120,6 +157,70 @@ export function RiderApp({ onOpenDownloads }) {
     }
   };
 
+  const handleSendOffer = async (job) => {
+    setErr('');
+    setMsg('');
+    const draft = offerDrafts[job.id] || {};
+    const offeredFare = Number(draft.fare !== undefined && draft.fare !== '' ? draft.fare : job.final_fare);
+    const etaMinutes = Number(draft.eta || 5);
+    try {
+      await apiRequest(`/api/riders/jobs/${job.id}/offer`, {
+        method: 'POST',
+        body: {
+          offered_fare: offeredFare,
+          eta_minutes: etaMinutes,
+          note: (draft.note || '').trim() || null,
+        },
+      });
+      setMsg(`Counter-offer Rs. ${offeredFare} sent directly to Customer (${job.booking_code})!`);
+      await loadAll();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleWithdrawOffer = async (bookingId) => {
+    setErr('');
+    try {
+      await apiRequest(`/api/riders/jobs/${bookingId}/withdraw-offer`, { method: 'POST' });
+      setMsg('Offer withdrawn.');
+      await loadAll();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleSaveCaptainProfile = async (e) => {
+    e.preventDefault();
+    setErr('');
+    setMsg('');
+    setSavingProfile(true);
+    try {
+      await apiRequest('/api/riders/profile', {
+        method: 'PATCH',
+        body: {
+          full_name: profileForm.full_name,
+          vehicle_type: profileForm.vehicle_type,
+          bike_model: profileForm.bike_model,
+          bike_plate: profileForm.bike_plate,
+          cnic_number: profileForm.cnic_number,
+          license_no: profileForm.license_no,
+          zone_name: profileForm.zone_name,
+          rider_photo: profileForm.rider_photo || '',
+          vehicle_photo: profileForm.vehicle_photo || '',
+          cnic_front_photo: profileForm.cnic_front_photo || '',
+          cnic_back_photo: profileForm.cnic_back_photo || '',
+        },
+      });
+      await refreshMe();
+      setMsg('Profile & verification photos saved! Admin will verify uploaded documents shortly.');
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleStep = async (bookingId, nextStatus) => {
     setErr('');
     setMsg('');
@@ -153,11 +254,20 @@ export function RiderApp({ onOpenDownloads }) {
       {/* Dark Captain Header */}
       <header className="sticky top-0 z-20 bg-slate-900 text-white border-b border-slate-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] text-slate-400">
-              Captain · {rp?.bike_model} ({rp?.bike_plate})
+          <div className="flex items-center gap-2.5">
+            {rp?.rider_photo ? (
+              <img src={rp.rider_photo} alt={user?.full_name} className="w-10 h-10 rounded-full object-cover border-2 border-[#009E4D] shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-emerald-600/30 border border-emerald-400/50 flex items-center justify-center font-extrabold text-emerald-300 shrink-0">
+                {isCarCaptain ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />}
+              </div>
+            )}
+            <div>
+              <div className="text-[11px] text-slate-400">
+                {isCarCaptain ? 'AC Car Captain' : 'Bike Captain'} · {rp?.bike_model} ({rp?.bike_plate})
+              </div>
+              <div className="text-base font-extrabold">{user?.full_name}</div>
             </div>
-            <div className="text-base font-extrabold">{user?.full_name}</div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -183,11 +293,45 @@ export function RiderApp({ onOpenDownloads }) {
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
         {!rp?.is_verified && (
-          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              Your Captain account is pending Admin verification. Once Admin verifies your CNIC &amp; Bike Plate, you can go online and accept rides.
+          <div
+            className={`p-4 rounded-2xl border text-xs font-bold flex flex-wrap items-center justify-between gap-3 ${
+              rp?.verification_status === 'rejected'
+                ? 'bg-rose-50 border-rose-200 text-rose-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}
+          >
+            <div className="flex items-start gap-2 max-w-xl">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                {rp?.verification_status === 'rejected'
+                  ? `Docs Returned: ${rp.verification_note || 'Please upload clearer Selfie, Vehicle & CNIC photos in Profile.'}`
+                  : !rp?.has_required_docs
+                  ? `Upload your Captain Selfie, ${isCarCaptain ? 'Car' : 'Bike'} Photo & CNIC Photo in Profile to unlock live rides.`
+                  : `Your ${isCarCaptain ? 'AC Car' : 'Bike'} Captain docs are uploaded and awaiting verification.`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTab('profile')}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 text-white font-extrabold shrink-0"
+            >
+              {rp?.has_required_docs ? 'View Docs in Profile' : 'Upload Photos Now →'}
+            </button>
+          </div>
+        )}
+
+        {rp?.is_verified && !rp?.is_online && tab === 'duty' && (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold">
+              You are currently <strong>OFFLINE</strong>. Go Online to appear on Customer GPS &amp; take InDrive rides directly!
             </span>
+            <button
+              type="button"
+              onClick={handleToggleOnline}
+              className="px-4 py-2 rounded-xl bg-[#009E4D] text-white font-extrabold"
+            >
+              Go ONLINE Now
+            </button>
           </div>
         )}
 
@@ -238,9 +382,20 @@ export function RiderApp({ onOpenDownloads }) {
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-extrabold text-slate-900">
-                Available Ride &amp; Parcel Requests ({availableJobs.length})
+                Direct Open Market Requests ({availableJobs.length})
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIncludeOtherVehicles((v) => !v)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                    includeOtherVehicles
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {includeOtherVehicles ? 'Showing All Vehicles' : `Filter: ${isCarCaptain ? 'Car & Parcel' : 'Bike & Parcel'}`}
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowLocationPicker((v) => !v)}
@@ -249,7 +404,7 @@ export function RiderApp({ onOpenDownloads }) {
                   <LocateFixed className="w-3.5 h-3.5" />
                   {showLocationPicker ? 'Hide My Map Pin' : 'Update My Map Location'}
                 </button>
-                <button onClick={loadAll} className="text-xs font-bold text-[#009E4D] underline">
+                <button onClick={() => loadAll()} className="text-xs font-bold text-[#009E4D] underline">
                   Refresh
                 </button>
               </div>
@@ -342,7 +497,7 @@ export function RiderApp({ onOpenDownloads }) {
 
                   <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-3 gap-2 mono-num">
                     <div>
-                      <div className="text-[11px] text-slate-500">Customer Fare</div>
+                      <div className="text-[11px] text-slate-500">Customer Offer</div>
                       <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
                     </div>
                     <div className="text-center">
@@ -355,12 +510,106 @@ export function RiderApp({ onOpenDownloads }) {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleAccept(job.id)}
-                    className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#009E4D] hover:bg-[#008741] transition"
-                  >
-                    Accept Ride Now
-                  </button>
+                  {/* InDrive Dual Path: Instant 1-Tap Accept OR Custom Counter-Offer */}
+                  <div className="space-y-2.5 pt-1">
+                    <button
+                      onClick={() => handleAccept(job.id)}
+                      className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#009E4D] hover:bg-[#008741] transition shadow-sm"
+                    >
+                      Accept Rs. {job.final_fare} Immediately
+                    </button>
+
+                    {job.my_offer && job.my_offer.status === 'pending' && (
+                      <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-bold text-teal-900 mono-num">
+                          Offer Sent: Rs. {job.my_offer.offered_fare} ({job.my_offer.eta_minutes} min ETA) · Net Rs.{' '}
+                          {job.my_offer.rider_earning ?? '—'} — Waiting Customer
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleWithdrawOffer(job.id)}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 font-bold"
+                        >
+                          Withdraw Offer
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                        <span>Or Send InDrive Counter-Offer</span>
+                        <div className="flex gap-1">
+                          {[20, 50, 100].map((bump) => (
+                            <button
+                              key={bump}
+                              type="button"
+                              onClick={() =>
+                                setOfferDrafts((prev) => ({
+                                  ...prev,
+                                  [job.id]: {
+                                    ...(prev[job.id] || {}),
+                                    fare: String(Number(job.final_fare) + bump),
+                                  },
+                                }))
+                              }
+                              className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 hover:border-emerald-400 mono-num"
+                            >
+                              +{bump}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="number"
+                          min="50"
+                          placeholder={`Rs. ${Number(job.final_fare) + 30}`}
+                          value={offerDrafts[job.id]?.fare ?? ''}
+                          onChange={(e) =>
+                            setOfferDrafts((prev) => ({
+                              ...prev,
+                              [job.id]: { ...(prev[job.id] || {}), fare: e.target.value },
+                            }))
+                          }
+                          className="px-2.5 py-2 rounded-lg border border-slate-200 bg-white font-bold mono-num"
+                        />
+                        <select
+                          value={offerDrafts[job.id]?.eta ?? '5'}
+                          onChange={(e) =>
+                            setOfferDrafts((prev) => ({
+                              ...prev,
+                              [job.id]: { ...(prev[job.id] || {}), eta: e.target.value },
+                            }))
+                          }
+                          className="px-2 py-2 rounded-lg border border-slate-200 bg-white font-bold"
+                        >
+                          <option value="3">3 min away</option>
+                          <option value="5">5 min away</option>
+                          <option value="8">8 min away</option>
+                          <option value="12">12 min away</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleSendOffer(job)}
+                          className="py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold"
+                        >
+                          Send Offer
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Optional note to customer (e.g. Near Pakhwal Chowk)"
+                        value={offerDrafts[job.id]?.note ?? ''}
+                        onChange={(e) =>
+                          setOfferDrafts((prev) => ({
+                            ...prev,
+                            [job.id]: { ...(prev[job.id] || {}), note: e.target.value },
+                          }))
+                        }
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px]"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))
             )}
@@ -680,34 +929,176 @@ export function RiderApp({ onOpenDownloads }) {
           </div>
         )}
 
-        {/* TAB 4: PROFILE */}
+        {/* TAB 4: PROFILE & UNIFIED VERIFICATION DOCUMENTS (BIKE & CAR) */}
         {tab === 'profile' && (
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
-            <div className="text-base font-extrabold text-slate-900">{user?.full_name}</div>
-            <div><strong>Phone:</strong> <span className="mono-num">{user?.phone}</span></div>
-            <div><strong>Bike:</strong> {rp?.bike_model} (<span className="mono-num">{rp?.bike_plate}</span>)</div>
-            <div><strong>CNIC:</strong> <span className="mono-num">{rp?.cnic_number || 'N/A'}</span></div>
-            <div><strong>Zone:</strong> {rp?.zone_name}</div>
-            <div><strong>Credit Limit:</strong> <span className="mono-num">Rs. {rp?.credit_limit}</span></div>
-            <div><strong>Rating:</strong> ★ {rp?.rating_avg}</div>
+          <form onSubmit={handleSaveCaptainProfile} className="space-y-4 text-xs">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>{user?.full_name}</span>
+                    {rp?.is_verified && <ShieldCheck className="w-4 h-4 text-[#009E4D]" />}
+                  </div>
+                  <div className="text-slate-500 mono-num">
+                    {user?.phone} · Credit Cap Rs. {rp?.credit_limit} · Rating ★ {rp?.rating_avg}
+                  </div>
+                </div>
+                <StatusBadge value={rp?.is_verified ? 'verified' : rp?.verification_status || 'incomplete'} />
+              </div>
+
+              {rp?.verification_status === 'rejected' && rp?.verification_note && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-bold">
+                  Verification Note: {rp.verification_note}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={profileForm.full_name}
+                    onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Captain Vehicle Category</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProfileForm({ ...profileForm, vehicle_type: 'bike' })}
+                      className={`py-2.5 rounded-xl font-bold border inline-flex items-center justify-center gap-1.5 ${
+                        profileForm.vehicle_type === 'bike'
+                          ? 'bg-[#009E4D] text-white border-[#009E4D]'
+                          : 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      <Bike className="w-4 h-4" />
+                      Motorbike
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfileForm({ ...profileForm, vehicle_type: 'car' })}
+                      className={`py-2.5 rounded-xl font-bold border inline-flex items-center justify-center gap-1.5 ${
+                        profileForm.vehicle_type === 'car'
+                          ? 'bg-[#009E4D] text-white border-[#009E4D]'
+                          : 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      <Car className="w-4 h-4" />
+                      AC Car
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {profileForm.vehicle_type === 'car' ? 'Car Model' : 'Bike Model'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={profileForm.vehicle_type === 'car' ? 'Suzuki Alto / Toyota Corolla' : 'Honda CD-70 / CG-125'}
+                    value={profileForm.bike_model}
+                    onChange={(e) => setProfileForm({ ...profileForm, bike_model: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {profileForm.vehicle_type === 'car' ? 'Car Number Plate' : 'Bike Number Plate'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profileForm.bike_plate}
+                    onChange={(e) => setProfileForm({ ...profileForm, bike_plate: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70 uppercase mono-num"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">CNIC Number</label>
+                  <input
+                    type="text"
+                    placeholder="13503-XXXXXXX-X"
+                    value={profileForm.cnic_number}
+                    onChange={(e) => setProfileForm({ ...profileForm, cnic_number: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70 mono-num"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Driving License #</label>
+                  <input
+                    type="text"
+                    placeholder="License #"
+                    value={profileForm.license_no}
+                    onChange={(e) => setProfileForm({ ...profileForm, license_no: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Primary Hub / Zone</label>
+                <select
+                  value={profileForm.zone_name}
+                  onChange={(e) => setProfileForm({ ...profileForm, zone_name: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70 font-semibold"
+                >
+                  {bootstrap.zones.map((z) => (
+                    <option key={z.id} value={z.name}>
+                      {z.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
+              <div>
+                <div className="text-sm font-extrabold text-slate-900">
+                  Captain Verification Documents ({profileForm.vehicle_type === 'car' ? 'AC Car Captain' : 'Bike Captain'})
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Upload clear photos of yourself, your {profileForm.vehicle_type === 'car' ? 'Car' : 'Motorbike'}, and your CNIC so Customers trust you and SafarGo verifies your account.
+                </p>
+              </div>
+
+              <CaptainPhotoUploads
+                vehicleType={profileForm.vehicle_type}
+                photos={profileForm}
+                onChangePhoto={(k, val) => setProfileForm((prev) => ({ ...prev, [k]: val }))}
+              />
+
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="w-full py-3 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold text-sm transition disabled:opacity-60"
+              >
+                {savingProfile ? 'Saving & Uploading Photos...' : 'Save Profile & Submit Verification Docs'}
+              </button>
+            </div>
+
             <button
+              type="button"
               onClick={onOpenDownloads}
-              className="mt-2 w-full py-3 rounded-xl bg-teal-600 text-white font-bold inline-flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-teal-600 text-white font-bold inline-flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
-              Open APK / EXE Download Center
+              Open SafarGo App Download Center
             </button>
-          </div>
+          </form>
         )}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80">
         <div className="max-w-3xl mx-auto grid grid-cols-4">
           {[
-            { id: 'duty', label: 'Duty', icon: Bike },
+            { id: 'duty', label: 'Duty', icon: isCarCaptain ? Car : Bike },
             { id: 'active', label: `Active (${activeJobs.length})`, icon: CheckCircle2 },
             { id: 'ledger', label: 'Hisab', icon: Wallet },
-            { id: 'profile', label: 'Profile', icon: User },
+            { id: 'profile', label: rp?.is_verified ? 'Profile' : 'Profile (!)', icon: User },
           ].map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;

@@ -115,6 +115,8 @@ def get_nearby_captains(
             continue
         if service_type == "car_ride" and rp.vehicle_type != "car":
             continue
+        if service_type == "bike_ride" and rp.vehicle_type != "bike":
+            continue
         dist = haversine_km(lat, lng, rp.current_lat, rp.current_lng)
         if dist <= radius_km:
             first_name = (u.full_name or "Captain").split()[0]
@@ -130,6 +132,7 @@ def get_nearby_captains(
                     "distance_km": dist,
                     "eta_min": max(2, int(round(dist / 0.45))),
                     "rating_avg": rp.rating_avg,
+                    "rider_photo": getattr(rp, "rider_photo", None),
                     "location_updated_at": rp.location_updated_at,
                 }
             )

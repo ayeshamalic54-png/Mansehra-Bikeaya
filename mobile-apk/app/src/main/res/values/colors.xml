@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_green">#00A651</color>
-    <color name="brand_green_dark">#008E46</color>
-    <color name="brand_magenta">#EC1FA8</color>
+    <color name="brand_green">#009E4D</color>
+    <color name="brand_green_dark">#044D2B</color>
+    <color name="brand_gold">#FBBF24</color>
 </resources>

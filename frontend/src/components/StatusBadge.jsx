@@ -1,7 +1,7 @@
 import React from 'react';
 
 const STATUS_STYLES = {
-  pending: 'bg-rose-50 text-rose-700 border-rose-200',
+  pending: 'bg-emerald-50 text-[#008741] border-emerald-200',
   assigned: 'bg-sky-50 text-sky-700 border-sky-200',
   arrived: 'bg-amber-50 text-amber-700 border-amber-200',
   in_progress: 'bg-teal-50 text-teal-700 border-teal-200',
@@ -13,13 +13,15 @@ const STATUS_STYLES = {
   paid: 'bg-emerald-100 text-[#008741] border-emerald-300 font-extrabold',
   submitted: 'bg-sky-50 text-sky-700 border-sky-200',
   rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+  incomplete: 'bg-slate-100 text-slate-700 border-slate-300',
+  verified: 'bg-emerald-100 text-[#008741] border-emerald-300 font-extrabold',
   unpaid: 'bg-amber-50 text-amber-800 border-amber-200',
 };
 
 const LABELS = {
-  pending: 'Waiting Rider',
-  assigned: 'Rider Assigned',
-  arrived: 'Rider Arrived',
+  pending: 'Open · Finding Captain',
+  assigned: 'Captain Matched',
+  arrived: 'Captain Arrived',
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
@@ -27,8 +29,10 @@ const LABELS = {
   submitted: 'Payment Sent',
   unpaid: 'Payment Pending',
   rejected: 'Rejected',
+  incomplete: 'Docs Required',
+  verified: 'Verified ✓',
   bike_ride: 'Bike Ride',
-  car_ride: 'Car Ride',
+  car_ride: 'AC Car Ride',
   parcel: 'Parcel',
   errand: 'Errand',
 };

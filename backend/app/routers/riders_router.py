@@ -1,18 +1,94 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 from app.auth import require_roles
 from app.database import get_db
-from app.models import Booking, LedgerEntry, MansehraZone, PricingRule, RiderProfile, RiderSettlementRequest, User
-from app.routers.bookings_router import serialize_booking
-from app.schemas import BookingStatusUpdate, RiderLocationUpdate, RiderSettlementSubmit
+from app.models import (
+    Booking,
+    LedgerEntry,
+    MansehraZone,
+    PricingRule,
+    RideOffer,
+    RiderProfile,
+    RiderSettlementRequest,
+    User,
+)
+from app.routers.auth_router import serialize_user
+from app.routers.bookings_router import booking_query_with_relations, serialize_booking, serialize_offer
+from app.schemas import (
+    BookingStatusUpdate,
+    RideOfferCreate,
+    RiderLocationUpdate,
+    RiderProfileSelfUpdate,
+    RiderSettlementSubmit,
+)
 from app.services.finance import (
     apply_wait_charge_to_booking,
     complete_booking_and_post_ledger,
     compute_commission,
     utcnow,
 )
+from app.services.media import clean_image_data_uri
 
 router = APIRouter(prefix="/api/riders", tags=["Rider Captain"])
+
+
+def _vehicle_matches_service(vehicle_type: str, service_type: str) -> bool:
+    vt = (vehicle_type or "bike").lower()
+    if service_type == "car_ride":
+        return vt == "car"
+    if service_type == "bike_ride":
+        return vt == "bike"
+    return True  # parcel & errand can be fulfilled by both bike & car captains
+
+
+@router.get("/profile")
+def get_my_captain_profile(current_user: User = Depends(require_roles("rider"))):
+    return serialize_user(current_user)
+
+
+@router.patch("/profile")
+def update_my_captain_profile(
+    payload: RiderProfileSelfUpdate,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Captain profile not found")
+
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip()
+    if payload.vehicle_type is not None:
+        rp.vehicle_type = payload.vehicle_type
+    if payload.bike_model is not None:
+        rp.bike_model = payload.bike_model.strip()
+    if payload.bike_plate is not None:
+        rp.bike_plate = payload.bike_plate.strip().upper()
+    if payload.cnic_number is not None:
+        rp.cnic_number = payload.cnic_number.strip() or None
+    if payload.license_no is not None:
+        rp.license_no = payload.license_no.strip() or None
+    if payload.zone_name is not None:
+        rp.zone_name = payload.zone_name.strip()
+
+    for field in ("rider_photo", "vehicle_photo", "cnic_front_photo", "cnic_back_photo"):
+        val = getattr(payload, field)
+        if val is not None:
+            cleaned = clean_image_data_uri(val)
+            setattr(rp, field, cleaned or None)
+
+    has_required_docs = bool(rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
+    if has_required_docs:
+        rp.docs_submitted_at = utcnow()
+        if not rp.is_verified:
+            rp.verification_status = "pending"
+            rp.verification_note = None
+    elif not rp.is_verified:
+        rp.verification_status = "incomplete"
+
+    db.commit()
+    db.refresh(current_user)
+    return serialize_user(current_user)
 
 
 @router.post("/toggle-online")
@@ -28,14 +104,14 @@ def toggle_online(
         if not rp.is_verified:
             raise HTTPException(
                 status_code=403,
-                detail="Your account is pending Admin verification before you can go online.",
+                detail="Please upload your Photo, Vehicle Photo & CNIC in Profile and wait for verification before going online.",
             )
         if rp.balance_due_to_admin > rp.credit_limit:
             raise HTTPException(
                 status_code=403,
                 detail=(
                     f"Unpaid commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds "
-                    f"your limit (Rs. {rp.credit_limit:.0f}). Please settle with Admin first."
+                    f"your limit (Rs. {rp.credit_limit:.0f}). Please settle with SafarGo first."
                 ),
             )
         rp.is_online = True
@@ -81,6 +157,7 @@ def update_rider_location(
 
 @router.get("/available-jobs")
 def get_available_jobs(
+    include_other_vehicles: bool = Query(False),
     current_user: User = Depends(require_roles("rider")),
     db: Session = Depends(get_db),
 ):
@@ -92,22 +169,122 @@ def get_available_jobs(
 
     rules = {r.service_type: r for r in db.query(PricingRule).all()}
     jobs = (
-        db.query(Booking)
-        .options(joinedload(Booking.customer))
+        booking_query_with_relations(db)
         .filter(Booking.status == "pending", Booking.rider_id.is_(None))
         .order_by(Booking.created_at.desc())
         .all()
     )
     out = []
     for job in jobs:
+        matches = _vehicle_matches_service(rp.vehicle_type, job.service_type)
+        if not include_other_vehicles and not matches:
+            continue
         data = serialize_booking(job)
+        data["matches_vehicle"] = matches
         rule = rules.get(job.service_type)
         if rule:
             _, _, comm, net = compute_commission(job.final_fare, rule, rp)
             data["commission_amount"] = comm
             data["rider_earning"] = net
+        my_offer = next((o for o in job.offers if o.rider_id == current_user.id and o.status != "withdrawn"), None)
+        if my_offer:
+            serialized_offer = serialize_offer(my_offer)
+            if rule:
+                _, _, o_comm, o_net = compute_commission(my_offer.offered_fare, rule, rp)
+                serialized_offer["commission_amount"] = o_comm
+                serialized_offer["rider_earning"] = o_net
+            data["my_offer"] = serialized_offer
+        else:
+            data["my_offer"] = None
         out.append(data)
     return out
+
+
+@router.post("/jobs/{booking_id}/offer")
+def send_or_update_ride_offer(
+    booking_id: int,
+    payload: RideOfferCreate,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
+    if not rp or not rp.is_verified:
+        raise HTTPException(status_code=403, detail="Account verification required before sending ride offers")
+    if rp.balance_due_to_admin > rp.credit_limit:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds credit cap "
+                f"(Rs. {rp.credit_limit:.0f}). Settle with SafarGo to continue."
+            ),
+        )
+
+    booking = booking_query_with_relations(db).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.status != "pending" or booking.rider_id is not None:
+        raise HTTPException(status_code=409, detail="This ride was already assigned or cancelled")
+
+    rec = float(booking.recommended_fare or booking.estimated_fare or 100.0)
+    min_floor = max(50.0, float(round(rec * 0.5)))
+    offered = float(round(payload.offered_fare))
+    if offered < min_floor:
+        raise HTTPException(status_code=400, detail=f"Offer fare must be at least Rs. {min_floor:.0f}")
+
+    offer = (
+        db.query(RideOffer)
+        .filter(RideOffer.booking_id == booking.id, RideOffer.rider_id == current_user.id)
+        .order_by(RideOffer.id.desc())
+        .first()
+    )
+    if offer:
+        offer.offered_fare = offered
+        offer.eta_minutes = payload.eta_minutes
+        offer.note = payload.note.strip() if payload.note else None
+        offer.status = "pending"
+    else:
+        offer = RideOffer(
+            booking_id=booking.id,
+            rider_id=current_user.id,
+            offered_fare=offered,
+            eta_minutes=payload.eta_minutes,
+            note=payload.note.strip() if payload.note else None,
+            status="pending",
+        )
+        db.add(offer)
+
+    rp.is_online = True
+    db.commit()
+    db.refresh(offer)
+    rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
+    res = serialize_offer(offer)
+    if rule:
+        _, _, o_comm, o_net = compute_commission(offered, rule, rp)
+        res["commission_amount"] = o_comm
+        res["rider_earning"] = o_net
+    return res
+
+
+@router.post("/jobs/{booking_id}/withdraw-offer")
+def withdraw_ride_offer(
+    booking_id: int,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    offer = (
+        db.query(RideOffer)
+        .filter(
+            RideOffer.booking_id == booking_id,
+            RideOffer.rider_id == current_user.id,
+            RideOffer.status == "pending",
+        )
+        .first()
+    )
+    if not offer:
+        raise HTTPException(status_code=404, detail="No active offer found for this booking")
+    offer.status = "withdrawn"
+    db.commit()
+    return {"status": "withdrawn", "offer_id": offer.id}
 
 
 @router.post("/jobs/{booking_id}/accept")
@@ -118,22 +295,17 @@ def accept_job(
 ):
     rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
     if not rp or not rp.is_verified:
-        raise HTTPException(status_code=403, detail="Rider must be verified by Admin to accept rides")
+        raise HTTPException(status_code=403, detail="Account verification required to accept rides")
     if rp.balance_due_to_admin > rp.credit_limit:
         raise HTTPException(
             status_code=403,
             detail=(
                 f"Commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds credit cap "
-                f"(Rs. {rp.credit_limit:.0f}). Settle with Admin to continue."
+                f"(Rs. {rp.credit_limit:.0f}). Settle with SafarGo to continue."
             ),
         )
 
-    booking = (
-        db.query(Booking)
-        .options(joinedload(Booking.customer))
-        .filter(Booking.id == booking_id)
-        .first()
-    )
+    booking = booking_query_with_relations(db).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking.status != "pending" or booking.rider_id is not None:
@@ -151,8 +323,14 @@ def accept_job(
     booking.status = "assigned"
     booking.assigned_at = utcnow()
     rp.is_online = True
+    for o in booking.offers:
+        if o.rider_id == current_user.id and o.status == "pending":
+            o.status = "accepted"
+        elif o.status == "pending":
+            o.status = "declined"
+
     db.commit()
-    db.refresh(booking)
+    booking = booking_query_with_relations(db).filter(Booking.id == booking.id).first()
     return serialize_booking(booking)
 
 
@@ -163,18 +341,13 @@ def update_rider_job_status(
     current_user: User = Depends(require_roles("rider")),
     db: Session = Depends(get_db),
 ):
-    booking = (
-        db.query(Booking)
-        .options(joinedload(Booking.customer), joinedload(Booking.rider).joinedload(User.rider_profile))
-        .filter(Booking.id == booking_id)
-        .first()
-    )
+    booking = booking_query_with_relations(db).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking.rider_id != current_user.id:
         raise HTTPException(status_code=403, detail="This booking is not assigned to you")
     if payload.status == "cancelled":
-        raise HTTPException(status_code=403, detail="Please contact Admin to cancel an assigned ride")
+        raise HTTPException(status_code=403, detail="Please contact Support/Admin to cancel an assigned ride")
 
     allowed = {
         "assigned": ("arrived", "in_progress", "completed"),
@@ -216,7 +389,7 @@ def update_rider_job_status(
             wait_minutes_override=payload.wait_minutes,
         )
 
-    db.refresh(booking)
+    booking = booking_query_with_relations(db).filter(Booking.id == booking.id).first()
     return serialize_booking(booking)
 
 

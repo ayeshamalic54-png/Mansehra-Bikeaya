@@ -30,6 +30,13 @@ def ensure_schema_migrations() -> None:
             ("current_lat", "FLOAT"),
             ("current_lng", "FLOAT"),
             ("location_updated_at", ts_type),
+            ("rider_photo", "TEXT"),
+            ("vehicle_photo", "TEXT"),
+            ("cnic_front_photo", "TEXT"),
+            ("cnic_back_photo", "TEXT"),
+            ("verification_status", "VARCHAR(24) NOT NULL DEFAULT 'pending'"),
+            ("verification_note", "VARCHAR(255)"),
+            ("docs_submitted_at", ts_type),
         ],
         "mansehra_zones": [
             ("lat", "FLOAT"),
@@ -46,6 +53,7 @@ def ensure_schema_migrations() -> None:
             ("pickup_lng", "FLOAT"),
             ("drop_lat", "FLOAT"),
             ("drop_lng", "FLOAT"),
+            ("recommended_fare", "FLOAT"),
             ("wait_minutes", "INTEGER NOT NULL DEFAULT 0"),
             ("wait_charge", "FLOAT NOT NULL DEFAULT 0.0"),
             ("arrived_at", ts_type),
@@ -66,6 +74,13 @@ def ensure_schema_migrations() -> None:
                 text(
                     "UPDATE bookings SET payment_status = 'paid' "
                     "WHERE status = 'completed' AND payment_status = 'pending' AND payment_collector = 'rider'"
+                )
+            )
+        if "rider_profiles" in tables:
+            conn.execute(
+                text(
+                    "UPDATE rider_profiles SET verification_status = 'verified' "
+                    "WHERE is_verified = TRUE AND verification_status != 'verified'"
                 )
             )
 

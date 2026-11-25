@@ -49,6 +49,14 @@ class RiderProfile(Base):
     location_updated_at = Column(DateTime(timezone=True), nullable=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     is_online = Column(Boolean, default=False, nullable=False)
+    rider_photo = Column(Text, nullable=True)
+    vehicle_photo = Column(Text, nullable=True)
+    cnic_front_photo = Column(Text, nullable=True)
+    cnic_back_photo = Column(Text, nullable=True)
+    verification_status = Column(String(24), nullable=False, default="incomplete")
+    # incomplete | pending | verified | rejected
+    verification_note = Column(String(255), nullable=True)
+    docs_submitted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Optional per-rider commission override (editable anytime by Admin)
     custom_commission_type = Column(String(20), nullable=True)  # percent | fixed | None
@@ -137,6 +145,7 @@ class Booking(Base):
     distance_km = Column(Float, nullable=False, default=3.0)
 
     estimated_fare = Column(Float, nullable=False)
+    recommended_fare = Column(Float, nullable=True)
     discount_amount = Column(Float, default=0.0, nullable=False)
     promo_code = Column(String(40), nullable=True)
     wait_minutes = Column(Integer, default=0, nullable=False)
@@ -173,6 +182,24 @@ class Booking(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     customer = relationship("User", foreign_keys=[customer_id])
+    rider = relationship("User", foreign_keys=[rider_id])
+    offers = relationship("RideOffer", back_populates="booking", cascade="all, delete-orphan")
+
+
+class RideOffer(Base):
+    __tablename__ = "ride_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
+    rider_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    offered_fare = Column(Float, nullable=False)
+    eta_minutes = Column(Integer, nullable=False, default=5)
+    note = Column(String(200), nullable=True)
+    status = Column(String(24), nullable=False, default="pending")  # pending | accepted | declined | withdrawn
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    booking = relationship("Booking", back_populates="offers")
     rider = relationship("User", foreign_keys=[rider_id])
 
 

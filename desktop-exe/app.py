@@ -1,10 +1,9 @@
 import os
-import sys
 import webbrowser
 import webview
 
-APP_URL = os.environ.get("BIKEAYA_APP_URL", "https://mansehra-bikeaya.onrender.com")
-APP_TITLE = "Mansehra Bikeaya — Dispatch & Rider Network"
+APP_URL = os.environ.get("SAFARGO_APP_URL") or os.environ.get("BIKEAYA_APP_URL", "https://mansehra-bikeaya.onrender.com")
+APP_TITLE = "SafarGo — Rides, Cars, Parcels & Dispatch"
 
 
 class DesktopApi:
@@ -15,7 +14,7 @@ class DesktopApi:
 
 def main() -> None:
     api = DesktopApi()
-    window = webview.create_window(
+    webview.create_window(
         title=APP_TITLE,
         url=APP_URL,
         width=1280,

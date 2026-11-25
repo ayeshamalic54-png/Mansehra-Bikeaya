@@ -839,6 +839,184 @@ def test_admin_per_trip_km_and_office_contact_settings(client):
         assert boot_settings[k] == v
 
 
+def test_indrive_direct_bidding_and_equal_bike_car_verification_uploads(client):
+    sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+
+    # 1. New Bike Captain & New Car Captain both register and upload Selfie, Vehicle Photo, CNIC Front/Back equally
+    bike_reg = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Hamza Bike Captain",
+            "phone": "03150001111",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_model": "Honda CG-125",
+            "bike_plate": "MNS-7001",
+            "cnic_number": "13503-1111111-1",
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+        },
+    )
+    assert bike_reg.status_code == 201
+    bike_user = bike_reg.json()["user"]
+    bike_token = bike_reg.json()["access_token"]
+    assert bike_user["rider_profile"]["vehicle_type"] == "bike"
+    assert bike_user["rider_profile"]["has_required_docs"] is True
+    assert bike_user["rider_profile"]["verification_status"] == "pending"
+
+    # New Car Captain uploads vehicle + selfie via Profile PATCH equally
+    car_reg = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Tariq Car Captain",
+            "phone": "03150002222",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "car",
+            "bike_model": "Toyota Corolla GLi",
+            "bike_plate": "MNS-8822",
+            "cnic_number": "13503-2222222-3",
+        },
+    )
+    assert car_reg.status_code == 201
+    car_token = car_reg.json()["access_token"]
+    car_id = car_reg.json()["user"]["id"]
+    assert car_reg.json()["user"]["rider_profile"]["verification_status"] == "incomplete"
+
+    upd_car = client.patch(
+        "/api/riders/profile",
+        headers=_auth_header(car_token),
+        json={
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    )
+    assert upd_car.status_code == 200
+    assert upd_car.json()["rider_profile"]["has_required_docs"] is True
+    assert upd_car.json()["rider_profile"]["verification_status"] == "pending"
+
+    # Admin inspects uploaded docs and verifies both Bike & Car Captains
+    admin_riders = client.get("/api/admin/riders", headers=_auth_header(admin_token)).json()
+    car_row = next(r for r in admin_riders if r["id"] == car_id)
+    assert car_row["rider_photo"] == sample_jpg
+    assert car_row["vehicle_photo"] == sample_jpg
+    assert car_row["cnic_front_photo"] == sample_jpg
+    assert car_row["cnic_back_photo"] == sample_jpg
+
+    assert (
+        client.patch(
+            f"/api/admin/riders/{bike_user['id']}",
+            headers=_auth_header(admin_token),
+            json={"is_verified": True},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.patch(
+            f"/api/admin/riders/{car_id}",
+            headers=_auth_header(admin_token),
+            json={"is_verified": True},
+        ).status_code
+        == 200
+    )
+
+    # 2. Customer books an AC Car Ride with custom InDrive offer fare -> NO Admin approval needed!
+    car_book = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk",
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Chowk",
+            "distance_km": 4.0,
+            "payment_method": "cash",
+            "offer_fare": 420.0,
+        },
+    )
+    assert car_book.status_code == 201
+    bk = car_book.json()
+    assert bk["status"] == "pending"
+    assert bk["final_fare"] == 420.0
+
+    # Bike Captain default job feed excludes car_ride; Car Captain job feed includes it immediately!
+    bike_jobs = client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
+    assert not any(j["id"] == bk["id"] for j in bike_jobs)
+
+    car_jobs = client.get("/api/riders/available-jobs", headers=_auth_header(car_token)).json()
+    assert any(j["id"] == bk["id"] and j["matches_vehicle"] is True for j in car_jobs)
+
+    # Customer raises fare + Car Captain sends InDrive counter-offer -> Customer accepts Captain directly!
+    raised = client.post(
+        f"/api/bookings/{bk['id']}/raise-fare",
+        headers=_auth_header(cust_token),
+        json={"new_fare": 450.0},
+    )
+    assert raised.status_code == 200
+    assert raised.json()["final_fare"] == 450.0
+
+    offer_res = client.post(
+        f"/api/riders/jobs/{bk['id']}/offer",
+        headers=_auth_header(car_token),
+        json={"offered_fare": 480.0, "eta_minutes": 4, "note": "AC Corolla at Punjab Chowk"},
+    )
+    assert offer_res.status_code == 200
+    offer = offer_res.json()
+    assert offer["offered_fare"] == 480.0
+    assert "cnic_number" not in (offer.get("rider") or {})
+
+    # Customer inspects live offers & accepts Car Captain directly (ZERO Admin intervention!)
+    cust_my = client.get("/api/bookings/my", headers=_auth_header(cust_token)).json()
+    bk_with_offer = next(r for r in cust_my if r["id"] == bk["id"])
+    assert len(bk_with_offer["offers"]) == 1
+    assert bk_with_offer["offers"][0]["rider"]["rider_photo"] == sample_jpg
+    assert bk_with_offer["offers"][0]["rider"]["vehicle_photo"] == sample_jpg
+
+    accepted = client.post(
+        f"/api/bookings/{bk['id']}/offers/{offer['id']}/accept",
+        headers=_auth_header(cust_token),
+    )
+    assert accepted.status_code == 200
+    matched = accepted.json()
+    assert matched["status"] == "assigned"
+    assert matched["rider_id"] == car_id
+    assert matched["final_fare"] == 480.0
+    assert matched["rider"]["vehicle_type"] == "car"
+    assert matched["rider"]["rider_photo"] == sample_jpg
+    assert matched["rider"]["vehicle_photo"] == sample_jpg
+
+
+def test_admin_overview_and_pending_verification_photos(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    res = client.get("/api/admin/overview", headers=_auth_header(admin_token))
+    assert res.status_code == 200
+    data = res.json()
+    assert "kpis" in data
+    assert "today_total_rides" in data["kpis"]
+    assert "today_completed_rides" in data["kpis"]
+    assert "recent_bookings" in data
+    assert "over_limit_riders" in data
+
+
+
 
 
 

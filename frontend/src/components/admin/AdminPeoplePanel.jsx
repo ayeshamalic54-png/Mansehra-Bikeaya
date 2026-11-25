@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyRound, MapPin, Pencil, Trash2, X } from 'lucide-react';
+import { Bike, Car, CheckCircle2, FileCheck2, KeyRound, MapPin, Pencil, Trash2, X, XCircle } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { StatusBadge } from '../StatusBadge';
+import { CaptainPhotoUploads } from '../CaptainPhotoUploads';
 
 export function AdminPeoplePanel({
   mode, // 'riders' | 'customers'
@@ -12,10 +13,12 @@ export function AdminPeoplePanel({
   onReloadCustomers,
   onNotify,
 }) {
-  // Password Modal State (shared for Rider or Customer)
+  // Password & Verification Docs Review Modals
   const [pwTarget, setPwTarget] = useState(null); // { id, name, role }
   const [newPassword, setNewPassword] = useState('');
   const [tripsRiderId, setTripsRiderId] = useState(null);
+  const [docsRiderId, setDocsRiderId] = useState(null);
+  const [rejectNote, setRejectNote] = useState('');
 
   // Rider Form State (Create or Edit)
   const [editingRiderId, setEditingRiderId] = useState(null);
@@ -100,7 +103,7 @@ export function AdminPeoplePanel({
                 : null,
           },
         });
-        onNotify('Motorbike Captain details updated!');
+        onNotify(`${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain details updated!`);
       } else {
         await apiRequest('/api/admin/riders', {
           method: 'POST',
@@ -124,7 +127,7 @@ export function AdminPeoplePanel({
             is_verified: true,
           },
         });
-        onNotify('New Motorbike Captain added & verified!');
+        onNotify(`New ${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain added & verified!`);
       }
       resetRiderForm();
       onReloadRiders();
@@ -228,10 +231,119 @@ export function AdminPeoplePanel({
 
       {mode === 'riders' ? (
         <>
+          {/* Captain Document Verification Modal (Shared identically for Bike & Car Captains) */}
+          {docsRiderId && (() => {
+            const dr = riders.find((r) => r.id === docsRiderId);
+            if (!dr) return null;
+            const isCar = dr.vehicle_type === 'car';
+            return (
+              <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 w-full max-w-2xl space-y-4 shadow-2xl my-auto">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+                        {isCar ? <Car className="w-4 h-4 text-sky-600" /> : <Bike className="w-4 h-4 text-[#009E4D]" />}
+                        <span>
+                          Verification Review — {dr.full_name} ({isCar ? 'AC Car Captain' : 'Bike Captain'})
+                        </span>
+                        <StatusBadge value={dr.is_verified ? 'verified' : dr.verification_status || 'pending'} />
+                      </div>
+                      <div className="text-slate-500 mono-num mt-0.5">
+                        {dr.phone} · {dr.bike_model} ({dr.bike_plate}) · CNIC: {dr.cnic_number || 'N/A'} · Lic: {dr.license_no || 'N/A'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocsRiderId(null);
+                        setRejectNote('');
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <CaptainPhotoUploads
+                    vehicleType={dr.vehicle_type || 'bike'}
+                    photos={{
+                      rider_photo: dr.rider_photo,
+                      vehicle_photo: dr.vehicle_photo,
+                      cnic_front_photo: dr.cnic_front_photo,
+                      cnic_back_photo: dr.cnic_back_photo,
+                    }}
+                    onChangePhoto={async (slotKey, dataUrl) => {
+                      try {
+                        await apiRequest(`/api/admin/riders/${dr.id}`, {
+                          method: 'PATCH',
+                          body: { [slotKey]: dataUrl },
+                        });
+                        onNotify(`Updated ${slotKey.replace(/_/g, ' ')} for ${dr.full_name}.`);
+                        onReloadRiders();
+                      } catch (err) {
+                        onNotify(err.message, true);
+                      }
+                    }}
+                  />
+
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Optional note or rejection reason (e.g. Upload clearer CNIC front)"
+                      value={rejectNote}
+                      onChange={(e) => setRejectNote(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await apiRequest(`/api/admin/riders/${dr.id}`, {
+                            method: 'PATCH',
+                            body: { is_verified: true, verification_status: 'verified' },
+                          });
+                          onNotify(`${dr.full_name} verified and unlocked for live rides!`);
+                          setDocsRiderId(null);
+                          setRejectNote('');
+                          onReloadRiders();
+                        }}
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold inline-flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Approve &amp; Verify Captain ✓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await apiRequest(`/api/admin/riders/${dr.id}`, {
+                            method: 'PATCH',
+                            body: {
+                              is_verified: false,
+                              verification_status: 'rejected',
+                              verification_note: rejectNote.trim() || 'Please re-upload clear Selfie, Vehicle & CNIC photos.',
+                            },
+                          });
+                          onNotify(`Returned docs to ${dr.full_name} for re-upload.`);
+                          setDocsRiderId(null);
+                          setRejectNote('');
+                          onReloadRiders();
+                        }}
+                        className="py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold inline-flex items-center justify-center gap-1.5"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject Docs
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <form onSubmit={handleSaveRider} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-sm text-slate-900">
-                {editingRiderId ? 'Edit Motorbike Captain' : '+ Register & Verify Motorbike Captain'}
+                {editingRiderId ? 'Edit Bike / AC Car Captain' : '+ Register & Verify Bike / AC Car Captain'}
               </span>
               {editingRiderId && (
                 <button type="button" onClick={resetRiderForm} className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
@@ -344,8 +456,8 @@ export function AdminPeoplePanel({
             <table className="w-full text-left">
               <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
                 <tr>
-                  <th className="p-3.5">Captain &amp; Bike</th>
-                  <th className="p-3.5">Zone &amp; Status</th>
+                  <th className="p-3.5">Captain &amp; Vehicle</th>
+                  <th className="p-3.5">Zone &amp; Docs Status</th>
                   <th className="p-3.5">Trips / Rating</th>
                   <th className="p-3.5">Due / Cap</th>
                   <th className="p-3.5">Commission</th>
@@ -353,21 +465,53 @@ export function AdminPeoplePanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {riders.map((r) => (
+                {riders.map((r) => {
+                  const docCount = [r.rider_photo, r.vehicle_photo, r.cnic_front_photo, r.cnic_back_photo].filter(Boolean).length;
+                  const isCar = r.vehicle_type === 'car';
+                  return (
                   <tr key={r.id}>
                     <td className="p-3.5">
-                      <div className="font-bold text-slate-900">{r.full_name}</div>
-                      <div className="mono-num text-slate-500">{r.phone} · {r.bike_model} ({r.bike_plate})</div>
+                      <div className="flex items-center gap-2.5">
+                        {r.rider_photo ? (
+                          <img src={r.rider_photo} alt={r.full_name} className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-extrabold text-slate-600 shrink-0">
+                            {(r.full_name || 'C')[0]}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{r.full_name}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${isCar ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-emerald-50 text-[#008741] border border-emerald-200'}`}>
+                              {isCar ? 'CAR' : 'BIKE'}
+                            </span>
+                          </div>
+                          <div className="mono-num text-slate-500">{r.phone} · {r.bike_model} ({r.bike_plate})</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="p-3.5">
                       <div>{r.zone_name}</div>
-                      <div className="flex gap-1.5 mt-1">
-                        <span className={`px-2 py-0.5 rounded-full font-bold ${r.is_verified ? 'bg-emerald-50 text-[#008741]' : 'bg-amber-50 text-amber-700'}`}>
-                          {r.is_verified ? 'Verified' : 'Pending'}
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        <span className={`px-2 py-0.5 rounded-full font-bold ${r.is_verified ? 'bg-emerald-50 text-[#008741]' : r.verification_status === 'rejected' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {r.is_verified ? 'Verified ✓' : r.verification_status === 'rejected' ? 'Rejected' : 'Pending Review'}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full font-bold ${r.is_active ? 'bg-sky-50 text-sky-700' : 'bg-rose-50 text-rose-600'}`}>
                           {r.is_active ? 'Active' : 'Suspended'}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocsRiderId(r.id);
+                            setRejectNote(r.verification_note || '');
+                          }}
+                          className={`px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 ${
+                            docCount >= 3 ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <FileCheck2 className="w-3 h-3" />
+                          Docs ({docCount}/4)
+                        </button>
                       </div>
                     </td>
                     <td className="p-3.5 mono-num">
@@ -452,7 +596,8 @@ export function AdminPeoplePanel({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

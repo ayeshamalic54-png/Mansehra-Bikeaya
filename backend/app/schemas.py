@@ -17,6 +17,10 @@ class RegisterRequest(BaseModel):
     bike_plate: Optional[str] = None
     license_no: Optional[str] = None
     zone_name: Optional[str] = "Main Bazar / Lari Adda"
+    rider_photo: Optional[str] = Field(None, max_length=950000)
+    vehicle_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_front_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_back_photo: Optional[str] = Field(None, max_length=950000)
 
 
 class LoginRequest(BaseModel):
@@ -73,6 +77,31 @@ class BookingCreate(BaseModel):
     receiver_phone: Optional[str] = None
     cod_amount: float = Field(0.0, ge=0)
     customer_notes: Optional[str] = None
+    offer_fare: Optional[float] = Field(None, ge=50.0, le=200000.0)
+
+
+class BookingRaiseFare(BaseModel):
+    new_fare: float = Field(..., ge=50.0, le=200000.0)
+
+
+class RideOfferCreate(BaseModel):
+    offered_fare: float = Field(..., ge=50.0, le=200000.0)
+    eta_minutes: int = Field(5, ge=1, le=120)
+    note: Optional[str] = Field(None, max_length=200)
+
+
+class RiderProfileSelfUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, max_length=120)
+    vehicle_type: Optional[str] = Field(None, pattern="^(bike|car)$")
+    bike_model: Optional[str] = Field(None, min_length=2, max_length=80)
+    bike_plate: Optional[str] = Field(None, min_length=2, max_length=32)
+    cnic_number: Optional[str] = Field(None, max_length=32)
+    license_no: Optional[str] = Field(None, max_length=64)
+    zone_name: Optional[str] = Field(None, max_length=100)
+    rider_photo: Optional[str] = Field(None, max_length=950000)
+    vehicle_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_front_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_back_photo: Optional[str] = Field(None, max_length=950000)
 
 
 class BookingPaymentSubmit(BaseModel):
@@ -131,8 +160,14 @@ class RiderConfigUpdate(BaseModel):
     bike_plate: Optional[str] = None
     license_no: Optional[str] = None
     is_verified: Optional[bool] = None
+    verification_status: Optional[str] = Field(None, pattern="^(incomplete|pending|verified|rejected)$")
+    verification_note: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
     zone_name: Optional[str] = None
+    rider_photo: Optional[str] = Field(None, max_length=950000)
+    vehicle_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_front_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_back_photo: Optional[str] = Field(None, max_length=950000)
     current_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
     current_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     credit_limit: Optional[float] = Field(None, ge=0)

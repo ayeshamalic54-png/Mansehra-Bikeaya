@@ -634,7 +634,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                 <StatCard
                   label="Online Captains"
                   value={`${kpis.online_riders_count} / ${kpis.total_riders_count}`}
-                  subtext={`${kpis.pending_dispatch_count} rides waiting rider`}
+                  subtext={`${kpis.pending_dispatch_count} rides in open market`}
                   accent="magenta"
                 />
               </div>
@@ -695,18 +695,25 @@ export function AdminDashboard({ onOpenDownloads }) {
                             {b.rider ? (
                               <span className="font-semibold">{b.rider.full_name} ({b.rider.bike_plate})</span>
                             ) : (
-                              <select
-                                defaultValue=""
-                                onChange={(e) => handleAssignRider(b.id, e.target.value)}
-                                className="px-2 py-1 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
-                              >
-                                <option value="">Assign Captain...</option>
-                                {verifiedRiders.map((r) => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.full_name} ({r.bike_plate})
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="space-y-1">
+                                {(b.offers || []).filter((o) => o.status === 'pending').length > 0 && (
+                                  <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-[#008741] text-[10px] font-extrabold">
+                                    {(b.offers || []).filter((o) => o.status === 'pending').length} Captain Offer(s)
+                                  </span>
+                                )}
+                                <select
+                                  defaultValue=""
+                                  onChange={(e) => handleAssignRider(b.id, e.target.value)}
+                                  className="block px-2 py-1 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
+                                >
+                                  <option value="">Optional Manual Assign...</option>
+                                  {verifiedRiders.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                      {r.vehicle_type === 'car' ? 'Car' : 'Bike'}: {r.full_name} ({r.bike_plate})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             )}
                           </td>
                           <td className="p-3.5 mono-num">
@@ -923,18 +930,25 @@ export function AdminDashboard({ onOpenDownloads }) {
                         </td>
                         <td className="p-3.5">
                           {b.status !== 'completed' && b.status !== 'cancelled' ? (
-                            <select
-                              value={b.rider_id || ''}
-                              onChange={(e) => handleAssignRider(b.id, e.target.value)}
-                              className="px-2 py-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
-                            >
-                              <option value="">Select Rider...</option>
-                              {verifiedRiders.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.full_name} ({r.bike_plate})
-                                </option>
-                              ))}
-                            </select>
+                            <div className="space-y-1">
+                              {!b.rider_id && (b.offers || []).filter((o) => o.status === 'pending').length > 0 && (
+                                <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-[#008741] text-[10px] font-extrabold">
+                                  {(b.offers || []).filter((o) => o.status === 'pending').length} Captain Offer(s)
+                                </span>
+                              )}
+                              <select
+                                value={b.rider_id || ''}
+                                onChange={(e) => handleAssignRider(b.id, e.target.value)}
+                                className="block px-2 py-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 font-semibold"
+                              >
+                                <option value="">Optional Assign...</option>
+                                {verifiedRiders.map((r) => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.vehicle_type === 'car' ? 'Car' : 'Bike'}: {r.full_name} ({r.bike_plate})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           ) : (
                             <span>{b.rider?.full_name || '—'}</span>
                           )}

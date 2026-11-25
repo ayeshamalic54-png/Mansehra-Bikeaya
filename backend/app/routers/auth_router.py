@@ -4,12 +4,55 @@ from app.auth import create_access_token, get_current_user, hash_password, verif
 from app.database import get_db
 from app.models import MansehraZone, RiderProfile, SystemSetting, User
 from app.schemas import LoginRequest, RegisterRequest
+from app.services.finance import utcnow
+from app.services.media import clean_image_data_uri
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
+def serialize_rider_profile(rp: RiderProfile) -> dict:
+    has_required_docs = bool(rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
+    v_status = getattr(rp, "verification_status", None) or (
+        "verified" if rp.is_verified else ("pending" if has_required_docs else "incomplete")
+    )
+    if rp.is_verified:
+        v_status = "verified"
+    return {
+        "id": rp.id,
+        "cnic_number": rp.cnic_number,
+        "vehicle_type": rp.vehicle_type,
+        "bike_model": rp.bike_model,
+        "bike_plate": rp.bike_plate,
+        "license_no": rp.license_no,
+        "zone_name": rp.zone_name,
+        "current_lat": rp.current_lat,
+        "current_lng": rp.current_lng,
+        "location_updated_at": rp.location_updated_at,
+        "is_verified": rp.is_verified,
+        "verification_status": v_status,
+        "verification_note": getattr(rp, "verification_note", None),
+        "docs_submitted_at": getattr(rp, "docs_submitted_at", None),
+        "has_required_docs": has_required_docs,
+        "rider_photo": getattr(rp, "rider_photo", None),
+        "vehicle_photo": getattr(rp, "vehicle_photo", None),
+        "cnic_front_photo": getattr(rp, "cnic_front_photo", None),
+        "cnic_back_photo": getattr(rp, "cnic_back_photo", None),
+        "is_online": rp.is_online,
+        "credit_limit": rp.credit_limit,
+        "balance_due_to_admin": rp.balance_due_to_admin,
+        "custom_commission_type": rp.custom_commission_type,
+        "custom_commission_value": rp.custom_commission_value,
+        "total_trips": rp.total_trips,
+        "total_gross_collected": rp.total_gross_collected,
+        "total_net_earned": rp.total_net_earned,
+        "total_commission_generated": rp.total_commission_generated,
+        "total_settled_to_admin": rp.total_settled_to_admin,
+        "rating_avg": rp.rating_avg,
+    }
+
+
 def serialize_user(user: User) -> dict:
-    data = {
+    return {
         "id": user.id,
         "full_name": user.full_name,
         "phone": user.phone,
@@ -17,35 +60,8 @@ def serialize_user(user: User) -> dict:
         "role": user.role,
         "is_active": user.is_active,
         "created_at": user.created_at,
-        "rider_profile": None,
+        "rider_profile": serialize_rider_profile(user.rider_profile) if user.rider_profile else None,
     }
-    if user.rider_profile:
-        rp = user.rider_profile
-        data["rider_profile"] = {
-            "id": rp.id,
-            "cnic_number": rp.cnic_number,
-            "vehicle_type": rp.vehicle_type,
-            "bike_model": rp.bike_model,
-            "bike_plate": rp.bike_plate,
-            "license_no": rp.license_no,
-            "zone_name": rp.zone_name,
-            "current_lat": rp.current_lat,
-            "current_lng": rp.current_lng,
-            "location_updated_at": rp.location_updated_at,
-            "is_verified": rp.is_verified,
-            "is_online": rp.is_online,
-            "credit_limit": rp.credit_limit,
-            "balance_due_to_admin": rp.balance_due_to_admin,
-            "custom_commission_type": rp.custom_commission_type,
-            "custom_commission_value": rp.custom_commission_value,
-            "total_trips": rp.total_trips,
-            "total_gross_collected": rp.total_gross_collected,
-            "total_net_earned": rp.total_net_earned,
-            "total_commission_generated": rp.total_commission_generated,
-            "total_settled_to_admin": rp.total_settled_to_admin,
-            "rating_avg": rp.rating_avg,
-        }
-    return data
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -56,7 +72,12 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     if payload.email and db.query(User).filter(User.email == payload.email.strip()).first():
         raise HTTPException(status_code=400, detail="Email is already registered")
     if payload.role == "rider" and not payload.bike_plate:
-        raise HTTPException(status_code=400, detail="Bike number plate is required for Rider registration")
+        raise HTTPException(status_code=400, detail="Vehicle number plate is required for Captain registration")
+
+    rider_photo = clean_image_data_uri(payload.rider_photo) or None
+    vehicle_photo = clean_image_data_uri(payload.vehicle_photo) or None
+    cnic_front_photo = clean_image_data_uri(payload.cnic_front_photo) or None
+    cnic_back_photo = clean_image_data_uri(payload.cnic_back_photo) or None
 
     user = User(
         full_name=payload.full_name.strip(),
@@ -75,8 +96,12 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         credit_limit = float(cap_setting.value) if cap_setting else 1500.0
         z = db.query(MansehraZone).filter(MansehraZone.name == (payload.zone_name or "Main Bazar / Lari Adda")).first()
         vtype = payload.vehicle_type or (
-            "car" if payload.bike_model and any(w in payload.bike_model.lower() for w in ("alto", "corolla", "civic", "mehran", "cultus", "car", "vitz", "wagon", "hiace")) else "bike"
+            "car"
+            if payload.bike_model
+            and any(w in payload.bike_model.lower() for w in ("alto", "corolla", "civic", "mehran", "cultus", "car", "vitz", "wagon", "hiace"))
+            else "bike"
         )
+        has_docs = bool(rider_photo and vehicle_photo and cnic_front_photo)
         rp = RiderProfile(
             user_id=user.id,
             cnic_number=payload.cnic_number,
@@ -87,7 +112,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             zone_name=payload.zone_name or "Main Bazar / Lari Adda",
             current_lat=z.lat if z else 34.3335,
             current_lng=z.lng if z else 73.1995,
-            is_verified=False,  # Requires Admin verification before going online
+            rider_photo=rider_photo,
+            vehicle_photo=vehicle_photo,
+            cnic_front_photo=cnic_front_photo,
+            cnic_back_photo=cnic_back_photo,
+            is_verified=False,
+            verification_status="pending" if has_docs else "incomplete",
+            docs_submitted_at=utcnow() if has_docs else None,
             is_online=False,
             credit_limit=credit_limit,
         )

@@ -7,6 +7,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.DownloadListener;
+import android.webkit.GeolocationPermissions;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -15,12 +17,23 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     private static final String APP_URL = "https://mansehra-bikeaya.onrender.com";
     private WebView webView;
     private ProgressBar progressBar;
+    private ValueCallback<Uri[]> filePathCallback;
+
+    private final ActivityResultLauncher<Intent> fileChooserLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (filePathCallback == null) return;
+                Uri[] results = WebChromeClient.FileChooserParams.parseResult(result.getResultCode(), result.getData());
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            });
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -35,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setGeolocationEnabled(true);
+        settings.setAllowFileAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -47,6 +62,31 @@ public class MainActivity extends AppCompatActivity {
                     progressBar.setProgress(newProgress);
                 } else {
                     progressBar.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                callback.invoke(origin, true, false);
+            }
+
+            @Override
+            public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams
+            ) {
+                if (MainActivity.this.filePathCallback != null) {
+                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                }
+                MainActivity.this.filePathCallback = filePathCallback;
+                try {
+                    Intent intent = fileChooserParams.createIntent();
+                    fileChooserLauncher.launch(intent);
+                    return true;
+                } catch (Exception e) {
+                    MainActivity.this.filePathCallback = null;
+                    return false;
                 }
             }
         });
@@ -77,10 +117,10 @@ public class MainActivity extends AppCompatActivity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     String offlineHtml = "<html><body style='font-family:sans-serif;text-align:center;padding:48px 20px;background:#F4F6FB;color:#0F172A;'>"
-                            + "<h2 style='color:#00A651;'>Mansehra Bikeaya</h2>"
-                            + "<p>Internet connection required or server waking up...</p>"
+                            + "<h2 style='color:#009E4D;'>SafarGo</h2>"
+                            + "<p>Bikes, AC Cars &amp; Express Parcels · Reconnecting to live network...</p>"
                             + "<button onclick=\"window.location.href='" + APP_URL + "'\" "
-                            + "style='background:#00A651;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;font-size:15px;'>Retry Now</button>"
+                            + "style='background:#009E4D;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;font-size:15px;'>Retry Now</button>"
                             + "</body></html>";
                     view.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null);
                 }

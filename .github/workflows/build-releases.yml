@@ -1,4 +1,4 @@
-name: Build Android APK & Windows EXE
+name: Build SafarGo Android APK & Windows EXE
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
           keytool -genkeypair -v -keystore mobile-apk/app/release-keystore.jks \
             -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 \
             -alias bikeaya -storepass mansehra123 -keypass mansehra123 \
-            -dname "CN=Mansehra Bikeaya, OU=Mobile, O=MansehraBikeaya, L=Mansehra, ST=KPK, C=PK"
+            -dname "CN=SafarGo, OU=Mobile, O=SafarGo, L=Mansehra, ST=KPK, C=PK"
 
       - name: Build Signed Android Release APK
         working-directory: mobile-apk
@@ -62,12 +62,12 @@ jobs:
           files: apk-build.log
 
       - name: Rename APK Artifact
-        run: cp mobile-apk/app/build/outputs/apk/release/app-release.apk MansehraBikeaya.apk
+        run: cp mobile-apk/app/build/outputs/apk/release/app-release.apk SafarGo.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: MansehraBikeaya.apk
+          path: SafarGo.apk
 
   build-exe:
     runs-on: windows-latest
@@ -85,12 +85,12 @@ jobs:
         working-directory: desktop-exe
         run: |
           python generate_icon.py
-          pyinstaller --noconfirm --onefile --windowed --icon=icon.ico --name=MansehraBikeayaDesk app.py
+          pyinstaller --noconfirm --onefile --windowed --icon=icon.ico --name=SafarGoDesk app.py
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: desktop-exe/dist/MansehraBikeayaDesk.exe
+          path: desktop-exe/dist/SafarGoDesk.exe
 
   publish-release:
     needs: [build-apk, build-exe]
@@ -101,15 +101,15 @@ jobs:
           pattern: '*'
           merge-multiple: true
 
-      - name: Publish Release v1.0.0
+      - name: Publish Release v1.1.0
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: Mansehra Bikeaya v1.0.0 (Android APK & Windows EXE)
+          tag_name: v1.1.0
+          name: SafarGo v1.1.0 (Android APK & Windows EXE)
           body: |
-            Official installable binaries connected to https://mansehra-bikeaya.onrender.com:
-            - **MansehraBikeaya.apk** — Android Mobile App (Customers, Motorbike Captains & Admin)
-            - **MansehraBikeayaDesk.exe** — Windows Desktop App (Admin Dispatch, Rider Settlements & P&L)
+            Official SafarGo installable apps connected to https://mansehra-bikeaya.onrender.com:
+            - **SafarGo.apk** — Android Mobile App (Customers, Bike & AC Car Captains, Express Parcels)
+            - **SafarGoDesk.exe** — Windows Desktop App (Admin Dispatch, Rider Settlements & P&L)
           files: |
-            MansehraBikeaya.apk
-            MansehraBikeayaDesk.exe
+            SafarGo.apk
+            SafarGoDesk.exe
