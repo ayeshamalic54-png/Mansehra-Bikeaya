@@ -1,3 +1,5 @@
+import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,12 @@ from app.routers import (
     riders_router,
 )
 from app.seed import seed_initial_data
+from app.services.backup import (
+    BACKUP_HOUR_PKT,
+    create_full_database_backup,
+    has_todays_scheduled_pkt_backup,
+    pkt_now,
+)
 
 
 def ensure_schema_migrations() -> None:
@@ -60,6 +68,11 @@ def ensure_schema_migrations() -> None:
             ("payment_status", "VARCHAR(24) NOT NULL DEFAULT 'pending'"),
             ("payment_reference", "VARCHAR(80)"),
         ],
+        "database_backups": [
+            ("emailed_to", "VARCHAR(180)"),
+            ("email_status", "VARCHAR(32) NOT NULL DEFAULT 'pending'"),
+            ("email_error", "VARCHAR(255)"),
+        ],
     }
     with engine.begin() as conn:
         for table_name, cols in column_specs.items():
@@ -85,6 +98,28 @@ def ensure_schema_migrations() -> None:
             )
 
 
+def _run_scheduled_pkt_backup_if_due() -> None:
+    now_p = pkt_now()
+    if now_p.hour < BACKUP_HOUR_PKT:
+        return
+    db = SessionLocal()
+    try:
+        if not has_todays_scheduled_pkt_backup(db, now_p):
+            create_full_database_backup(db, trigger_type="scheduled_pkt", write_local_file=True, send_email=True)
+    except Exception:
+        # Background backup errors must never crash web requests.
+        pass
+    finally:
+        db.close()
+
+
+async def _daily_pkt_backup_loop() -> None:
+    await asyncio.sleep(5)
+    while True:
+        await asyncio.to_thread(_run_scheduled_pkt_backup_if_due)
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -94,7 +129,19 @@ async def lifespan(app: FastAPI):
         seed_initial_data(db)
     finally:
         db.close()
-    yield
+
+    backup_task = None
+    if not os.getenv("PYTEST_CURRENT_TEST"):
+        backup_task = asyncio.create_task(_daily_pkt_backup_loop())
+    try:
+        yield
+    finally:
+        if backup_task is not None:
+            backup_task.cancel()
+            try:
+                await backup_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(

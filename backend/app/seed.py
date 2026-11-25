@@ -209,6 +209,8 @@ def seed_initial_data(db: Session) -> None:
         "payment_jazzcash": "",
         "payment_bank_name": "",
         "payment_bank_account": "",
+        "backup_email": "gosafar4@gmail.com",
+        "backup_schedule_pkt": "04:00 AM PKT",
     }
     for k, v in default_settings.items():
         if not db.query(SystemSetting).filter(SystemSetting.key == k).first():

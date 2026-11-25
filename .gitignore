@@ -5,6 +5,8 @@
 my db*.txt
 *.sqlite
 *.db
+backups/
+*.json.gz
 
 # Python
 .venv/

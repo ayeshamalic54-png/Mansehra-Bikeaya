@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.auth import hash_password, require_roles
@@ -9,6 +9,7 @@ from app.models import (
     AdminExpense,
     AppRelease,
     Booking,
+    DatabaseBackup,
     LedgerEntry,
     MansehraZone,
     PricingRule,
@@ -48,6 +49,18 @@ from app.services.finance import (
     find_nearest_captains_for_booking,
     recalculate_rider_ledger_balances,
     utcnow,
+)
+from app.services.backup import (
+    BACKUP_DIR,
+    BACKUP_HOUR_PKT,
+    create_full_database_backup,
+    get_backup_gz_bytes,
+    parse_backup_bytes,
+    pkt_now,
+    resolve_backup_email_config,
+    restore_database_from_payload,
+    retry_send_backup_email,
+    serialize_backup_summary,
 )
 from app.services.media import clean_image_data_uri, get_missing_captain_docs, has_complete_captain_docs
 
@@ -1308,7 +1321,15 @@ def admin_list_settings(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    return {s.key: s.value for s in db.query(SystemSetting).all()}
+    rows = {s.key: s.value for s in db.query(SystemSetting).all()}
+    smtp_cfg = resolve_backup_email_config(db)
+    if "backup_smtp_pass" in rows:
+        rows["backup_smtp_pass"] = ""
+    rows["backup_smtp_pass_configured"] = "true" if smtp_cfg["smtp_configured"] else "false"
+    rows.setdefault("backup_email", smtp_cfg["recipient"])
+    rows.setdefault("backup_smtp_user", smtp_cfg["smtp_user"])
+    rows.setdefault("backup_schedule_pkt", f"{BACKUP_HOUR_PKT:02d}:00 AM PKT")
+    return rows
 
 
 @router.put("/settings/{key}")
@@ -1318,11 +1339,129 @@ def admin_update_setting(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
+    if key == "backup_smtp_pass_configured":
+        return {"key": key, "value": "ignored"}
+    val = payload.value.strip() if key == "backup_smtp_pass" else payload.value
+    if key == "backup_smtp_pass" and val == "":
+        # Do not wipe stored App Password if Admin leaves password input blank when saving other settings.
+        return {"key": key, "value": "unchanged"}
+    if key == "backup_smtp_pass":
+        val = "".join(val.split())
     s = db.query(SystemSetting).filter(SystemSetting.key == key).first()
     if not s:
-        s = SystemSetting(key=key, value=payload.value)
+        s = SystemSetting(key=key, value=val)
         db.add(s)
     else:
-        s.value = payload.value
+        s.value = val
     db.commit()
-    return {"key": s.key, "value": s.value}
+    return {"key": s.key, "value": "" if key == "backup_smtp_pass" else s.value}
+
+
+@router.get("/backups")
+def admin_list_backups(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(DatabaseBackup).order_by(DatabaseBackup.id.desc()).limit(30).all()
+    cfg = resolve_backup_email_config(db)
+    now_p = pkt_now()
+    next_run = now_p.replace(hour=BACKUP_HOUR_PKT, minute=0, second=0, microsecond=0)
+    if now_p >= next_run:
+        from datetime import timedelta
+
+        next_run = next_run + timedelta(days=1)
+    return {
+        "schedule_pkt": f"{BACKUP_HOUR_PKT:02d}:00 AM PKT (Asia/Karachi, UTC+5)",
+        "next_backup_pkt": next_run.strftime("%Y-%m-%d %I:%M %p PKT"),
+        "app_backup_dir": str(BACKUP_DIR),
+        "backup_email": cfg["recipient"],
+        "smtp_user": cfg["smtp_user"],
+        "smtp_configured": cfg["smtp_configured"],
+        "backups": [serialize_backup_summary(r) for r in rows],
+    }
+
+
+@router.post("/backups/run")
+def admin_trigger_backup(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rec, _out_path = create_full_database_backup(
+        db,
+        trigger_type="manual",
+        write_local_file=True,
+        send_email=True,
+    )
+    return serialize_backup_summary(rec)
+
+
+@router.post("/backups/{backup_id}/email")
+def admin_resend_backup_email(
+    backup_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rec = db.query(DatabaseBackup).filter(DatabaseBackup.id == backup_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Backup record not found")
+    try:
+        updated = retry_send_backup_email(db, rec)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return serialize_backup_summary(updated)
+
+
+@router.get("/backups/{backup_id}/download")
+def admin_download_backup(
+    backup_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rec = db.query(DatabaseBackup).filter(DatabaseBackup.id == backup_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Backup record not found")
+    raw = get_backup_gz_bytes(rec)
+    if not raw:
+        raise HTTPException(status_code=404, detail="Backup file payload was pruned")
+    return Response(
+        content=raw,
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{rec.file_name}"'},
+    )
+
+
+@router.post("/backups/{backup_id}/restore")
+def admin_restore_saved_backup(
+    backup_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rec = db.query(DatabaseBackup).filter(DatabaseBackup.id == backup_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Backup record not found")
+    raw = get_backup_gz_bytes(rec)
+    if not raw:
+        raise HTTPException(status_code=404, detail="Backup file payload was pruned")
+    try:
+        payload = parse_backup_bytes(raw)
+        return restore_database_from_payload(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/backups/restore-file")
+async def admin_restore_uploaded_backup(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    raw = await file.read()
+    if not raw or len(raw) > 35 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Backup file empty or exceeds 35 MB limit")
+    try:
+        payload = parse_backup_bytes(raw)
+        return restore_database_from_payload(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not parse backup file: {exc}") from exc

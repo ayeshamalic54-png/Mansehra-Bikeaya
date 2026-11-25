@@ -68,3 +68,27 @@ export async function downloadAuthenticatedCsv(path, filename) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+export async function uploadAuthenticatedFile(path, file) {
+  const token = getStoredToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    let message = `Upload failed (${res.status})`;
+    try {
+      const errData = await res.json();
+      if (errData?.detail) {
+        message = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+      }
+    } catch {
+      // ignore non-json
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}

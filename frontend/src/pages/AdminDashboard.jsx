@@ -9,6 +9,7 @@ import {
   Coins,
   Download,
   HelpCircle,
+  HardDrive,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -84,6 +85,7 @@ const NAV_GROUPS = [
     items: [
       { id: 'tickets', label: 'Complaints & Support', icon: HelpCircle, badgeCls: 'bg-orange-500/15 text-orange-400' },
       { id: 'zones', label: 'Cities, Zones & Promos', icon: MapPin, badgeCls: 'bg-sky-500/15 text-sky-300' },
+      { id: 'backups', label: 'Backup & Restore (4 AM)', icon: HardDrive, badgeCls: 'bg-cyan-500/15 text-cyan-300' },
       { id: 'settings', label: 'Passwords & Settings', icon: ShieldCheck, badgeCls: 'bg-emerald-500/15 text-emerald-400' },
     ],
   },
@@ -1318,8 +1320,8 @@ export function AdminDashboard({ onOpenDownloads }) {
           {/* 7. REPORTS */}
           {subpage === 'reports' && <AdminReportsPanel onNotify={notify} />}
 
-          {/* 8, 9, 10. RELEASES, TICKETS, ZONES/PROMOS, PASSWORDS & SETTINGS */}
-          {(subpage === 'releases' || subpage === 'tickets' || subpage === 'zones' || subpage === 'settings') && (
+          {/* 8, 9, 10. RELEASES, TICKETS, ZONES/PROMOS, DB BACKUPS, PASSWORDS & SETTINGS */}
+          {(subpage === 'releases' || subpage === 'tickets' || subpage === 'zones' || subpage === 'backups' || subpage === 'settings') && (
             <AdminOperationsPanel
               subpage={subpage}
               onNotify={notify}

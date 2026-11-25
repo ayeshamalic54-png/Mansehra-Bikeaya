@@ -1197,6 +1197,93 @@ def test_admin_full_rider_and_customer_complete_edit(client):
     assert c_upd.json()["full_name"] == "Hammad Raza Edited"
 
 
+def test_full_db_backup_download_and_restore(client):
+    import gzip
+    import json
+
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    # 1. Verify SMTP credentials cannot leak publicly even if saved in settings
+    client.put(
+        "/api/admin/settings/backup_smtp_pass",
+        headers=_auth_header(admin_token),
+        json={"value": "super-secret-app-pw"},
+    )
+    boot_settings = client.get("/api/public/bootstrap").json()["settings"]
+    assert "backup_smtp_pass" not in boot_settings
+    assert "backup_smtp_user" not in boot_settings
+    assert boot_settings.get("backup_email") == "gosafar4@gmail.com"
+
+    admin_settings = client.get("/api/admin/settings", headers=_auth_header(admin_token)).json()
+    assert admin_settings["backup_smtp_pass"] == ""
+    assert admin_settings["backup_smtp_pass_configured"] == "true"
+
+    # 2. Backup summary shows 04:00 AM PKT schedule and gosafar4@gmail.com
+    info = client.get("/api/admin/backups", headers=_auth_header(admin_token)).json()
+    assert "04:00 AM PKT" in info["schedule_pkt"]
+    assert info["backup_email"] == "gosafar4@gmail.com"
+
+    # 3. Take manual full backup -> compressed .json.gz in app directory & DB
+    created_files = []
+    try:
+        run_res = client.post("/api/admin/backups/run", headers=_auth_header(admin_token))
+        assert run_res.status_code == 200
+        bk = run_res.json()
+        assert bk["total_rows"] > 10
+        assert bk["file_name"].endswith("-PKT.json.gz")
+        if bk.get("local_path"):
+            created_files.append(Path(bk["local_path"]))
+            created_files.append(Path(bk["local_path"].replace(".json.gz", ".meta.json")))
+
+        # Download gzipped snapshot & inspect tables
+        dl = client.get(f"/api/admin/backups/{bk['id']}/download", headers=_auth_header(admin_token))
+        assert dl.status_code == 200
+        parsed = json.loads(gzip.decompress(dl.content).decode("utf-8"))
+        assert parsed["service"] == "SafarGo"
+        assert "users" in parsed["tables"] and "bookings" in parsed["tables"]
+
+        # Mutate DB (add temporary promo), then restore from saved backup -> temp promo disappears
+        p_res = client.post(
+            "/api/admin/promos",
+            headers=_auth_header(admin_token),
+            json={"code": "TEMP99", "discount_type": "fixed", "discount_value": 10, "max_discount": 10, "min_fare": 50},
+        )
+        assert p_res.status_code == 201
+
+        rst = client.post(f"/api/admin/backups/{bk['id']}/restore", headers=_auth_header(admin_token))
+        assert rst.status_code == 200
+        assert rst.json()["status"] == "restored"
+        safety_file = BACKUP_DIR_TEST / rst.json()["safety_backup_file"] if (BACKUP_DIR_TEST := BACKEND_DIR.parent / "backups") else None
+        if safety_file:
+            created_files.append(safety_file)
+            created_files.append(Path(str(safety_file).replace(".json.gz", ".meta.json")))
+
+        promos_after = client.get("/api/admin/promos", headers=_auth_header(admin_token)).json()
+        assert not any(p["code"] == "TEMP99" for p in promos_after)
+
+        # Also test restore-file upload endpoint
+        up_rst = client.post(
+            "/api/admin/backups/restore-file",
+            headers=_auth_header(admin_token),
+            files={"file": (bk["file_name"], dl.content, "application/gzip")},
+        )
+        assert up_rst.status_code == 200
+        assert up_rst.json()["status"] == "restored"
+        if up_rst.json().get("safety_backup_file"):
+            sf2 = BACKEND_DIR.parent / "backups" / up_rst.json()["safety_backup_file"]
+            created_files.append(sf2)
+            created_files.append(Path(str(sf2).replace(".json.gz", ".meta.json")))
+    finally:
+        for fp in created_files:
+            try:
+                fp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 
 
 

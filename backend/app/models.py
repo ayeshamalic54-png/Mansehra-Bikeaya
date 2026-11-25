@@ -292,3 +292,22 @@ class RiderSettlementRequest(Base):
     paid_at = Column(DateTime(timezone=True), nullable=True)
 
     rider = relationship("User")
+
+
+class DatabaseBackup(Base):
+    __tablename__ = "database_backups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_date_pkt = Column(String(16), nullable=False, index=True)  # YYYY-MM-DD in Asia/Karachi (PKT)
+    file_name = Column(String(180), nullable=False)
+    trigger_type = Column(String(32), nullable=False, default="manual")  # scheduled_pkt | manual
+    status = Column(String(24), nullable=False, default="completed")
+    total_rows = Column(Integer, nullable=False, default=0)
+    row_counts_json = Column(Text, nullable=False, default="{}")
+    size_bytes = Column(Integer, nullable=False, default=0)
+    sha256 = Column(String(64), nullable=False)
+    emailed_to = Column(String(180), nullable=True)
+    email_status = Column(String(32), nullable=False, default="pending")
+    email_error = Column(String(255), nullable=True)
+    payload_gz_b64 = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
