@@ -935,6 +935,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   <div className="font-extrabold text-sm text-slate-900">
                     Active Customer Pickups ({liveMap.active_bookings.length})
                   </div>
+                  <div className="max-h-80 overflow-y-auto pr-1 space-y-2">
                   {liveMap.active_bookings.length === 0 ? (
                     <div className="text-slate-500 py-4 text-center">No active customer trips right now.</div>
                   ) : (
@@ -955,12 +956,14 @@ export function AdminDashboard({ onOpenDownloads }) {
                       </div>
                     ))
                   )}
+                  </div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
                   <div className="font-extrabold text-sm text-slate-900">
                     Captain Fleet Locations ({liveMap.captains.length})
                   </div>
+                  <div className="max-h-80 overflow-y-auto pr-1 space-y-2">
                   {liveMap.captains.map((c) => (
                     <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -999,6 +1002,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                       </span>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             </div>

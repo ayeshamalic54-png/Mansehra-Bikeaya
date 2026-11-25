@@ -52,36 +52,60 @@ function makeCaptainIcon(c, isSelected = false) {
   if (photoUrl) {
     return L.divIcon({
       className: 'safargo-div-icon',
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -16],
+      iconSize: [38, 38],
+      iconAnchor: [19, 19],
+      popupAnchor: [0, -20],
       html: `
-        <div style="position:relative;width:30px;height:30px;">
-          <div style="width:30px;height:30px;border-radius:9999px;border:2.5px solid ${ring};background:#fff;box-shadow:0 3px 10px rgba(15,23,42,0.34);overflow:hidden;">
-            <img src="${photoUrl}" alt="${shortName}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        <div style="position:relative;width:38px;height:38px;">
+          <div style="width:36px;height:36px;border-radius:9999px;border:3px solid ${ring};background-color:#ffffff;background-image:url('${photoUrl}');background-size:cover;background-position:center;box-shadow:0 3px 10px rgba(15,23,42,0.38);overflow:hidden;">
+            <img src="${photoUrl}" alt="${shortName}" style="width:30px;height:30px;min-width:30px;min-height:30px;border-radius:9999px;object-fit:cover;display:block;" />
           </div>
-          <span style="position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:9999px;background:${dot};border:1.5px solid #fff;"></span>
+          <span style="position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:9999px;background:${dot};border:2px solid #fff;"></span>
         </div>
       `,
     });
   }
 
   const glyph = isCar
-    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>`
-    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`;
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`;
 
   return L.divIcon({
     className: 'safargo-div-icon',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
     html: `
-      <div style="position:relative;width:28px;height:28px;border-radius:9999px;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,0.28);">
+      <div style="position:relative;width:32px;height:32px;border-radius:9999px;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;border:2.5px solid ${isSelected ? '#F59E0B' : '#fff'};box-shadow:0 3px 10px rgba(15,23,42,0.28);">
         ${glyph}
-        <span style="position:absolute;bottom:-1px;right:-1px;width:8px;height:8px;border-radius:9999px;background:${dot};border:1.5px solid #fff;"></span>
+        <span style="position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:9999px;background:${dot};border:1.5px solid #fff;"></span>
       </div>
     `,
   });
+}
+
+function getCaptainKey(c, fallbackIdx = 0) {
+  return String(c?.id ?? c?.rider_id ?? c?.phone ?? fallbackIdx);
+}
+
+function getSpreadPosition(c, idx, allList) {
+  let duplicatesBefore = 0;
+  for (let i = 0; i < idx; i += 1) {
+    const other = allList[i];
+    if (
+      Math.abs(Number(other.lat) - Number(c.lat)) < 0.00018 &&
+      Math.abs(Number(other.lng) - Number(c.lng)) < 0.00018
+    ) {
+      duplicatesBefore += 1;
+    }
+  }
+  if (duplicatesBefore === 0) return [Number(c.lat), Number(c.lng)];
+  const angle = duplicatesBefore * 2.39996; // golden angle in radians
+  const radius = 0.00028 * Math.sqrt(duplicatesBefore);
+  return [
+    Number(c.lat) + radius * Math.sin(angle),
+    Number(c.lng) + radius * Math.cos(angle),
+  ];
 }
 
 export function SafarGoMap({
@@ -104,15 +128,32 @@ export function SafarGoMap({
   const layerRef = useRef(null);
   const baseLayersRef = useRef(null);
   const [mapStyle, setMapStyle] = useState('street'); // street | satellite
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [selectedKey, setSelectedKey] = useState(null);
+  const [fleetSearch, setFleetSearch] = useState('');
+  const [fleetFilter, setFleetFilter] = useState('all'); // all | online | bike | car
   const callbacksRef = useRef({ interactive, activePinMode, onMapPick, onPinDrag });
   callbacksRef.current = { interactive, activePinMode, onMapPick, onPinDrag };
 
   const visibleCaptains = (captains || []).filter((c) => c && c.lat != null && c.lng != null);
-  const safeSelectedIdx =
-    visibleCaptains.length === 0 ? 0 : Math.min(selectedIdx, visibleCaptains.length - 1);
-  const activeCaptain = visibleCaptains[safeSelectedIdx] || null;
+  const defaultCaptain =
+    visibleCaptains.find((c) => Boolean(safePhotoUrl(c.rider_photo))) || visibleCaptains[0] || null;
+  const activeCaptain =
+    visibleCaptains.find((c, i) => getCaptainKey(c, i) === selectedKey) || defaultCaptain;
+  const activeCaptainKey = activeCaptain
+    ? getCaptainKey(activeCaptain, visibleCaptains.indexOf(activeCaptain))
+    : null;
   const hasSidebar = showCaptainSidebar && visibleCaptains.length > 0;
+
+  const filteredRoster = visibleCaptains.filter((c) => {
+    if (fleetFilter === 'online' && c.is_online === false) return false;
+    if (fleetFilter === 'bike' && (c.vehicle_type || 'bike') !== 'bike') return false;
+    if (fleetFilter === 'car' && c.vehicle_type !== 'car') return false;
+    const q = fleetSearch.trim().toLowerCase();
+    if (!q) return true;
+    return [c.full_name, c.display_name, c.bike_plate, c.bike_model, c.zone_name]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q));
+  });
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -283,13 +324,16 @@ export function SafarGoMap({
 
     // 5. Captains Layer (Nearby Riders/Cars for Customer, or All Fleet for Admin)
     visibleCaptains.forEach((c, idx) => {
-      const m = L.marker([c.lat, c.lng], {
-        icon: makeCaptainIcon(c, idx === safeSelectedIdx),
-      }).addTo(layer);
-      m.on('click', () => setSelectedIdx(idx));
-      const title = c.full_name || c.display_name || 'SafarGo Captain';
+      const capKey = getCaptainKey(c, idx);
+      const isSelected = capKey === activeCaptainKey;
       const riderImg = safePhotoUrl(c.rider_photo);
-      const vehImg = safePhotoUrl(c.vehicle_photo);
+      const [plotLat, plotLng] = getSpreadPosition(c, idx, visibleCaptains);
+      const m = L.marker([plotLat, plotLng], {
+        icon: makeCaptainIcon(c, isSelected),
+        zIndexOffset: isSelected ? 1200 : riderImg ? 900 : 650,
+      }).addTo(layer);
+      m.on('click', () => setSelectedKey(capKey));
+      const title = c.full_name || c.display_name || 'SafarGo Captain';
       m.bindPopup(
         `<div style="font-size:12px;line-height:1.4;min-width:170px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
@@ -307,7 +351,7 @@ export function SafarGoMap({
         </div>`
       );
       if (bounds.length === 0 || activeBookings?.length > 0) {
-        bounds.push([c.lat, c.lng]);
+        bounds.push([plotLat, plotLng]);
       }
     });
 
@@ -331,7 +375,7 @@ export function SafarGoMap({
     activeBookings,
     interactive,
     fitSignature,
-    safeSelectedIdx,
+    activeCaptainKey,
   ]);
 
   const googleMapsUrl =
@@ -384,13 +428,13 @@ export function SafarGoMap({
         </a>
       </div>
 
-      {/* Side-Wise Clear Captain Photo Showcase Panel (never covers map labels or pins) */}
+      {/* Side-Wise Clear Captain Photo Showcase Panel + Scalable Roster for Growing Fleet */}
       {hasSidebar && activeCaptain && (
-        <aside className="w-full md:w-64 lg:w-72 shrink-0 rounded-2xl border border-slate-200/90 bg-white p-3.5 flex flex-col justify-between gap-3 shadow-xs">
+        <aside className="w-full md:w-72 lg:w-80 shrink-0 rounded-2xl border border-slate-200/90 bg-white p-3.5 flex flex-col justify-between gap-3 shadow-xs">
           <div className="space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Live Captain Pin ({safeSelectedIdx + 1}/{visibleCaptains.length})
+                Live Captain Pin ({visibleCaptains.findIndex((c, i) => getCaptainKey(c, i) === activeCaptainKey) + 1}/{visibleCaptains.length})
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
@@ -451,21 +495,96 @@ export function SafarGoMap({
           </div>
 
           {visibleCaptains.length > 1 && (
-            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
-              {visibleCaptains.slice(0, 6).map((c, idx) => (
-                <button
-                  key={c.id || c.rider_id || idx}
-                  type="button"
-                  onClick={() => setSelectedIdx(idx)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition ${
-                    idx === safeSelectedIdx
-                      ? 'bg-[#009E4D] text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {(c.full_name || c.display_name || `C${idx + 1}`).split(' ')[0]}
-                </button>
-              ))}
+            <div className="pt-2.5 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Fleet ({filteredRoster.length}/{visibleCaptains.length})
+                </span>
+                <div className="flex gap-1">
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'online', label: 'Online' },
+                    { id: 'bike', label: 'Bike' },
+                    { id: 'car', label: 'Car' },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFleetFilter(f.id)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        fleetFilter === f.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {visibleCaptains.length > 3 && (
+                <input
+                  type="text"
+                  placeholder="Search captain, plate, chowk..."
+                  value={fleetSearch}
+                  onChange={(e) => setFleetSearch(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-medium"
+                />
+              )}
+
+              <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
+                {filteredRoster.length === 0 ? (
+                  <div className="text-[11px] text-slate-400 text-center py-2">No matching captains</div>
+                ) : (
+                  filteredRoster.map((c) => {
+                    const origIdx = visibleCaptains.indexOf(c);
+                    const capKey = getCaptainKey(c, origIdx);
+                    const isSel = capKey === activeCaptainKey;
+                    const thumb = safePhotoUrl(c.rider_photo);
+                    return (
+                      <button
+                        key={capKey}
+                        type="button"
+                        onClick={() => {
+                          setSelectedKey(capKey);
+                          mapRef.current?.panTo([Number(c.lat), Number(c.lng)], { animate: true });
+                        }}
+                        className={`w-full p-1.5 rounded-xl border text-left flex items-center justify-between gap-2 transition ${
+                          isSel
+                            ? 'bg-emerald-50 border-[#009E4D]'
+                            : 'bg-slate-50/80 border-slate-200/70 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt={c.full_name || c.display_name || 'Captain'}
+                              className="w-7 h-7 rounded-full object-cover border border-emerald-300 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">
+                              {(c.full_name || c.display_name || 'C')[0]}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold text-slate-900 truncate">
+                              {c.full_name || c.display_name || 'Captain'}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {c.bike_plate || c.vehicle_type} · {c.zone_name || 'Live GPS'}
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            c.is_online !== false ? 'bg-[#009E4D]' : 'bg-slate-400'
+                          }`}
+                        />
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </aside>

@@ -87,17 +87,16 @@ def update_my_captain_profile(
                 identity_or_docs_changed = True
 
     has_required_docs = has_complete_captain_docs(rp)
-    if not has_required_docs:
-        rp.is_verified = False
-        rp.is_online = False
-        rp.verification_status = "incomplete"
-    elif identity_or_docs_changed or not rp.is_verified:
-        # Uploading or changing any verification photo/ID requires fresh Admin review & approval.
+    if not rp.is_verified:
+        if has_required_docs:
+            rp.docs_submitted_at = utcnow()
+            rp.verification_status = "pending"
+            rp.verification_note = None
+        else:
+            rp.is_online = False
+            rp.verification_status = "incomplete"
+    elif identity_or_docs_changed and has_required_docs:
         rp.docs_submitted_at = utcnow()
-        rp.is_verified = False
-        rp.is_online = False
-        rp.verification_status = "pending"
-        rp.verification_note = None
 
     db.commit()
     db.refresh(current_user)

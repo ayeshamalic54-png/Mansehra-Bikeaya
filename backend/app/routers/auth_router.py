@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 def serialize_rider_profile(rp: RiderProfile) -> dict:
     missing_docs = get_missing_captain_docs(rp)
     has_required_docs = len(missing_docs) == 0
-    is_verified = bool(rp.is_verified and has_required_docs)
+    is_verified = bool(rp.is_verified)
     v_status = getattr(rp, "verification_status", None) or (
         "verified" if is_verified else ("pending" if has_required_docs else "incomplete")
     )

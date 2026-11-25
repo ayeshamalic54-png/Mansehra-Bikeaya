@@ -299,7 +299,10 @@ export function AdminPeoplePanel({
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                     {!allDocsComplete && (
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold">
-                        Incomplete Documents — Admin cannot verify yet. Missing: <span className="text-rose-700">{missingList.join(', ')}</span>
+                        Pending Documents Note — Missing: <span className="text-rose-700">{missingList.join(', ')}</span>
+                        <div className="text-[10px] text-amber-800 mt-0.5">
+                          Captain khud verify nahi ho sakta, lekin Admin chahe to abhi manually Approve &amp; Verify kar sakta hai.
+                        </div>
                       </div>
                     )}
                     <input
@@ -312,7 +315,6 @@ export function AdminPeoplePanel({
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={!allDocsComplete}
                         onClick={async () => {
                           try {
                             await apiRequest(`/api/admin/riders/${dr.id}`, {
@@ -327,10 +329,10 @@ export function AdminPeoplePanel({
                             onNotify(err.message, true);
                           }
                         }}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-extrabold inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold inline-flex items-center justify-center gap-1.5"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        {allDocsComplete ? 'Approve & Verify Captain ✓' : 'Complete All Docs to Approve'}
+                        Approve &amp; Verify Captain ✓
                       </button>
                       <button
                         type="button"
@@ -559,37 +561,24 @@ export function AdminPeoplePanel({
                     </td>
                     <td className="p-3.5 whitespace-nowrap space-x-1.5">
                       {!r.is_verified && (
-                        canApproveRow ? (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await apiRequest(`/api/admin/riders/${r.id}`, {
-                                  method: 'PATCH',
-                                  body: { is_verified: true, verification_status: 'verified' },
-                                });
-                                onNotify(`${r.full_name} verified!`);
-                                onReloadRiders();
-                              } catch (err) {
-                                onNotify(err.message, true);
-                              }
-                            }}
-                            className="px-2 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
-                          >
-                            Verify
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDocsRiderId(r.id);
-                              setRejectNote(r.verification_note || '');
-                            }}
-                            className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-bold"
-                            title="Upload all 4 documents + CNIC before Admin verification"
-                          >
-                            Docs ({docCount}/4)
-                          </button>
-                        )
+                        <button
+                          onClick={async () => {
+                            try {
+                              await apiRequest(`/api/admin/riders/${r.id}`, {
+                                method: 'PATCH',
+                                body: { is_verified: true, verification_status: 'verified' },
+                              });
+                              onNotify(`${r.full_name} verified!`);
+                              onReloadRiders();
+                            } catch (err) {
+                              onNotify(err.message, true);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
+                          title={canApproveRow ? 'Verify Captain' : `Docs ${docCount}/4 — Admin manual verify override`}
+                        >
+                          Verify
+                        </button>
                       )}
                       <button
                         onClick={async () => {

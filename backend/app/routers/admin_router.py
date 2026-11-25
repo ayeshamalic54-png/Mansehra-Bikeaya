@@ -525,7 +525,7 @@ def list_riders(
         completed_km = round(sum(float(b.distance_km or 0.0) for b in r_trips if b.status == "completed"), 1)
         missing_docs = get_missing_captain_docs(rp)
         has_docs = len(missing_docs) == 0
-        is_verified = bool(rp and rp.is_verified and has_docs)
+        is_verified = bool(rp and rp.is_verified)
         v_status = (getattr(rp, "verification_status", None) if rp else None) or (
             "verified" if is_verified else ("pending" if has_docs else "incomplete")
         )
@@ -636,22 +636,15 @@ def admin_create_rider(
         credit_limit=payload.credit_limit,
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
-        is_verified=False,
-        verification_status="incomplete",
+        is_verified=bool(payload.is_verified),
+        verification_status="verified" if payload.is_verified else "incomplete",
         is_online=False,
     )
     missing_docs = get_missing_captain_docs(rp)
-    if payload.is_verified and missing_docs:
-        db.delete(user)
-        db.commit()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot verify Captain yet. Complete all documents first — missing: {', '.join(missing_docs)}",
-        )
     if not missing_docs:
         rp.docs_submitted_at = utcnow()
-        rp.is_verified = bool(payload.is_verified)
-        rp.verification_status = "verified" if payload.is_verified else "pending"
+        if not payload.is_verified:
+            rp.verification_status = "pending"
     db.add(rp)
     db.commit()
     return {"id": user.id, "full_name": user.full_name, "phone": user.phone, "bike_plate": rp.bike_plate}
@@ -698,11 +691,7 @@ def update_rider_config(
     wants_reject = payload.verification_status == "rejected"
 
     if wants_verify:
-        if missing_docs:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot verify Captain yet. Complete all documents first — missing: {', '.join(missing_docs)}",
-            )
+        # Admin can always manually verify/approve a Captain even while documents remain pending.
         rp.is_verified = True
         rp.verification_status = "verified"
         rp.verification_note = None
@@ -715,12 +704,9 @@ def update_rider_config(
         rp.is_online = False
         rp.verification_status = "rejected" if payload.verification_note else ("pending" if not missing_docs else "incomplete")
     else:
-        if missing_docs:
-            rp.is_verified = False
-            rp.is_online = False
-            if rp.verification_status != "rejected":
-                rp.verification_status = "incomplete"
-        elif not rp.is_verified and rp.verification_status != "rejected":
+        if missing_docs and not rp.is_verified and rp.verification_status != "rejected":
+            rp.verification_status = "incomplete"
+        elif not missing_docs and not rp.is_verified and rp.verification_status != "rejected":
             rp.docs_submitted_at = rp.docs_submitted_at or utcnow()
             rp.verification_status = "pending"
     if payload.is_active is not None:

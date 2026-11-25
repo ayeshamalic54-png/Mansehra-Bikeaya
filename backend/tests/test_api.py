@@ -84,15 +84,9 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
 
-    # Fresh Captain starts unverified; partial doc saves progress, blocks verify until all 4 docs + Admin approval
+    # Fresh Captain starts unverified; partial doc saves progress, stays unverified until Admin manually approves
     sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
     assert rider_user["rider_profile"]["is_verified"] is False
-    blocked_verify = client.patch(
-        f"/api/admin/riders/{rider_user['id']}",
-        headers=_auth_header(admin_token),
-        json={"is_verified": True},
-    )
-    assert blocked_verify.status_code == 400
 
     partial = client.patch(
         "/api/riders/profile",
@@ -107,13 +101,20 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     assert p_rp["verification_status"] == "incomplete"
     assert len(p_rp["missing_required_docs"]) == 3
 
-    blocked_partial = client.patch(
+    # Admin CAN manually verify even while docs are still incomplete/pending (Admin override option)
+    admin_override = client.patch(
         f"/api/admin/riders/{rider_user['id']}",
         headers=_auth_header(admin_token),
         json={"is_verified": True},
     )
-    assert blocked_partial.status_code == 400
+    assert admin_override.status_code == 200
 
+    # Reset back to test full 4/4 pending flow -> still needs Admin verify
+    client.patch(
+        f"/api/admin/riders/{rider_user['id']}",
+        headers=_auth_header(admin_token),
+        json={"is_verified": False},
+    )
     completed_docs = client.patch(
         "/api/riders/profile",
         headers=_auth_header(rider_token),

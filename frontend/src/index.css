@@ -42,6 +42,11 @@
   border: none;
 }
 
+.safargo-div-icon img {
+  max-width: none !important;
+  max-height: none !important;
+}
+
 @media print {
   .no-print {
     display: none !important;

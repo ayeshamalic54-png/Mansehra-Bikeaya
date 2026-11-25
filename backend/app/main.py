@@ -79,19 +79,6 @@ def ensure_schema_migrations() -> None:
         if "rider_profiles" in tables:
             conn.execute(
                 text(
-                    "UPDATE rider_profiles SET is_verified = FALSE, is_online = FALSE, "
-                    "verification_status = 'incomplete' "
-                    "WHERE COALESCE(TRIM(rider_photo), '') = '' "
-                    "OR COALESCE(TRIM(vehicle_photo), '') = '' "
-                    "OR COALESCE(TRIM(cnic_front_photo), '') = '' "
-                    "OR COALESCE(TRIM(cnic_back_photo), '') = '' "
-                    "OR COALESCE(TRIM(cnic_number), '') = '' "
-                    "OR COALESCE(TRIM(bike_model), '') = '' "
-                    "OR COALESCE(TRIM(bike_plate), '') = ''"
-                )
-            )
-            conn.execute(
-                text(
                     "UPDATE rider_profiles SET verification_status = 'verified' "
                     "WHERE is_verified = TRUE AND verification_status != 'verified'"
                 )
