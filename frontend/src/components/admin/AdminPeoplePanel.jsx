@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Bike, Car, CheckCircle2, FileCheck2, KeyRound, MapPin, Pencil, Trash2, X, XCircle } from 'lucide-react';
+import { Bike, Car, CheckCircle2, FileCheck2, KeyRound, MapPin, Pencil, Printer, Trash2, X, XCircle } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { StatusBadge } from '../StatusBadge';
 import { CaptainPhotoUploads } from '../CaptainPhotoUploads';
+import { FleetPrintRegister } from './FleetPrintRegister';
 
 export function AdminPeoplePanel({
   mode, // 'riders' | 'customers'
@@ -12,6 +13,7 @@ export function AdminPeoplePanel({
   onReloadRiders,
   onReloadCustomers,
   onNotify,
+  settings = {},
 }) {
   // Password & Verification Docs Review Modals
   const [pwTarget, setPwTarget] = useState(null); // { id, name, role }
@@ -19,6 +21,7 @@ export function AdminPeoplePanel({
   const [tripsRiderId, setTripsRiderId] = useState(null);
   const [docsRiderId, setDocsRiderId] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [showPrintRegister, setShowPrintRegister] = useState(false);
 
   // Create Captain Form State
   const [riderForm, setRiderForm] = useState({
@@ -724,7 +727,8 @@ export function AdminPeoplePanel({
             </div>
           )}
 
-          <form onSubmit={handleSaveRider} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
+          {!showPrintRegister && (
+          <form onSubmit={handleSaveRider} className="no-print bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-sm text-slate-900">
                 + Register New Bike / AC Car Captain
@@ -843,7 +847,34 @@ export function AdminPeoplePanel({
               Save New Captain
             </button>
           </form>
+          )}
 
+          <div className="no-print bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-extrabold text-sm text-slate-900">
+                SafarGo Registered Captains ({riders.length})
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Edit, verify, check per-trip km, ya office record ke liye full contrast sheet print karein.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrintRegister((v) => !v)}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold inline-flex items-center gap-2 shadow-xs"
+            >
+              <Printer className="w-4 h-4 text-emerald-400" />
+              {showPrintRegister ? 'Back to Fleet Table' : 'Print Office Fleet List'}
+            </button>
+          </div>
+
+          {showPrintRegister ? (
+            <FleetPrintRegister
+              riders={riders}
+              settings={settings}
+              onClose={() => setShowPrintRegister(false)}
+            />
+          ) : (
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
@@ -989,6 +1020,7 @@ export function AdminPeoplePanel({
               </tbody>
             </table>
           </div>
+          )}
 
           {tripsRiderId && (() => {
             const target = riders.find((r) => r.id === tripsRiderId);
@@ -1180,6 +1212,32 @@ export function AdminPeoplePanel({
             </button>
           </form>
 
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-extrabold text-sm text-slate-900">
+                SafarGo Registered Captains ({riders.length})
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Edit, verify, check per-trip km, ya office record ke liye full contrast sheet print karein.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrintRegister(true)}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold inline-flex items-center gap-2 shadow-xs"
+            >
+              <Printer className="w-4 h-4 text-emerald-400" />
+              Print Office Fleet List
+            </button>
+          </div>
+
+          {showPrintRegister ? (
+            <FleetPrintRegister
+              riders={riders}
+              settings={settings}
+              onClose={() => setShowPrintRegister(false)}
+            />
+          ) : (
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
@@ -1255,6 +1313,7 @@ export function AdminPeoplePanel({
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
     </div>

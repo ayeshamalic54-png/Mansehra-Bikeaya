@@ -1323,9 +1323,13 @@ def admin_list_settings(
 ):
     rows = {s.key: s.value for s in db.query(SystemSetting).all()}
     smtp_cfg = resolve_backup_email_config(db)
-    if "backup_smtp_pass" in rows:
-        rows["backup_smtp_pass"] = ""
+    for sec_key in ("backup_smtp_pass", "backup_resend_key", "backup_webhook_url"):
+        if sec_key in rows:
+            rows[sec_key] = ""
     rows["backup_smtp_pass_configured"] = "true" if smtp_cfg["smtp_configured"] else "false"
+    rows["backup_webhook_url_configured"] = "true" if bool(smtp_cfg["webhook_url"]) else "false"
+    rows["backup_resend_key_configured"] = "true" if bool(smtp_cfg["resend_key"]) else "false"
+    rows["backup_https_configured"] = "true" if smtp_cfg["https_relay_configured"] else "false"
     rows.setdefault("backup_email", smtp_cfg["recipient"])
     rows.setdefault("backup_smtp_user", smtp_cfg["smtp_user"])
     rows.setdefault("backup_schedule_pkt", f"{BACKUP_HOUR_PKT:02d}:00 AM PKT")
@@ -1339,11 +1343,16 @@ def admin_update_setting(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    if key == "backup_smtp_pass_configured":
+    if key in (
+        "backup_smtp_pass_configured",
+        "backup_webhook_url_configured",
+        "backup_resend_key_configured",
+        "backup_https_configured",
+    ):
         return {"key": key, "value": "ignored"}
-    val = payload.value.strip() if key == "backup_smtp_pass" else payload.value
-    if key == "backup_smtp_pass" and val == "":
-        # Do not wipe stored App Password if Admin leaves password input blank when saving other settings.
+    secret_keys = ("backup_smtp_pass", "backup_resend_key", "backup_webhook_url")
+    val = payload.value.strip() if key in secret_keys else payload.value
+    if key in secret_keys and val == "":
         return {"key": key, "value": "unchanged"}
     if key == "backup_smtp_pass":
         val = "".join(val.split())
@@ -1354,7 +1363,7 @@ def admin_update_setting(
     else:
         s.value = val
     db.commit()
-    return {"key": s.key, "value": "" if key == "backup_smtp_pass" else s.value}
+    return {"key": s.key, "value": "" if key in secret_keys else s.value}
 
 
 @router.get("/backups")
@@ -1377,6 +1386,8 @@ def admin_list_backups(
         "backup_email": cfg["recipient"],
         "smtp_user": cfg["smtp_user"],
         "smtp_configured": cfg["smtp_configured"],
+        "https_relay_configured": cfg["https_relay_configured"],
+        "email_configured": cfg["email_configured"],
         "backups": [serialize_backup_summary(r) for r in rows],
     }
 

@@ -47,12 +47,34 @@
   max-height: none !important;
 }
 
+@page {
+  size: auto;
+  margin: 10mm;
+}
+
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .no-print {
     display: none !important;
   }
   body {
     background: #FFFFFF !important;
     background-image: none !important;
+    color: #0F172A !important;
+  }
+  .print-fleet-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10.5px !important;
+  }
+  .print-fleet-table thead {
+    display: table-header-group !important;
+  }
+  .print-fleet-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

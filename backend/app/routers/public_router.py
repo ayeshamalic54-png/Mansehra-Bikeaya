@@ -64,7 +64,7 @@ def get_public_bootstrap(db: Session = Depends(get_db)):
         "settings": {
             s.key: s.value
             for s in settings_rows
-            if not any(tok in s.key.lower() for tok in ("secret", "pass", "smtp", "token", "private"))
+            if not any(tok in s.key.lower() for tok in ("secret", "pass", "smtp", "token", "private", "webhook", "resend", "key"))
         },
         "releases": [
             {

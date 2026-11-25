@@ -4,11 +4,14 @@ import hashlib
 import json
 import os
 import smtplib
+import socket
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional
+import httpx
+from sqlalchemy import Date, DateTime, text
 from sqlalchemy.orm import Session
 from app.config import ROOT_DIR
 from app.database import Base
@@ -52,6 +55,8 @@ def resolve_backup_email_config(db: Session) -> dict:
         or _get_setting(db, "backup_email", DEFAULT_BACKUP_EMAIL)
         or DEFAULT_BACKUP_EMAIL
     ).strip()
+    webhook_url = (os.getenv("BACKUP_WEBHOOK_URL") or _get_setting(db, "backup_webhook_url", "")).strip()
+    resend_key = (os.getenv("RESEND_API_KEY") or _get_setting(db, "backup_resend_key", "")).strip()
     smtp_host = (os.getenv("SMTP_HOST") or _get_setting(db, "backup_smtp_host", "smtp.gmail.com")).strip()
     smtp_port = int((os.getenv("SMTP_PORT") or _get_setting(db, "backup_smtp_port", "465")).strip() or "465")
     smtp_user = (os.getenv("SMTP_USER") or _get_setting(db, "backup_smtp_user", recipient) or recipient).strip()
@@ -59,34 +64,40 @@ def resolve_backup_email_config(db: Session) -> dict:
     smtp_pass = "".join(raw_pass.split())
     return {
         "recipient": recipient,
+        "webhook_url": webhook_url,
+        "resend_key": resend_key,
         "smtp_host": smtp_host,
         "smtp_port": smtp_port,
         "smtp_user": smtp_user,
         "smtp_pass": smtp_pass,
         "smtp_configured": bool(recipient and smtp_user and smtp_pass),
+        "https_relay_configured": bool(webhook_url or resend_key),
+        "email_configured": bool(webhook_url or resend_key or (recipient and smtp_user and smtp_pass)),
     }
+
+
+def _resolve_ipv4_host(hostname: str, port: int) -> str:
+    """Resolve IPv4 address explicitly so hosts without IPv6 routing avoid [Errno 101]."""
+    try:
+        infos = socket.getaddrinfo(hostname, port, socket.AF_INET, socket.SOCK_STREAM)
+        if infos:
+            return infos[0][4][0]
+    except OSError:
+        pass
+    return hostname
 
 
 def send_backup_email(db: Session, rec: DatabaseBackup, gz_bytes: bytes) -> tuple[str, str, Optional[str]]:
     cfg = resolve_backup_email_config(db)
     recipient = cfg["recipient"]
     if os.getenv("PYTEST_CURRENT_TEST"):
-        return "skipped", recipient, "Skipped external SMTP send during automated tests"
-    if not cfg["smtp_configured"]:
-        return (
-            "smtp_not_configured",
-            recipient,
-            "Set Gmail App Password in Admin -> DB Backups (or SMTP_PASS env) to email backups automatically.",
-        )
+        return "skipped", recipient, "Skipped external email send during automated tests"
 
-    msg = EmailMessage()
-    msg["Subject"] = (
+    subject = (
         f"[SafarGo Backup] {rec.backup_date_pkt} ({rec.trigger_type}) — "
         f"{rec.total_rows} rows ({round(rec.size_bytes / 1024.0, 1)} KB)"
     )
-    msg["From"] = f"SafarGo Backups <{cfg['smtp_user']}>"
-    msg["To"] = recipient
-    msg.set_content(
+    body_text = (
         f"SafarGo Full Database Backup Summary\n"
         f"----------------------------------\n"
         f"Time (PKT): {to_pkt_iso(rec.created_at) or rec.backup_date_pkt}\n"
@@ -98,24 +109,103 @@ def send_backup_email(db: Session, rec: DatabaseBackup, gz_bytes: bytes) -> tupl
         f"Local App Directory Copy: {BACKUP_DIR / rec.file_name}\n\n"
         f"The compressed full database JSON archive is attached to this email.\n"
     )
-    msg.add_attachment(
-        gz_bytes,
-        maintype="application",
-        subtype="gzip",
-        filename=rec.file_name,
-    )
+    b64_data = base64.b64encode(gz_bytes).decode("ascii")
+
+    # 1. Preferred on Render/Cloud: HTTPS port 443 Google Apps Script Gmail Relay Webhook
+    if cfg["webhook_url"]:
+        try:
+            r = httpx.post(
+                cfg["webhook_url"],
+                json={
+                    "to": recipient,
+                    "subject": subject,
+                    "body": body_text,
+                    "filename": rec.file_name,
+                    "mimeType": "application/gzip",
+                    "contentBase64": b64_data,
+                },
+                timeout=30.0,
+                follow_redirects=True,
+            )
+            if 200 <= r.status_code < 300:
+                return "sent", recipient, None
+            return "failed", recipient, f"Webhook HTTP {r.status_code}: {r.text[:160]}"
+        except Exception as exc:
+            return "failed", recipient, f"HTTPS Webhook failed: {str(exc)[:180]}"
+
+    # 2. Alternative HTTPS Port 443: Resend Email API
+    if cfg["resend_key"]:
+        try:
+            r = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {cfg['resend_key']}"},
+                json={
+                    "from": "SafarGo Backups <onboarding@resend.dev>",
+                    "to": [recipient],
+                    "subject": subject,
+                    "text": body_text,
+                    "attachments": [{"filename": rec.file_name, "content": b64_data}],
+                },
+                timeout=30.0,
+            )
+            if 200 <= r.status_code < 300:
+                return "sent", recipient, None
+            return "failed", recipient, f"Resend HTTP {r.status_code}: {r.text[:160]}"
+        except Exception as exc:
+            return "failed", recipient, f"Resend API failed: {str(exc)[:180]}"
+
+    # 3. Direct SMTP fallback (works on local Windows PC / VPS; Render Free blocks SMTP 465/587)
+    if not cfg["smtp_configured"]:
+        return (
+            "smtp_not_configured",
+            recipient,
+            "Configure HTTPS Gmail Script URL / Resend Key (for Render) or Gmail App Password (for local PC).",
+        )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"SafarGo Backups <{cfg['smtp_user']}>"
+    msg["To"] = recipient
+    msg.set_content(body_text)
+    msg.add_attachment(gz_bytes, maintype="application", subtype="gzip", filename=rec.file_name)
 
     try:
-        if cfg["smtp_port"] == 465:
-            with smtplib.SMTP_SSL(cfg["smtp_host"], cfg["smtp_port"], timeout=25) as server:
-                server.login(cfg["smtp_user"], cfg["smtp_pass"])
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"], timeout=25) as server:
-                server.starttls()
-                server.login(cfg["smtp_user"], cfg["smtp_pass"])
-                server.send_message(msg)
-        return "sent", recipient, None
+        host = cfg["smtp_host"]
+        port = cfg["smtp_port"]
+        # Connect using IPv4 if DNS returns unreachable IPv6, while preserving SNI hostname for TLS
+        ipv4_host = _resolve_ipv4_host(host, port)
+        try:
+            if port == 465:
+                with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+                    server.login(cfg["smtp_user"], cfg["smtp_pass"])
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(host, port, timeout=20) as server:
+                    server.starttls()
+                    server.login(cfg["smtp_user"], cfg["smtp_pass"])
+                    server.send_message(msg)
+            return "sent", recipient, None
+        except OSError as net_err:
+            if ipv4_host != host:
+                if port == 465:
+                    with smtplib.SMTP_SSL(ipv4_host, port, timeout=20) as server:
+                        server.login(cfg["smtp_user"], cfg["smtp_pass"])
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(ipv4_host, port, timeout=20) as server:
+                        server.starttls()
+                        server.login(cfg["smtp_user"], cfg["smtp_pass"])
+                        server.send_message(msg)
+                return "sent", recipient, None
+            raise net_err
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (101, 110, 111) or "unreachable" in str(exc).lower():
+            return (
+                "failed",
+                recipient,
+                f"Cloud host blocks SMTP port {cfg['smtp_port']} ({exc}). Paste a free HTTPS Gmail Script URL or Resend Key below to send from Render, OR run from local Windows 4 AM scheduler.",
+            )
+        return "failed", recipient, str(exc)[:240]
     except Exception as exc:
         return "failed", recipient, str(exc)[:240]
 
@@ -128,7 +218,6 @@ def export_full_database_payload(db: Session) -> tuple[dict, dict[str, int]]:
     bind = db.get_bind()
     for table in Base.metadata.sorted_tables:
         if table.name == "database_backups":
-            # Exclude backup blobs themselves to prevent recursive growth.
             continue
         rows = db.execute(table.select()).mappings().all()
         serial_rows = [dict(r) for r in rows]
@@ -208,6 +297,7 @@ def create_full_database_backup(
         row_counts_json=json.dumps(row_counts),
         size_bytes=len(gz_bytes),
         sha256=digest,
+        email_status="local_only" if not send_email else "pending",
         payload_gz_b64=gz_b64,
     )
     db.add(rec)
@@ -315,8 +405,6 @@ def parse_backup_bytes(raw_bytes: bytes) -> dict:
 def _coerce_column_value(col, val):
     if val is None:
         return None
-    from sqlalchemy import Date, DateTime
-
     if isinstance(col.type, DateTime) and isinstance(val, str):
         parsed = datetime.fromisoformat(val)
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
@@ -327,10 +415,7 @@ def _coerce_column_value(col, val):
 
 def restore_database_from_payload(db: Session, payload: dict) -> dict:
     """Safely restore full database tables from parsed SafarGo backup payload."""
-    from sqlalchemy import text
-
     tables_data: dict = payload.get("tables") or {}
-    # Always snapshot current state first so any restore can be undone.
     safety_rec, _ = create_full_database_backup(
         db,
         trigger_type="pre_restore",
@@ -381,8 +466,11 @@ def restore_database_from_payload(db: Session, payload: dict) -> dict:
 
     return {
         "status": "restored",
+        "source_backup_pkt": payload.get("created_at_pkt") or "",
         "safety_backup_id": safety_rec.id,
         "safety_backup_file": safety_rec.file_name,
+        "safety_backup_status": safety_rec.email_status,
         "total_restored_rows": sum(restored_counts.values()),
         "restored_counts": restored_counts,
+        "restored_at_pkt": to_pkt_iso(pkt_now()),
     }

@@ -1206,25 +1206,43 @@ def test_full_db_backup_download_and_restore(client):
         json={"phone_or_email": "03139620729", "password": "superadmin99"},
     ).json()["access_token"]
 
-    # 1. Verify SMTP credentials cannot leak publicly even if saved in settings
+    # 1. Verify SMTP & HTTPS relay credentials cannot leak publicly even if saved in settings
     client.put(
         "/api/admin/settings/backup_smtp_pass",
         headers=_auth_header(admin_token),
         json={"value": "super-secret-app-pw"},
     )
+    client.put(
+        "/api/admin/settings/backup_webhook_url",
+        headers=_auth_header(admin_token),
+        json={"value": "https://script.google.com/macros/s/test-secret/exec"},
+    )
+    client.put(
+        "/api/admin/settings/backup_resend_key",
+        headers=_auth_header(admin_token),
+        json={"value": "re_test_secret_123"},
+    )
     boot_settings = client.get("/api/public/bootstrap").json()["settings"]
     assert "backup_smtp_pass" not in boot_settings
     assert "backup_smtp_user" not in boot_settings
+    assert "backup_webhook_url" not in boot_settings
+    assert "backup_resend_key" not in boot_settings
     assert boot_settings.get("backup_email") == "gosafar4@gmail.com"
 
     admin_settings = client.get("/api/admin/settings", headers=_auth_header(admin_token)).json()
     assert admin_settings["backup_smtp_pass"] == ""
     assert admin_settings["backup_smtp_pass_configured"] == "true"
+    assert admin_settings["backup_webhook_url"] == ""
+    assert admin_settings["backup_webhook_url_configured"] == "true"
+    assert admin_settings["backup_resend_key"] == ""
+    assert admin_settings["backup_resend_key_configured"] == "true"
 
-    # 2. Backup summary shows 04:00 AM PKT schedule and gosafar4@gmail.com
+    # 2. Backup summary shows 04:00 AM PKT schedule, gosafar4@gmail.com, and HTTPS relay flag
     info = client.get("/api/admin/backups", headers=_auth_header(admin_token)).json()
     assert "04:00 AM PKT" in info["schedule_pkt"]
     assert info["backup_email"] == "gosafar4@gmail.com"
+    assert info["https_relay_configured"] is True
+    assert info["email_configured"] is True
 
     # 3. Take manual full backup -> compressed .json.gz in app directory & DB
     created_files = []
@@ -1255,11 +1273,22 @@ def test_full_db_backup_download_and_restore(client):
 
         rst = client.post(f"/api/admin/backups/{bk['id']}/restore", headers=_auth_header(admin_token))
         assert rst.status_code == 200
-        assert rst.json()["status"] == "restored"
-        safety_file = BACKUP_DIR_TEST / rst.json()["safety_backup_file"] if (BACKUP_DIR_TEST := BACKEND_DIR.parent / "backups") else None
+        rst_data = rst.json()
+        assert rst_data["status"] == "restored"
+        assert rst_data["safety_backup_status"] == "local_only"
+        assert rst_data["total_restored_rows"] > 10
+        assert "PKT" in rst_data["restored_at_pkt"]
+        assert "users" in rst_data["restored_counts"]
+        safety_file = BACKUP_DIR_TEST / rst_data["safety_backup_file"] if (BACKUP_DIR_TEST := BACKEND_DIR.parent / "backups") else None
         if safety_file:
             created_files.append(safety_file)
             created_files.append(Path(str(safety_file).replace(".json.gz", ".meta.json")))
+
+        # Verify safety backup stored in backups list shows local_only (not pending)
+        after_list = client.get("/api/admin/backups", headers=_auth_header(admin_token)).json()["backups"]
+        safety_row = next((x for x in after_list if x["file_name"] == rst_data["safety_backup_file"]), None)
+        assert safety_row is not None
+        assert safety_row["email_status"] == "local_only"
 
         promos_after = client.get("/api/admin/promos", headers=_auth_header(admin_token)).json()
         assert not any(p["code"] == "TEMP99" for p in promos_after)
@@ -1272,6 +1301,7 @@ def test_full_db_backup_download_and_restore(client):
         )
         assert up_rst.status_code == 200
         assert up_rst.json()["status"] == "restored"
+        assert up_rst.json()["safety_backup_status"] == "local_only"
         if up_rst.json().get("safety_backup_file"):
             sf2 = BACKEND_DIR.parent / "backups" / up_rst.json()["safety_backup_file"]
             created_files.append(sf2)

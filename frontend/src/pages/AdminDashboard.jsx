@@ -1305,6 +1305,7 @@ export function AdminDashboard({ onOpenDownloads }) {
               onReloadRiders={loadOverviewAndRiders}
               onReloadCustomers={loadCustomers}
               onNotify={notify}
+              settings={bootstrap?.settings || {}}
             />
           )}
 

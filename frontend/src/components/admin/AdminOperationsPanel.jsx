@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Copy,
   Download,
   HardDrive,
   KeyRound,
@@ -71,9 +75,15 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
     backup_email: 'gosafar4@gmail.com',
     backup_smtp_user: 'gosafar4@gmail.com',
     backup_smtp_pass: '',
+    backup_webhook_url: '',
+    backup_resend_key: '',
   });
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState(null);
+  const [restoreSuccess, setRestoreSuccess] = useState(null);
+  const [showAppsScript, setShowAppsScript] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
 
   const loadSubpage = async () => {
     try {
@@ -96,6 +106,8 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
           backup_email: cfg.backup_email || bk.backup_email || 'gosafar4@gmail.com',
           backup_smtp_user: cfg.backup_smtp_user || bk.smtp_user || 'gosafar4@gmail.com',
           backup_smtp_pass: '',
+          backup_webhook_url: '',
+          backup_resend_key: '',
         });
       } else if (subpage === 'settings') {
         setSysSettings(await apiRequest('/api/admin/settings'));
@@ -563,15 +575,50 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
 
   if (subpage === 'backups') {
     const backups = backupState?.backups || [];
+    const webhookConfigured = sysSettings?.backup_webhook_url_configured === 'true';
+    const resendConfigured = sysSettings?.backup_resend_key_configured === 'true';
+    const httpsRelayConfigured =
+      Boolean(backupState?.https_relay_configured) || webhookConfigured || resendConfigured;
+    const smtpConfigured = Boolean(backupState?.smtp_configured) || sysSettings?.backup_smtp_pass_configured === 'true';
+    const emailReady = Boolean(backupState?.email_configured) || httpsRelayConfigured || smtpConfigured;
+
+    const APPS_SCRIPT_SNIPPET = `function doPost(e) {
+  var d = JSON.parse(e.postData.contents);
+  var bytes = Utilities.base64Decode(d.contentBase64);
+  var blob = Utilities.newBlob(bytes, d.mimeType || 'application/gzip', d.filename || 'safargo-backup.json.gz');
+  GmailApp.sendEmail(d.to, d.subject, d.body, { attachments: [blob], name: 'SafarGo Backups' });
+  return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+    const handleCopyAppsScript = async () => {
+      try {
+        await navigator.clipboard.writeText(APPS_SCRIPT_SNIPPET);
+        setCopiedScript(true);
+        setTimeout(() => setCopiedScript(false), 2500);
+        onNotify('Google Apps Script copy ho gaya — ab script.google.com par deploy karein!');
+      } catch {
+        setShowAppsScript(true);
+      }
+    };
+
     const handleRunManualBackup = async () => {
       setBackupBusy(true);
       try {
         const created = await apiRequest('/api/admin/backups/run', { method: 'POST' });
-        const emailNote =
-          created.email_status === 'sent'
-            ? `Email bhi ${created.emailed_to} par send ho gayi!`
-            : `Local & DB save done (Email status: ${created.email_status}).`;
-        onNotify(`Full DB Backup (${created.total_rows} rows, ${created.size_kb} KB) saved! ${emailNote}`);
+        if (created.email_status === 'sent') {
+          onNotify(
+            `Full DB Backup (${created.total_rows} rows, ${created.size_kb} KB) saved locally & emailed to ${created.emailed_to}!`
+          );
+        } else if (created.email_status === 'failed') {
+          onNotify(
+            `Backup (${created.total_rows} rows, ${created.size_kb} KB) app folder mein save ho gaya, lekin email failed: ${created.email_error || 'Network unreachable'}. Neeche HTTPS Gmail Relay setup karein.`,
+            true
+          );
+        } else {
+          onNotify(
+            `Full DB Backup (${created.total_rows} rows, ${created.size_kb} KB) app folder & DB mein save ho gaya! (${created.email_status})`
+          );
+        }
         await loadSubpage();
       } catch (err) {
         onNotify(err.message, true);
@@ -601,30 +648,55 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             })
           );
         }
+        if (backupEmailForm.backup_webhook_url.trim()) {
+          ops.push(
+            apiRequest('/api/admin/settings/backup_webhook_url', {
+              method: 'PUT',
+              body: { value: backupEmailForm.backup_webhook_url.trim() },
+            })
+          );
+        }
+        if (backupEmailForm.backup_resend_key.trim()) {
+          ops.push(
+            apiRequest('/api/admin/settings/backup_resend_key', {
+              method: 'PUT',
+              body: { value: backupEmailForm.backup_resend_key.trim() },
+            })
+          );
+        }
         await Promise.all(ops);
-        onNotify('Backup Email & Gmail SMTP settings saved!');
+        onNotify('Backup Email & HTTPS Relay settings saved successfully!');
         await loadSubpage();
       } catch (err) {
         onNotify(err.message, true);
       }
     };
 
-    const handleUploadRestoreFile = async (e) => {
+    const handleUploadRestoreFile = (e) => {
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file) return;
-      if (
-        !window.confirm(
-          `Restore full SafarGo database from "${file.name}"? Pehle safety backup liya jayega, phir saara data restore hoga.`
-        )
-      ) {
-        return;
-      }
+      setRestoreConfirm({
+        type: 'file',
+        file,
+        label: file.name,
+        subtitle: `${(file.size / 1024).toFixed(1)} KB local backup file`,
+      });
+    };
+
+    const executeConfirmedRestore = async () => {
+      if (!restoreConfirm) return;
+      const target = restoreConfirm;
       setRestoreBusy(true);
       try {
-        const res = await uploadAuthenticatedFile('/api/admin/backups/restore-file', file);
+        const res =
+          target.type === 'id'
+            ? await apiRequest(`/api/admin/backups/${target.id}/restore`, { method: 'POST' })
+            : await uploadAuthenticatedFile('/api/admin/backups/restore-file', target.file);
+        setRestoreConfirm(null);
+        setRestoreSuccess(res);
         onNotify(
-          `Database restored cleanly (${res.total_restored_rows} rows)! Safety backup saved as ${res.safety_backup_file}.`
+          `Database Restored Successfully (${res.total_restored_rows} rows)! Safety backup saved locally: ${res.safety_backup_file}`
         );
         onRefreshBootstrap?.();
         await loadSubpage();
@@ -637,6 +709,85 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
 
     return (
       <div className="space-y-4 text-xs">
+        {/* In-App Professional Restore Safety Confirmation Modal */}
+        {restoreConfirm && (
+          <div className="fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-amber-300 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      Confirm Full Database Restore
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Safety snapshot will be saved automatically before restoring
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={restoreBusy}
+                  onClick={() => setRestoreConfirm(null)}
+                  className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Selected Restore Point
+                </div>
+                <div className="font-extrabold text-sm text-slate-900 break-all">
+                  {restoreConfirm.label}
+                </div>
+                {restoreConfirm.subtitle && (
+                  <div className="text-[11px] text-slate-600 font-semibold mono-num">
+                    {restoreConfirm.subtitle}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 space-y-1 text-[11px]">
+                <div className="font-extrabold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#009E4D]" />
+                  Automatic Safety Guarantee
+                </div>
+                <p>
+                  1. Pehle current live database ka <strong>Pre-Restore Safety Snapshot</strong> app folder mein{' '}
+                  <em>Saved Locally (Pre-Restore)</em> mark ke saath mehfooz kiya jayega.
+                </p>
+                <p>
+                  2. Phir Users, Captains, Photos, Bookings, Ledger, Zones aur Settings clean atomic transaction mein restore honge.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={restoreBusy}
+                  onClick={() => setRestoreConfirm(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-bold hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={restoreBusy}
+                  onClick={executeConfirmedRestore}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold inline-flex items-center gap-2 disabled:opacity-60"
+                >
+                  <RotateCcw className={`w-4 h-4 ${restoreBusy ? 'animate-spin' : ''}`} />
+                  {restoreBusy ? 'Restoring Database...' : 'Yes, Restore Database Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950 text-white rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-[11px]">
@@ -665,41 +816,183 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
           </div>
         </div>
 
+        {/* Professional Prominent Restore Confirmation Summary Banner */}
+        {restoreSuccess && (
+          <div className="bg-gradient-to-r from-emerald-50 via-white to-sky-50 border-2 border-[#009E4D] rounded-2xl p-5 shadow-md space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-[#009E4D] text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-base font-extrabold text-slate-900">
+                    Database Restored Successfully ✓
+                  </div>
+                  <div className="text-xs text-slate-600 font-semibold">
+                    Tamam SafarGo records safely restore ho chuke hain ({restoreSuccess.restored_at_pkt || 'Just now PKT'}).
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRestoreSuccess(null)}
+                className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px]">
+              <div className="p-3 rounded-xl bg-white border border-emerald-200">
+                <div className="text-slate-500 font-bold uppercase text-[10px]">Total Restored Records</div>
+                <div className="text-base font-extrabold text-[#008741] mono-num mt-0.5">
+                  {restoreSuccess.total_restored_rows} rows
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="text-slate-500 font-bold uppercase text-[10px]">Restored From Snapshot</div>
+                <div className="font-bold text-slate-900 mt-0.5 truncate">
+                  {restoreSuccess.source_backup_pkt || 'Uploaded Backup File'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="text-slate-500 font-bold uppercase text-[10px]">Pre-Restore Safety Copy</div>
+                <div className="font-mono font-bold text-slate-800 mt-0.5 truncate" title={restoreSuccess.safety_backup_file}>
+                  {restoreSuccess.safety_backup_file} ({restoreSuccess.safety_backup_status === 'local_only' ? 'Saved Locally' : restoreSuccess.safety_backup_status})
+                </div>
+              </div>
+            </div>
+
+            {restoreSuccess.restored_counts && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {Object.entries(restoreSuccess.restored_counts)
+                  .filter(([, count]) => Number(count) > 0)
+                  .map(([tbl, count]) => (
+                    <span
+                      key={tbl}
+                      className="px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-slate-700 font-bold text-[10px] mono-num"
+                    >
+                      {tbl}: {count}
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Email & App Directory Dual Delivery Settings */}
           <form onSubmit={handleSaveEmailConfig} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
                 <Mail className="w-4 h-4 text-[#009E4D]" />
                 Dual Save: App Folder + Gmail ({backupEmailForm.backup_email})
               </div>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  backupState?.smtp_configured
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  webhookConfigured || resendConfigured
                     ? 'bg-emerald-100 text-[#008741]'
+                    : smtpConfigured
+                    ? 'bg-sky-100 text-sky-800'
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {backupState?.smtp_configured ? 'Email SMTP Active ✓' : 'Needs Gmail App Password'}
+                {webhookConfigured
+                  ? 'HTTPS Gmail Relay Active ✓'
+                  : resendConfigured
+                  ? 'Resend HTTPS Active ✓'
+                  : smtpConfigured
+                  ? 'SMTP Active (Local PC)'
+                  : 'Setup HTTPS Relay / Email'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Har daily backup app ki <code className="bg-slate-100 px-1 rounded">backups/</code> directory mein save hone ke saath email attachment par bhi jata hai. Gmail SMTP ke liye Google Account Security → <strong>App Passwords</strong> (16 digits) enter karein.
-            </p>
-            <div className="space-y-2">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Backup Receiver Email</label>
-                <input
-                  type="email"
-                  required
-                  value={backupEmailForm.backup_email}
-                  onChange={(e) => setBackupEmailForm({ ...backupEmailForm, backup_email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                />
+
+            <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-950 text-[11px] space-y-1">
+              <div className="font-extrabold">
+                Cloud Hosting Note (Fix for [Errno 101] Network is unreachable):
               </div>
+              <p>
+                Render cloud servers Gmail SMTP ports (465/587) block karte hain. Cloud par reliable{' '}
+                <strong>gosafar4@gmail.com</strong> email ke liye neeche <strong>Google Apps Script HTTPS Webhook URL</strong>{' '}
+                (HTTPS port 443 — hamesha chalta hai) ya <strong>Resend API Key</strong> enter karein. Local PC 4 AM task SMTP bhi use karta hai.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAppsScript((v) => !v)}
+                className="font-extrabold text-sky-800 underline hover:text-sky-950"
+              >
+                {showAppsScript
+                  ? 'Hide Free 6-Line Gmail HTTPS Script ▲'
+                  : 'Get Free 6-Line Google Apps Script (Sends via gosafar4@gmail.com) ▼'}
+              </button>
+              {showAppsScript && (
+                <div className="mt-2 p-2.5 rounded-xl bg-slate-900 text-emerald-300 space-y-2">
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    1. Open <strong>script.google.com</strong> logged in as <strong>gosafar4@gmail.com</strong> → New Project.<br />
+                    2. Paste code below → <strong>Deploy → New deployment → Web app</strong> (Execute as: <em>Me</em>, Access: <em>Anyone</em>).<br />
+                    3. Copy Web App URL (`https://script.google.com/macros/s/.../exec`) &amp; paste below.
+                  </div>
+                  <pre className="text-[10px] font-mono overflow-x-auto bg-slate-950 p-2 rounded-lg text-emerald-200">
+                    {APPS_SCRIPT_SNIPPET}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={handleCopyAppsScript}
+                    className="px-3 py-1.5 rounded-lg bg-[#009E4D] text-white font-bold inline-flex items-center gap-1.5"
+                  >
+                    {copiedScript ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedScript ? 'Copied Script!' : 'Copy Google Apps Script'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Gmail Sender Address</label>
+                  <label className="font-bold text-slate-700 block mb-1">Backup Receiver Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={backupEmailForm.backup_email}
+                    onChange={(e) => setBackupEmailForm({ ...backupEmailForm, backup_email: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Gmail HTTPS Webhook URL {webhookConfigured ? '(Saved ✓)' : '(Recommended on Render)'}
+                  </label>
+                  <input
+                    type="url"
+                    placeholder={
+                      webhookConfigured
+                        ? '•••••••• (Saved ✓ — leave blank to keep)'
+                        : 'https://script.google.com/macros/s/.../exec'
+                    }
+                    value={backupEmailForm.backup_webhook_url}
+                    onChange={(e) => setBackupEmailForm({ ...backupEmailForm, backup_webhook_url: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Resend API Key {resendConfigured ? '(Saved ✓)' : '(Optional HTTPS)'}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={resendConfigured ? '•••••••• (Saved ✓)' : 're_xxxxxxxxx'}
+                    value={backupEmailForm.backup_resend_key}
+                    onChange={(e) => setBackupEmailForm({ ...backupEmailForm, backup_resend_key: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Gmail Sender (Local SMTP)</label>
                   <input
                     type="email"
                     required
@@ -710,11 +1003,11 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 </div>
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Gmail App Password {backupState?.smtp_configured ? '(Saved ✓)' : '(16 chars)'}
+                    Gmail App Password {smtpConfigured ? '(Saved ✓)' : '(16 chars)'}
                   </label>
                   <input
                     type="password"
-                    placeholder={backupState?.smtp_configured ? '•••••••••••• (leave blank to keep)' : 'xxxx xxxx xxxx xxxx'}
+                    placeholder={smtpConfigured ? '•••••••• (Saved ✓)' : 'xxxx xxxx xxxx xxxx'}
                     value={backupEmailForm.backup_smtp_pass}
                     onChange={(e) => setBackupEmailForm({ ...backupEmailForm, backup_smtp_pass: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
@@ -722,9 +1015,16 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 </div>
               </div>
             </div>
-            <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold">
-              Save Email Backup Settings
-            </button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold">
+                Save Email Backup Settings
+              </button>
+              {!emailReady && (
+                <span className="text-[11px] font-bold text-amber-700">
+                  HTTPS Relay or Gmail App Password needed for cloud email
+                </span>
+              )}
+            </div>
           </form>
 
           {/* Restore Database from Backup File */}
@@ -811,11 +1111,13 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                       <div className="font-bold text-slate-900">{b.total_rows} rows</div>
                       <div className="text-slate-500">{b.size_kb} KB (.json.gz)</div>
                     </td>
-                    <td className="p-3.5">
+                    <td className="p-3.5 max-w-xs">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                           b.email_status === 'sent'
                             ? 'bg-emerald-100 text-[#008741]'
+                            : b.email_status === 'local_only'
+                            ? 'bg-slate-100 text-slate-700 border border-slate-200'
                             : b.email_status === 'failed'
                             ? 'bg-rose-100 text-rose-700'
                             : 'bg-amber-50 text-amber-800'
@@ -823,12 +1125,16 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                       >
                         {b.email_status === 'sent'
                           ? `Sent to ${b.emailed_to}`
+                          : b.email_status === 'local_only'
+                          ? 'Saved Locally (Pre-Restore)'
                           : b.email_status === 'smtp_not_configured'
-                          ? 'App Password Needed'
+                          ? 'Relay / SMTP Needed'
+                          : b.email_status === 'failed'
+                          ? 'Email Failed'
                           : b.email_status}
                       </span>
-                      {b.email_error && b.email_status !== 'sent' && (
-                        <div className="text-[10px] text-slate-500 mt-0.5 max-w-xs truncate" title={b.email_error}>
+                      {b.email_error && b.email_status !== 'sent' && b.email_status !== 'local_only' && (
+                        <div className="text-[10px] text-rose-700 mt-1 leading-snug break-words" title={b.email_error}>
                           {b.email_error}
                         </div>
                       )}
@@ -859,7 +1165,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                               onNotify(
                                 res.email_status === 'sent'
                                   ? `Backup emailed to ${res.emailed_to}!`
-                                  : `Email status: ${res.email_error || res.email_status}`,
+                                  : `Email failed: ${res.email_error || res.email_status}`,
                                 res.email_status !== 'sent'
                               );
                               await loadSubpage();
@@ -877,29 +1183,15 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                         <button
                           type="button"
                           disabled={restoreBusy}
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `Restore database back to ${b.created_at_pkt}? Pehle safety backup save hoga.`
-                              )
-                            ) {
-                              return;
-                            }
-                            setRestoreBusy(true);
-                            try {
-                              const res = await apiRequest(`/api/admin/backups/${b.id}/restore`, { method: 'POST' });
-                              onNotify(
-                                `Restored ${res.total_restored_rows} rows! Safety copy: ${res.safety_backup_file}`
-                              );
-                              onRefreshBootstrap?.();
-                              await loadSubpage();
-                            } catch (err) {
-                              onNotify(err.message, true);
-                            } finally {
-                              setRestoreBusy(false);
-                            }
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 font-bold inline-flex items-center gap-1"
+                          onClick={() =>
+                            setRestoreConfirm({
+                              type: 'id',
+                              id: b.id,
+                              label: b.created_at_pkt || b.file_name,
+                              subtitle: `${b.file_name} (${b.total_rows} rows · ${b.size_kb} KB)`,
+                            })
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 font-bold inline-flex items-center gap-1 disabled:opacity-60"
                         >
                           <RotateCcw className="w-3 h-3" />
                           Restore
