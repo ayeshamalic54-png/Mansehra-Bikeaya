@@ -45,6 +45,7 @@ from app.services.finance import (
     complete_booking_and_post_ledger,
     compute_commission,
     estimate_booking_fare,
+    find_nearest_captains_for_booking,
     recalculate_rider_ledger_balances,
     utcnow,
 )
@@ -106,6 +107,23 @@ def admin_overview(
         .all()
     )
 
+    recent_serialized = []
+    for b in recent_rows:
+        row = serialize_booking(b)
+        if b.status == "pending" and b.rider_id is None:
+            row["nearest_captains"] = find_nearest_captains_for_booking(
+                db,
+                b.service_type,
+                b.pickup_lat,
+                b.pickup_lng,
+                b.pickup_zone,
+                limit=3,
+                include_phone=True,
+            )
+        else:
+            row["nearest_captains"] = []
+        recent_serialized.append(row)
+
     return {
         "kpis": {
             "today_total_rides": len(today_bookings),
@@ -126,7 +144,7 @@ def admin_overview(
             "payable_to_riders": payable_to_riders,
         },
         "over_limit_riders": over_limit_riders,
-        "recent_bookings": [serialize_booking(b) for b in recent_rows],
+        "recent_bookings": recent_serialized,
     }
 
 

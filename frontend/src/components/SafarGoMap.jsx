@@ -40,29 +40,27 @@ function makePinIcon(bg, badge, subtitle) {
   });
 }
 
-function makeCaptainIcon(c) {
+function makeCaptainIcon(c, isSelected = false) {
   const isCar = c.vehicle_type === 'car';
   const online = c.is_online !== false;
   const bg = !online ? '#64748B' : isCar ? '#0284C7' : '#009E4D';
   const dot = online ? '#4ADE80' : '#CBD5E1';
   const photoUrl = safePhotoUrl(c.rider_photo);
   const shortName = esc((c.full_name || c.display_name || (isCar ? 'CAR' : 'BIKE')).split(' ')[0]);
+  const ring = isSelected ? '#F59E0B' : bg;
 
   if (photoUrl) {
     return L.divIcon({
       className: 'safargo-div-icon',
-      iconSize: [48, 56],
-      iconAnchor: [24, 24],
-      popupAnchor: [0, -24],
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor: [0, -16],
       html: `
-        <div style="display:flex;flex-direction:column;align-items:center;">
-          <div style="position:relative;width:40px;height:40px;border-radius:9999px;border:3px solid ${bg};background:#fff;box-shadow:0 4px 14px rgba(15,23,42,0.34);overflow:hidden;">
+        <div style="position:relative;width:30px;height:30px;">
+          <div style="width:30px;height:30px;border-radius:9999px;border:2.5px solid ${ring};background:#fff;box-shadow:0 3px 10px rgba(15,23,42,0.34);overflow:hidden;">
             <img src="${photoUrl}" alt="${shortName}" style="width:100%;height:100%;object-fit:cover;display:block;" />
           </div>
-          <span style="position:absolute;top:0;right:2px;width:11px;height:11px;border-radius:9999px;background:${dot};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-          <div style="margin-top:2px;padding:1px 6px;border-radius:9999px;background:${bg};color:#fff;font-size:9px;font-weight:800;border:1.5px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(15,23,42,0.22);">
-            ${shortName}
-          </div>
+          <span style="position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:9999px;background:${dot};border:1.5px solid #fff;"></span>
         </div>
       `,
     });
@@ -74,14 +72,13 @@ function makeCaptainIcon(c) {
 
   return L.divIcon({
     className: 'safargo-div-icon',
-    iconSize: [44, 30],
-    iconAnchor: [22, 15],
-    popupAnchor: [0, -16],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
     html: `
-      <div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:9999px;background:${bg};color:#fff;font-size:10px;font-weight:800;border:2px solid #fff;box-shadow:0 4px 12px rgba(15,23,42,0.28);white-space:nowrap;">
-        <span style="width:6px;height:6px;border-radius:9999px;background:${dot};display:inline-block;"></span>
+      <div style="position:relative;width:28px;height:28px;border-radius:9999px;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 10px rgba(15,23,42,0.28);">
         ${glyph}
-        <span>${isCar ? 'CAR' : 'BIKE'}</span>
+        <span style="position:absolute;bottom:-1px;right:-1px;width:8px;height:8px;border-radius:9999px;background:${dot};border:1.5px solid #fff;"></span>
       </div>
     `,
   });
@@ -100,14 +97,22 @@ export function SafarGoMap({
   onPinDrag = null,
   heightClass = 'h-64 sm:h-72',
   fitSignature = '',
+  showCaptainSidebar = true,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
   const baseLayersRef = useRef(null);
   const [mapStyle, setMapStyle] = useState('street'); // street | satellite
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const callbacksRef = useRef({ interactive, activePinMode, onMapPick, onPinDrag });
   callbacksRef.current = { interactive, activePinMode, onMapPick, onPinDrag };
+
+  const visibleCaptains = (captains || []).filter((c) => c && c.lat != null && c.lng != null);
+  const safeSelectedIdx =
+    visibleCaptains.length === 0 ? 0 : Math.min(selectedIdx, visibleCaptains.length - 1);
+  const activeCaptain = visibleCaptains[safeSelectedIdx] || null;
+  const hasSidebar = showCaptainSidebar && visibleCaptains.length > 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -277,40 +282,42 @@ export function SafarGoMap({
     }
 
     // 5. Captains Layer (Nearby Riders/Cars for Customer, or All Fleet for Admin)
-    for (const c of captains || []) {
-      if (c.lat == null || c.lng == null) continue;
-      const m = L.marker([c.lat, c.lng], { icon: makeCaptainIcon(c) }).addTo(layer);
+    visibleCaptains.forEach((c, idx) => {
+      const m = L.marker([c.lat, c.lng], {
+        icon: makeCaptainIcon(c, idx === safeSelectedIdx),
+      }).addTo(layer);
+      m.on('click', () => setSelectedIdx(idx));
       const title = c.full_name || c.display_name || 'SafarGo Captain';
       const riderImg = safePhotoUrl(c.rider_photo);
       const vehImg = safePhotoUrl(c.vehicle_photo);
       m.bindPopup(
-        `<div style="font-size:12px;line-height:1.4;min-width:190px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            ${riderImg ? `<img src="${riderImg}" alt="${esc(title)}" style="width:38px;height:38px;border-radius:9999px;object-fit:cover;border:2px solid #009E4D;flex-shrink:0;" />` : ''}
-            ${vehImg ? `<img src="${vehImg}" alt="Vehicle" style="width:46px;height:34px;border-radius:8px;object-fit:cover;border:1px solid #cbd5e1;flex-shrink:0;" />` : ''}
+        `<div style="font-size:12px;line-height:1.4;min-width:170px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            ${riderImg ? `<img src="${riderImg}" alt="${esc(title)}" style="width:32px;height:32px;border-radius:9999px;object-fit:cover;border:2px solid #009E4D;flex-shrink:0;" />` : ''}
             <div>
               <strong>${esc(title)}</strong><br/>
               <span style="font-size:11px;color:#475569;">${esc(c.vehicle_type === 'car' ? 'AC Car' : 'Bike')}: ${esc(c.bike_model || '')} ${c.bike_plate ? `(${esc(c.bike_plate)})` : ''}</span>
             </div>
           </div>
-          Area: ${esc(c.zone_name || '-')}<br/>
+          Area: <strong>${esc(c.zone_name || '-')}</strong><br/>
           ${c.distance_km != null ? `Distance: <strong>${esc(c.distance_km)} km (~${esc(c.eta_min || 3)} min)</strong><br/>` : ''}
           Status: <strong>${c.is_online !== false ? 'ONLINE' : 'OFFLINE'}</strong>
           ${c.is_verified === false ? ' · <span style="color:#D97706;font-weight:700;">Unverified Docs</span>' : ''}
           ${c.active_booking_code ? `<br/>Active Trip: <strong>${esc(c.active_booking_code)}</strong>` : ''}
-          <br/><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.lat},${c.lng}`)}" target="_blank" rel="noopener noreferrer" style="color:#0284C7;font-weight:700;text-decoration:underline;">Locate on Google Maps ↗</a>
         </div>`
       );
       if (bounds.length === 0 || activeBookings?.length > 0) {
         bounds.push([c.lat, c.lng]);
       }
-    }
+    });
 
     if (bounds.length >= 2) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [36, 36], maxZoom: 15 });
     } else if (bounds.length === 1) {
       map.setView(bounds[0], 14);
     }
+    const resizeTimer = setTimeout(() => map.invalidateSize(), 120);
+    return () => clearTimeout(resizeTimer);
   }, [
     pickup?.lat,
     pickup?.lng,
@@ -324,6 +331,7 @@ export function SafarGoMap({
     activeBookings,
     interactive,
     fitSignature,
+    safeSelectedIdx,
   ]);
 
   const googleMapsUrl =
@@ -331,43 +339,137 @@ export function SafarGoMap({
       ? `https://www.google.com/maps/dir/?api=1&origin=${pickup.lat},${pickup.lng}&destination=${drop.lat},${drop.lng}&travelmode=driving`
       : pickup?.lat != null
       ? `https://www.google.com/maps/search/?api=1&query=${pickup.lat},${pickup.lng}`
+      : activeCaptain
+      ? `https://www.google.com/maps/search/?api=1&query=${activeCaptain.lat},${activeCaptain.lng}`
       : 'https://www.google.com/maps/@34.3335,73.1995,13z';
 
-  return (
-    <div className={`relative w-full ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}>
-      <div ref={containerRef} className="w-full h-full" />
+  const activeRiderImg = safePhotoUrl(activeCaptain?.rider_photo);
+  const activeVehicleImg = safePhotoUrl(activeCaptain?.vehicle_photo);
 
-      {/* Top-Right: Free Street / Satellite View Switcher */}
-      <div className="absolute top-2.5 right-2.5 z-[400] inline-flex rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm p-0.5 text-[10px] font-extrabold">
-        <button
-          type="button"
-          onClick={() => setMapStyle('street')}
-          className={`px-2 py-1 rounded-md transition ${
-            mapStyle === 'street' ? 'bg-[#009E4D] text-white' : 'text-slate-700 hover:bg-slate-100'
-          }`}
+  return (
+    <div className={hasSidebar ? 'flex flex-col md:flex-row gap-3 items-stretch' : ''}>
+      <div className={`relative ${hasSidebar ? 'flex-1 min-w-0' : 'w-full'} ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}>
+        <div ref={containerRef} className="w-full h-full" />
+
+        {/* Top-Right: Free Street / Satellite View Switcher */}
+        <div className="absolute top-2.5 right-2.5 z-[400] inline-flex rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm p-0.5 text-[10px] font-extrabold">
+          <button
+            type="button"
+            onClick={() => setMapStyle('street')}
+            className={`px-2 py-1 rounded-md transition ${
+              mapStyle === 'street' ? 'bg-[#009E4D] text-white' : 'text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            Street
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle('satellite')}
+            className={`px-2 py-1 rounded-md transition ${
+              mapStyle === 'satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            Satellite
+          </button>
+        </div>
+
+        {/* Bottom-Left: Free Official Google Maps Turn-by-Turn Navigation Link */}
+        <a
+          href={googleMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-2.5 left-2.5 z-[400] px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-[10px] font-extrabold text-slate-800 hover:border-[#009E4D] hover:text-[#008741] transition"
         >
-          Street
-        </button>
-        <button
-          type="button"
-          onClick={() => setMapStyle('satellite')}
-          className={`px-2 py-1 rounded-md transition ${
-            mapStyle === 'satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          Satellite
-        </button>
+          Open in Google Maps ↗
+        </a>
       </div>
 
-      {/* Bottom-Left: Free Official Google Maps Turn-by-Turn Navigation Link */}
-      <a
-        href={googleMapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="absolute bottom-2.5 left-2.5 z-[400] px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-[10px] font-extrabold text-slate-800 hover:border-[#009E4D] hover:text-[#008741] transition"
-      >
-        Open in Google Maps ↗
-      </a>
+      {/* Side-Wise Clear Captain Photo Showcase Panel (never covers map labels or pins) */}
+      {hasSidebar && activeCaptain && (
+        <aside className="w-full md:w-64 lg:w-72 shrink-0 rounded-2xl border border-slate-200/90 bg-white p-3.5 flex flex-col justify-between gap-3 shadow-xs">
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Live Captain Pin ({safeSelectedIdx + 1}/{visibleCaptains.length})
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  activeCaptain.is_online !== false
+                    ? 'bg-emerald-100 text-[#008741]'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {activeCaptain.is_online !== false ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </div>
+
+            {/* Large Clear Side Captain Portrait + Vehicle Photo */}
+            <div className="flex items-center gap-2.5">
+              {activeRiderImg ? (
+                <img
+                  src={activeRiderImg}
+                  alt={activeCaptain.full_name || activeCaptain.display_name || 'Captain'}
+                  className="w-24 h-24 rounded-2xl object-cover border-2 border-[#009E4D] shadow-sm shrink-0 bg-slate-100"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-2xl bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center text-2xl font-extrabold text-[#008741] shrink-0">
+                  {(activeCaptain.full_name || activeCaptain.display_name || 'C')[0]}
+                </div>
+              )}
+              {activeVehicleImg && (
+                <img
+                  src={activeVehicleImg}
+                  alt={activeCaptain.bike_model || 'Vehicle'}
+                  className="w-20 h-24 rounded-2xl object-cover border border-slate-200 shrink-0 bg-slate-100"
+                />
+              )}
+            </div>
+
+            <div>
+              <div className="text-sm font-extrabold text-slate-900">
+                {activeCaptain.full_name || activeCaptain.display_name || 'SafarGo Captain'}
+              </div>
+              <div className="text-[11px] font-semibold text-slate-600">
+                {activeCaptain.vehicle_type === 'car' ? 'AC Car' : 'Bike'}:{' '}
+                {activeCaptain.bike_model || '-'}{' '}
+                {activeCaptain.bike_plate ? `(${activeCaptain.bike_plate})` : ''}
+              </div>
+              <div className="text-[11px] font-bold text-[#008741] mt-1">
+                Location: {activeCaptain.zone_name || `${Number(activeCaptain.lat).toFixed(4)}, ${Number(activeCaptain.lng).toFixed(4)}`}
+              </div>
+              {activeCaptain.distance_km != null && (
+                <div className="text-[11px] text-slate-500 mono-num mt-0.5">
+                  {activeCaptain.distance_km} km away (~{activeCaptain.eta_min || 3} min)
+                </div>
+              )}
+              {activeCaptain.is_verified === false && (
+                <div className="mt-1 inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">
+                  Docs Pending Verification
+                </div>
+              )}
+            </div>
+          </div>
+
+          {visibleCaptains.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+              {visibleCaptains.slice(0, 6).map((c, idx) => (
+                <button
+                  key={c.id || c.rider_id || idx}
+                  type="button"
+                  onClick={() => setSelectedIdx(idx)}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition ${
+                    idx === safeSelectedIdx
+                      ? 'bg-[#009E4D] text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {(c.full_name || c.display_name || `C${idx + 1}`).split(' ')[0]}
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      )}
     </div>
   );
 }

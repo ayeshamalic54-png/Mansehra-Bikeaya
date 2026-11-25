@@ -1074,6 +1074,65 @@ def test_admin_overview_and_pending_verification_photos(client):
     assert "over_limit_riders" in data
 
 
+def test_live_gps_resolves_baidra_chowk_and_notifies_closest_captain_and_admin(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    rider_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03112222222", "password": "rider123"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+
+    # Set Captain profile zone to Dhangri Chowk first, then push live Baidra Chowk GPS
+    client.patch(
+        "/api/riders/profile",
+        headers=_auth_header(rider_token),
+        json={"zone_name": "Mansehra — Dhangri Chowk"},
+    )
+    gps_res = client.post(
+        "/api/riders/location",
+        headers=_auth_header(rider_token),
+        json={"lat": 34.334342, "lng": 73.187789},
+    )
+    assert gps_res.status_code == 200
+    assert gps_res.json()["zone_name"] == "Mansehra — Baidra Chowk"
+
+    # Customer books pickup at Baidra Chowk -> Captain & Admin both see nearest priority!
+    bk_res = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Baidra Chowk",
+            "pickup_address": "Baidra Chowk Motorway Stand",
+            "pickup_lat": 34.334342,
+            "pickup_lng": 73.187789,
+            "drop_zone": "Mansehra — Punjab Chowk",
+            "drop_address": "Punjab Chowk",
+            "distance_km": 1.2,
+            "payment_method": "cash",
+        },
+    )
+    assert bk_res.status_code == 201
+    created = bk_res.json()
+    assert created["nearby_captains_notified"] >= 1
+
+    avail = client.get("/api/riders/available-jobs", headers=_auth_header(rider_token)).json()
+    target_job = next(j for j in avail if j["id"] == created["id"])
+    assert target_job["is_closest_captain"] is True
+    assert target_job["captain_distance_km"] <= 0.1
+
+    ov = client.get("/api/admin/overview", headers=_auth_header(admin_token)).json()
+    recent = next(b for b in ov["recent_bookings"] if b["id"] == created["id"])
+    assert len(recent["nearest_captains"]) >= 1
+    assert recent["nearest_captains"][0]["zone_name"] == "Mansehra — Baidra Chowk"
+
+
 
 
 

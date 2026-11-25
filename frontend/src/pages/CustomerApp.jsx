@@ -241,7 +241,13 @@ export function CustomerApp({ onOpenDownloads }) {
           offer_fare: offerFareInput !== '' ? Number(offerFareInput) : null,
         },
       });
-      setStatusMsg(`Booking ${created.booking_code} broadcasted directly to nearby Captains (No Admin wait)!`);
+      setStatusMsg(
+        `Booking ${created.booking_code} broadcasted directly to ${
+          created.nearby_captains_notified > 0
+            ? `${created.nearby_captains_notified} closest Captains (~${created.closest_captain_eta_min || 3} min away)`
+            : 'nearby Captains'
+        } & Admin!`
+      );
       setPickupAddress('');
       setDropAddress('');
       setPaymentReference('');

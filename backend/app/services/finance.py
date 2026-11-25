@@ -28,6 +28,92 @@ def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return round(2 * r * math.asin(min(1.0, math.sqrt(a))), 2)
 
 
+def captain_matches_service(vehicle_type: Optional[str], service_type: str) -> bool:
+    vtype = (vehicle_type or "bike").lower()
+    if service_type == "car_ride":
+        return vtype == "car"
+    if service_type == "bike_ride":
+        return vtype == "bike"
+    return True
+
+
+def resolve_nearest_zone_name(
+    db: Session,
+    lat: float,
+    lng: float,
+    max_km: float = 25.0,
+) -> Optional[str]:
+    """Find closest active Mansehra/Hazara landmark or zone for given live GPS coordinates."""
+    zones = db.query(MansehraZone).filter(MansehraZone.is_active.is_(True)).all()
+    best_name = None
+    best_dist = max_km
+    for z in zones:
+        if z.lat is None or z.lng is None:
+            continue
+        d = haversine_km(lat, lng, z.lat, z.lng)
+        if d <= best_dist:
+            # Prefer exact Chowk/Road names over broader town entries when tied at same spot
+            if best_name is None or d < best_dist - 0.05 or ("Chowk" in z.name and "Chowk" not in best_name):
+                best_dist = d
+                best_name = z.name
+    return best_name
+
+
+def find_nearest_captains_for_booking(
+    db: Session,
+    service_type: str,
+    pickup_lat: Optional[float],
+    pickup_lng: Optional[float],
+    pickup_zone: Optional[str] = None,
+    limit: int = 3,
+    include_phone: bool = False,
+) -> list[dict]:
+    """Return nearest online verified matching Captains ranked ascending by live GPS distance."""
+    p_lat, p_lng = pickup_lat, pickup_lng
+    if (p_lat is None or p_lng is None) and pickup_zone:
+        z = db.query(MansehraZone).filter(MansehraZone.name == pickup_zone).first()
+        if z and z.lat is not None and z.lng is not None:
+            p_lat, p_lng = z.lat, z.lng
+    if p_lat is None or p_lng is None:
+        return []
+
+    from sqlalchemy.orm import joinedload
+
+    captains = (
+        db.query(User)
+        .options(joinedload(User.rider_profile))
+        .filter(User.role == "rider", User.is_active.is_(True))
+        .all()
+    )
+    ranked = []
+    for u in captains:
+        rp = u.rider_profile
+        if not rp or not rp.is_verified or not rp.is_online:
+            continue
+        if rp.balance_due_to_admin > rp.credit_limit:
+            continue
+        if not captain_matches_service(rp.vehicle_type, service_type):
+            continue
+        if rp.current_lat is None or rp.current_lng is None:
+            continue
+        dist = haversine_km(rp.current_lat, rp.current_lng, p_lat, p_lng)
+        row = {
+            "rider_id": u.id,
+            "full_name": u.full_name,
+            "vehicle_type": rp.vehicle_type or "bike",
+            "bike_model": rp.bike_model,
+            "bike_plate": rp.bike_plate,
+            "zone_name": rp.zone_name,
+            "distance_km": dist,
+            "eta_min": max(2, int(round(dist / 0.45))),
+        }
+        if include_phone:
+            row["phone"] = u.phone
+        ranked.append(row)
+    ranked.sort(key=lambda item: (item["distance_km"], item["rider_id"]))
+    return ranked[:limit]
+
+
 def compute_commission(
     final_fare: float,
     pricing_rule: PricingRule,

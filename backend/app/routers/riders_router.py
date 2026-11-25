@@ -23,8 +23,12 @@ from app.schemas import (
 )
 from app.services.finance import (
     apply_wait_charge_to_booking,
+    captain_matches_service,
     complete_booking_and_post_ledger,
     compute_commission,
+    find_nearest_captains_for_booking,
+    haversine_km,
+    resolve_nearest_zone_name,
     utcnow,
 )
 from app.services.media import clean_image_data_uri, has_complete_captain_docs
@@ -33,12 +37,7 @@ router = APIRouter(prefix="/api/riders", tags=["Rider Captain"])
 
 
 def _vehicle_matches_service(vehicle_type: str, service_type: str) -> bool:
-    vt = (vehicle_type or "bike").lower()
-    if service_type == "car_ride":
-        return vt == "car"
-    if service_type == "bike_ride":
-        return vt == "bike"
-    return True  # parcel & errand can be fulfilled by both bike & car captains
+    return captain_matches_service(vehicle_type, service_type)
 
 
 @router.get("/profile")
@@ -158,12 +157,16 @@ def update_rider_location(
     rp.current_lat = payload.lat
     rp.current_lng = payload.lng
     rp.location_updated_at = utcnow()
+    resolved_zone = resolve_nearest_zone_name(db, payload.lat, payload.lng)
+    if resolved_zone:
+        rp.zone_name = resolved_zone
     if payload.is_online is not None and rp.is_verified and rp.balance_due_to_admin <= rp.credit_limit:
         rp.is_online = payload.is_online
     db.commit()
     return {
         "current_lat": rp.current_lat,
         "current_lng": rp.current_lng,
+        "zone_name": rp.zone_name,
         "location_updated_at": rp.location_updated_at,
         "is_online": rp.is_online,
     }
@@ -182,6 +185,7 @@ def get_available_jobs(
         return []
 
     rules = {r.service_type: r for r in db.query(PricingRule).all()}
+    zones_by_name = {z.name: z for z in db.query(MansehraZone).all()}
     jobs = (
         booking_query_with_relations(db)
         .filter(Booking.status == "pending", Booking.rider_id.is_(None))
@@ -195,6 +199,35 @@ def get_available_jobs(
             continue
         data = serialize_booking(job)
         data["matches_vehicle"] = matches
+
+        p_lat = job.pickup_lat
+        p_lng = job.pickup_lng
+        if (p_lat is None or p_lng is None) and job.pickup_zone in zones_by_name:
+            z = zones_by_name[job.pickup_zone]
+            p_lat, p_lng = z.lat, z.lng
+
+        cap_dist = None
+        if rp.current_lat is not None and rp.current_lng is not None and p_lat is not None and p_lng is not None:
+            cap_dist = haversine_km(rp.current_lat, rp.current_lng, p_lat, p_lng)
+
+        nearest = find_nearest_captains_for_booking(
+            db,
+            job.service_type,
+            p_lat,
+            p_lng,
+            job.pickup_zone,
+            limit=3,
+        )
+        closest_id = nearest[0]["rider_id"] if nearest else None
+        is_closest = bool(
+            matches and (closest_id == current_user.id or (cap_dist is not None and cap_dist <= 2.5))
+        )
+
+        data["captain_distance_km"] = cap_dist
+        data["captain_eta_min"] = max(2, int(round(cap_dist / 0.45))) if cap_dist is not None else None
+        data["closest_captain_id"] = closest_id
+        data["is_closest_captain"] = is_closest
+
         rule = rules.get(job.service_type)
         if rule:
             _, _, comm, net = compute_commission(job.final_fare, rule, rp)
@@ -211,6 +244,15 @@ def get_available_jobs(
         else:
             data["my_offer"] = None
         out.append(data)
+
+    out.sort(
+        key=lambda j: (
+            0 if j.get("matches_vehicle") else 1,
+            0 if j.get("is_closest_captain") else 1,
+            j.get("captain_distance_km") if j.get("captain_distance_km") is not None else 9999.0,
+            -j.get("id", 0),
+        )
+    )
     return out
 
 

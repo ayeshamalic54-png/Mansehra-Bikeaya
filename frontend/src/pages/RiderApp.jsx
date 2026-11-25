@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Bell,
   Bike,
   Car,
   CheckCircle2,
@@ -25,6 +26,12 @@ import {
   formatPaymentMethodLabel,
   getRidePaymentBadgeState,
 } from '../utils/paymentAccounts';
+import {
+  playRideAlertChime,
+  requestRideNotificationsPermission,
+  showBrowserRideNotification,
+  unlockRideAlertAudio,
+} from '../utils/rideAlerts';
 
 export function RiderApp({ onOpenDownloads }) {
   const { user, bootstrap, refreshMe, logout } = useAuth();
@@ -55,8 +62,14 @@ export function RiderApp({ onOpenDownloads }) {
     cnic_back_photo: user?.rider_profile?.cnic_back_photo || '',
   });
   const [savingProfile, setSavingProfile] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(true);
   const [gpsBanner, setGpsBanner] = useState('');
+  const [gpsState, setGpsState] = useState('idle'); // idle | syncing | live | denied | error
+  const [liveRideAlert, setLiveRideAlert] = useState(null);
+  const [alertsEnabled, setAlertsEnabled] = useState(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
+  const seenJobIdsRef = useRef(null);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -87,9 +100,33 @@ export function RiderApp({ onOpenDownloads }) {
         apiRequest('/api/bookings/my'),
         apiRequest('/api/riders/ledger'),
       ]);
-      setAvailableJobs(avail);
+      const list = avail || [];
+      setAvailableJobs(list);
       setMyJobs(mine);
       setLedgerData(ledger);
+
+      if (seenJobIdsRef.current === null) {
+        seenJobIdsRef.current = new Set(list.map((j) => j.id));
+        const closestExisting = list.find((j) => j.is_closest_captain) || list[0];
+        if (closestExisting) {
+          setLiveRideAlert(closestExisting);
+        }
+      } else {
+        const brandNew = list.filter((j) => !seenJobIdsRef.current.has(j.id));
+        if (brandNew.length > 0) {
+          brandNew.forEach((j) => seenJobIdsRef.current.add(j.id));
+          const topNew = brandNew.find((j) => j.is_closest_captain) || brandNew[0];
+          setLiveRideAlert(topNew);
+          playRideAlertChime(topNew.is_closest_captain ? 'closest' : 'captain');
+          showBrowserRideNotification(
+            topNew.is_closest_captain
+              ? `CLOSEST RIDE (${topNew.captain_distance_km ?? ''} km away)!`
+              : `New SafarGo Request ${topNew.booking_code}`,
+            `${topNew.pickup_zone} → ${topNew.drop_zone} · Offer Rs. ${topNew.final_fare}`,
+            `rider-job-${topNew.id}`
+          );
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -101,42 +138,89 @@ export function RiderApp({ onOpenDownloads }) {
     return () => clearInterval(timer);
   }, [includeOtherVehicles]);
 
-  const pushRiderLocation = async (lat, lng) => {
+  const pushRiderLocation = async (lat, lng, source = 'live') => {
     try {
-      await apiRequest('/api/riders/location', {
+      const res = await apiRequest('/api/riders/location', {
         method: 'POST',
         body: { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) },
       });
       await refreshMe();
-      setGpsBanner(`Live GPS shared (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+      setGpsState('live');
+      const resolvedLabel = res?.zone_name || 'Live GPS';
+      setGpsBanner(
+        `${source === 'manual' ? 'Location set' : 'Live GPS synced'}: ${resolvedLabel} (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`
+      );
     } catch {
       // ignore background ping failures
     }
   };
 
-  // Auto-broadcast Captain GPS when Duty is ONLINE so Customers & Admin see live pin
+  const detectAndSyncLiveGps = (showErrorToast = false) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsState('error');
+      setGpsBanner('Browser GPS unavailable — choose your Chowk below or tap the Map.');
+      return;
+    }
+    setGpsState('syncing');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        pushRiderLocation(pos.coords.latitude, pos.coords.longitude, 'live');
+      },
+      (geoErr) => {
+        // Fallback to network/Wi-Fi geolocation if high-accuracy GPS times out indoors/on laptop
+        navigator.geolocation.getCurrentPosition(
+          (pos2) => {
+            pushRiderLocation(pos2.coords.latitude, pos2.coords.longitude, 'live');
+          },
+          (geoErr2) => {
+            const denied = geoErr2?.code === 1 || geoErr?.code === 1;
+            setGpsState(denied ? 'denied' : 'error');
+            const notice = denied
+              ? 'Browser Location blocked! Browser address bar mein Allow Location karein ya neeche apna current Chowk (e.g. Baidra Chowk) choose karein.'
+              : 'Live GPS signal timeout — apna current Chowk neeche select karein ya map par tap karein.';
+            setGpsBanner(notice);
+            if (showErrorToast) setErr(notice);
+          },
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 5000 }
+    );
+  };
+
+  // Sync device GPS immediately on portal open AND continuously watch movement when Online
   useEffect(() => {
+    if (!user?.id) return;
+    detectAndSyncLiveGps(false);
     if (!rp?.is_online || !navigator.geolocation) return;
     let lastSent = 0;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const now = Date.now();
-        if (now - lastSent < 10000) return;
+        if (now - lastSent < 8000) return;
         lastSent = now;
-        pushRiderLocation(pos.coords.latitude, pos.coords.longitude);
+        pushRiderLocation(pos.coords.latitude, pos.coords.longitude, 'live');
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 10000 }
+      { enableHighAccuracy: false, maximumAge: 10000, timeout: 12000 }
     );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [rp?.is_online]);
+    const intervalId = setInterval(() => {
+      detectAndSyncLiveGps(false);
+    }, 20000);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(intervalId);
+    };
+  }, [user?.id, rp?.is_online]);
 
   const handleToggleOnline = async () => {
+    unlockRideAlertAudio();
     setErr('');
     setMsg('');
     try {
       await apiRequest('/api/riders/toggle-online', { method: 'POST' });
       await refreshMe();
+      detectAndSyncLiveGps(false);
       await loadAll();
     } catch (e) {
       setErr(e.message);
@@ -274,10 +358,30 @@ export function RiderApp({ onOpenDownloads }) {
                 {isCarCaptain ? 'AC Car Captain' : 'Bike Captain'} · {rp?.bike_model} ({rp?.bike_plate})
               </div>
               <div className="text-base font-extrabold">{user?.full_name}</div>
+              <div className="text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {rp?.zone_name || 'Syncing GPS...'}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const perm = await requestRideNotificationsPermission();
+                setAlertsEnabled(perm === 'granted');
+                playRideAlertChime('captain');
+              }}
+              className={`p-2 rounded-xl border text-xs font-bold inline-flex items-center gap-1 ${
+                alertsEnabled
+                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-200'
+                  : 'bg-slate-800 border-slate-700 text-slate-300'
+              }`}
+              title="Enable Ride Sound & Notifications"
+            >
+              <Bell className="w-4 h-4" />
+            </button>
             <button
               onClick={handleToggleOnline}
               className={`px-3.5 py-2 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 transition ${
@@ -299,6 +403,46 @@ export function RiderApp({ onOpenDownloads }) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+        {liveRideAlert && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-[#009E4D] to-emerald-700 text-white shadow-lg border border-emerald-300/40 flex flex-wrap items-center justify-between gap-3 animate-pulse-once">
+            <div className="space-y-0.5 text-xs">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">
+                <Bell className="w-3 h-3" />
+                {liveRideAlert.is_closest_captain
+                  ? `CLOSEST RIDE ALERT · ${liveRideAlert.captain_distance_km ?? ''} km away`
+                  : `NEW RIDE REQUEST · ${liveRideAlert.booking_code}`}
+              </div>
+              <div className="font-extrabold text-sm">
+                {liveRideAlert.pickup_zone} → {liveRideAlert.drop_zone}
+              </div>
+              <div className="text-emerald-100">
+                Pickup: {liveRideAlert.pickup_address} · Offer: <strong>Rs. {liveRideAlert.final_fare}</strong>
+                {liveRideAlert.captain_eta_min ? ` (~${liveRideAlert.captain_eta_min} min to pickup)` : ''}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  unlockRideAlertAudio();
+                  setTab('duty');
+                  handleAccept(liveRideAlert.id);
+                  setLiveRideAlert(null);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-white text-[#008741] font-extrabold text-xs hover:bg-emerald-50"
+              >
+                Accept Rs. {liveRideAlert.final_fare}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLiveRideAlert(null)}
+                className="px-2.5 py-2 rounded-xl bg-emerald-950/30 text-white text-xs font-bold"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         {!rp?.is_verified && (
           <div
             className={`p-4 rounded-2xl border text-xs font-bold flex flex-wrap items-center justify-between gap-3 ${
@@ -418,12 +562,49 @@ export function RiderApp({ onOpenDownloads }) {
             </div>
 
             {showLocationPicker && (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900">
-                    Tap map to move your live Captain pin (Customers &amp; Admin see this)
-                  </span>
-                  {gpsBanner && <span className="text-[#009E4D] font-bold">{gpsBanner}</span>}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <LocateFixed className="w-4 h-4 text-[#009E4D]" />
+                      Live GPS Pin: <span className="text-[#008741]">{rp?.zone_name || 'Syncing...'}</span>
+                    </div>
+                    <div className={`text-[11px] mt-0.5 font-semibold ${gpsState === 'denied' || gpsState === 'error' ? 'text-amber-700' : 'text-slate-500'}`}>
+                      {gpsBanner || (rp?.current_lat != null ? `GPS: ${Number(rp.current_lat).toFixed(5)}, ${Number(rp.current_lng).toFixed(5)}` : 'Waiting for GPS...')}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockRideAlertAudio();
+                        detectAndSyncLiveGps(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold inline-flex items-center gap-1"
+                    >
+                      <LocateFixed className="w-3.5 h-3.5" />
+                      {gpsState === 'syncing' ? 'Detecting GPS...' : 'Detect My Live GPS'}
+                    </button>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const chosen = (bootstrap.zones || []).find((z) => z.name === e.target.value);
+                        if (chosen?.lat != null && chosen?.lng != null) {
+                          pushRiderLocation(chosen.lat, chosen.lng, 'manual');
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700"
+                    >
+                      <option value="">Set Current Chowk Manually...</option>
+                      {(bootstrap.zones || [])
+                        .filter((z) => z.lat != null && z.lng != null)
+                        .map((z) => (
+                          <option key={z.id} value={z.name}>
+                            {z.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
                 <SafarGoMap
                   captains={
@@ -435,6 +616,9 @@ export function RiderApp({ onOpenDownloads }) {
                             vehicle_type: rp?.vehicle_type || 'bike',
                             bike_model: rp?.bike_model,
                             bike_plate: rp?.bike_plate,
+                            zone_name: rp?.zone_name,
+                            rider_photo: rp?.rider_photo,
+                            vehicle_photo: rp?.vehicle_photo,
                             lat: rp.current_lat,
                             lng: rp.current_lng,
                             is_online: rp.is_online,
@@ -444,7 +628,7 @@ export function RiderApp({ onOpenDownloads }) {
                   }
                   interactive={true}
                   activePinMode="pickup"
-                  onMapPick={(_which, lat, lng) => pushRiderLocation(lat, lng)}
+                  onMapPick={(_which, lat, lng) => pushRiderLocation(lat, lng, 'manual')}
                   heightClass="h-48"
                   fitSignature={`${rp?.current_lat}-${rp?.current_lng}`}
                 />
@@ -457,14 +641,30 @@ export function RiderApp({ onOpenDownloads }) {
               </div>
             ) : (
               availableJobs.map((job) => (
-                <div key={job.id} className="bg-white border-2 border-[#009E4D]/40 rounded-2xl p-4 space-y-3 text-xs shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-lg bg-teal-600 text-white font-bold">NEW JOB</span>
+                <div
+                  key={job.id}
+                  className={`bg-white rounded-2xl p-4 space-y-3 text-xs shadow-xs border-2 ${
+                    job.is_closest_captain ? 'border-[#009E4D] ring-2 ring-emerald-200/60' : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {job.is_closest_captain ? (
+                        <span className="px-2 py-0.5 rounded-lg bg-[#009E4D] text-white font-extrabold">
+                          CLOSEST TO YOU
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-lg bg-teal-600 text-white font-bold">NEW JOB</span>
+                      )}
                       <span className="mono-num font-bold">{job.booking_code}</span>
                       <StatusBadge value={job.service_type} />
+                      {job.captain_distance_km != null && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#008741] border border-emerald-200 font-bold">
+                          {job.captain_distance_km} km away (~{job.captain_eta_min} min)
+                        </span>
+                      )}
                     </div>
-                    <span className="mono-num font-bold text-slate-600">{job.distance_km} km</span>
+                    <span className="mono-num font-bold text-slate-600">Trip {job.distance_km} km</span>
                   </div>
 
                   <div className="space-y-1 text-slate-800">
@@ -490,6 +690,9 @@ export function RiderApp({ onOpenDownloads }) {
                                 display_name: 'You',
                                 vehicle_type: rp?.vehicle_type || 'bike',
                                 bike_model: rp?.bike_model,
+                                zone_name: rp?.zone_name,
+                                rider_photo: rp?.rider_photo,
+                                vehicle_photo: rp?.vehicle_photo,
                                 lat: rp.current_lat,
                                 lng: rp.current_lng,
                                 is_online: rp?.is_online,

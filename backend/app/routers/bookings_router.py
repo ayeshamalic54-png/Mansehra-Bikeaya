@@ -20,7 +20,12 @@ from app.schemas import (
     BookingRatingCreate,
     SupportTicketCreate,
 )
-from app.services.finance import compute_commission, estimate_booking_fare, utcnow
+from app.services.finance import (
+    compute_commission,
+    estimate_booking_fare,
+    find_nearest_captains_for_booking,
+    utcnow,
+)
 
 router = APIRouter(prefix="/api", tags=["Customer Bookings & Support"])
 
@@ -232,7 +237,19 @@ def create_customer_booking(
     db.add(booking)
     db.commit()
     booking = booking_query_with_relations(db).filter(Booking.id == booking.id).first()
-    return serialize_booking(booking)
+    res = serialize_booking(booking)
+    nearest = find_nearest_captains_for_booking(
+        db,
+        booking.service_type,
+        booking.pickup_lat,
+        booking.pickup_lng,
+        booking.pickup_zone,
+        limit=3,
+        include_phone=False,
+    )
+    res["nearby_captains_notified"] = len(nearest)
+    res["closest_captain_eta_min"] = nearest[0]["eta_min"] if nearest else None
+    return res
 
 
 @router.post("/bookings/{booking_id}/raise-fare")

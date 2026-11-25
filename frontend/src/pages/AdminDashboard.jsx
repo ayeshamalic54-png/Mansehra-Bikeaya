@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
+  Bell,
   Bike,
   ChevronRight,
   ClipboardList,
@@ -34,6 +35,12 @@ import { AdminOperationsPanel } from '../components/admin/AdminOperationsPanel';
 import { AdminPeoplePanel } from '../components/admin/AdminPeoplePanel';
 import { AdminReportsPanel } from '../components/admin/AdminReportsPanel';
 import { formatPaymentMethodLabel, getRidePaymentBadgeState } from '../utils/paymentAccounts';
+import {
+  playRideAlertChime,
+  requestRideNotificationsPermission,
+  showBrowserRideNotification,
+  unlockRideAlertAudio,
+} from '../utils/rideAlerts';
 
 const NAV_GROUPS = [
   {
@@ -96,6 +103,11 @@ export function AdminDashboard({ onOpenDownloads }) {
   const [liveMap, setLiveMap] = useState({ captains: [], active_bookings: [] });
   const [editingBooking, setEditingBooking] = useState(null);
   const [toast, setToast] = useState(null);
+  const [liveBookingAlert, setLiveBookingAlert] = useState(null);
+  const [alertsEnabled, setAlertsEnabled] = useState(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
+  const seenPendingIdsRef = useRef(null);
 
   const [manualForm, setManualForm] = useState({
     customer_phone: '',
@@ -122,13 +134,38 @@ export function AdminDashboard({ onOpenDownloads }) {
     setTimeout(() => setToast(null), 4500);
   };
 
+  const handleOverviewPayload = (ov) => {
+    setOverview(ov);
+    const pendingList = (ov?.recent_bookings || []).filter((b) => b.status === 'pending');
+    if (seenPendingIdsRef.current === null) {
+      seenPendingIdsRef.current = new Set(pendingList.map((b) => b.id));
+    } else {
+      const freshPending = pendingList.filter((b) => !seenPendingIdsRef.current.has(b.id));
+      if (freshPending.length > 0) {
+        freshPending.forEach((b) => seenPendingIdsRef.current.add(b.id));
+        const top = freshPending[0];
+        setLiveBookingAlert(top);
+        playRideAlertChime('admin');
+        const closest = top.nearest_captains?.[0];
+        const capHint = closest
+          ? `Nearest Captain: ${closest.full_name} (${closest.distance_km} km · ${closest.zone_name})`
+          : 'No verified online captain nearby';
+        showBrowserRideNotification(
+          `New SafarGo Booking ${top.booking_code}`,
+          `${top.customer?.full_name || 'Customer'}: ${top.pickup_zone} → ${top.drop_zone} · Rs. ${top.final_fare} · ${capHint}`,
+          `admin-booking-${top.id}`
+        );
+      }
+    }
+  };
+
   const loadOverviewAndRiders = async () => {
     try {
       const [ov, rd] = await Promise.all([
         apiRequest('/api/admin/overview'),
         apiRequest('/api/admin/riders'),
       ]);
-      setOverview(ov);
+      handleOverviewPayload(ov);
       setRiders(rd);
     } catch (e) {
       notify(e.message, true);
@@ -172,8 +209,20 @@ export function AdminDashboard({ onOpenDownloads }) {
   }, [subpage, bookingStatusFilter]);
 
   useEffect(() => {
+    const timer = setInterval(async () => {
+      try {
+        const ov = await apiRequest('/api/admin/overview');
+        handleOverviewPayload(ov);
+      } catch {
+        // ignore transient poll errors
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (subpage !== 'livemap' && subpage !== 'overview') return;
-    const timer = setInterval(loadLiveMap, 6000);
+    const timer = setInterval(loadLiveMap, 4500);
     return () => clearInterval(timer);
   }, [subpage]);
 
@@ -403,7 +452,28 @@ export function AdminDashboard({ onOpenDownloads }) {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSubpage('manual_booking')}
+              type="button"
+              onClick={async () => {
+                const perm = await requestRideNotificationsPermission();
+                setAlertsEnabled(perm === 'granted');
+                playRideAlertChime('admin');
+                notify('Admin booking alert sound & notifications active!');
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${
+                alertsEnabled
+                  ? 'bg-emerald-50 border-emerald-200 text-[#008741]'
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+              title="Enable New Booking Sound & Alerts"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{alertsEnabled ? 'Alerts On' : 'Enable Alerts'}</span>
+            </button>
+            <button
+              onClick={() => {
+                unlockRideAlertAudio();
+                setSubpage('manual_booking');
+              }}
               className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#009E4D] hover:bg-[#008741]"
             >
               + Manual Booking
@@ -424,6 +494,64 @@ export function AdminDashboard({ onOpenDownloads }) {
         </header>
 
         <main className="p-4 sm:p-6 space-y-5 max-w-7xl w-full mx-auto">
+          {liveBookingAlert && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-teal-950 text-white shadow-lg border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1 text-xs">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">
+                  <Bell className="w-3 h-3" />
+                  LIVE NEW CUSTOMER BOOKING · {liveBookingAlert.booking_code}
+                </div>
+                <div className="text-sm font-extrabold">
+                  {liveBookingAlert.customer?.full_name || 'Customer'} ({liveBookingAlert.customer?.phone || ''}) — {liveBookingAlert.pickup_zone} → {liveBookingAlert.drop_zone}
+                </div>
+                <div className="text-emerald-200">
+                  Offer: <strong>Rs. {liveBookingAlert.final_fare}</strong> ({liveBookingAlert.distance_km} km) ·{' '}
+                  {liveBookingAlert.nearest_captains?.[0] ? (
+                    <span>
+                      Closest Online Captain:{' '}
+                      <strong className="text-amber-300">
+                        {liveBookingAlert.nearest_captains[0].full_name} ({liveBookingAlert.nearest_captains[0].distance_km} km · {liveBookingAlert.nearest_captains[0].zone_name})
+                      </strong>
+                    </span>
+                  ) : (
+                    <span className="text-amber-300 font-bold">No online verified captain near pickup</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    unlockRideAlertAudio();
+                    setSubpage('livemap');
+                    loadLiveMap();
+                  }}
+                  className="px-3 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold text-xs"
+                >
+                  Open Live Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    unlockRideAlertAudio();
+                    setSubpage('dispatch');
+                    loadBookings();
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs"
+                >
+                  Open Queue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLiveBookingAlert(null)}
+                  className="px-2.5 py-2 rounded-xl bg-white/10 text-slate-300 text-xs font-bold"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {toast && (
             <div
               className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between ${
