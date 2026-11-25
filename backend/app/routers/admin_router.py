@@ -48,6 +48,7 @@ from app.services.finance import (
     recalculate_rider_ledger_balances,
     utcnow,
 )
+from app.services.media import clean_image_data_uri, get_missing_captain_docs, has_complete_captain_docs
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Command Center"])
 
@@ -504,12 +505,16 @@ def list_riders(
         rp = u.rider_profile
         r_trips = trips_by_rider.get(u.id, [])
         completed_km = round(sum(float(b.distance_km or 0.0) for b in r_trips if b.status == "completed"), 1)
-        has_docs = bool(rp and rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
+        missing_docs = get_missing_captain_docs(rp)
+        has_docs = len(missing_docs) == 0
+        is_verified = bool(rp and rp.is_verified and has_docs)
         v_status = (getattr(rp, "verification_status", None) if rp else None) or (
-            "verified" if (rp and rp.is_verified) else ("pending" if has_docs else "incomplete")
+            "verified" if is_verified else ("pending" if has_docs else "incomplete")
         )
-        if rp and rp.is_verified:
+        if is_verified:
             v_status = "verified"
+        elif not has_docs and v_status != "rejected":
+            v_status = "incomplete"
         out.append(
             {
                 "id": u.id,
@@ -526,11 +531,12 @@ def list_riders(
                 "current_lat": rp.current_lat if rp else None,
                 "current_lng": rp.current_lng if rp else None,
                 "location_updated_at": rp.location_updated_at if rp else None,
-                "is_verified": rp.is_verified if rp else False,
+                "is_verified": is_verified,
                 "verification_status": v_status,
                 "verification_note": getattr(rp, "verification_note", None) if rp else None,
                 "docs_submitted_at": getattr(rp, "docs_submitted_at", None) if rp else None,
                 "has_required_docs": has_docs,
+                "missing_required_docs": missing_docs,
                 "rider_photo": getattr(rp, "rider_photo", None) if rp else None,
                 "vehicle_photo": getattr(rp, "vehicle_photo", None) if rp else None,
                 "cnic_front_photo": getattr(rp, "cnic_front_photo", None) if rp else None,
@@ -589,6 +595,11 @@ def admin_create_rider(
     db.commit()
     db.refresh(user)
 
+    rider_photo = clean_image_data_uri(payload.rider_photo) or None
+    vehicle_photo = clean_image_data_uri(payload.vehicle_photo) or None
+    cnic_front_photo = clean_image_data_uri(payload.cnic_front_photo) or None
+    cnic_back_photo = clean_image_data_uri(payload.cnic_back_photo) or None
+
     z = db.query(MansehraZone).filter(MansehraZone.name == payload.zone_name).first()
     rp = RiderProfile(
         user_id=user.id,
@@ -600,13 +611,29 @@ def admin_create_rider(
         zone_name=payload.zone_name,
         current_lat=z.lat if z else 34.3335,
         current_lng=z.lng if z else 73.1995,
+        rider_photo=rider_photo,
+        vehicle_photo=vehicle_photo,
+        cnic_front_photo=cnic_front_photo,
+        cnic_back_photo=cnic_back_photo,
         credit_limit=payload.credit_limit,
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
-        is_verified=payload.is_verified,
-        verification_status="verified" if payload.is_verified else "incomplete",
+        is_verified=False,
+        verification_status="incomplete",
         is_online=False,
     )
+    missing_docs = get_missing_captain_docs(rp)
+    if payload.is_verified and missing_docs:
+        db.delete(user)
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot verify Captain yet. Complete all documents first — missing: {', '.join(missing_docs)}",
+        )
+    if not missing_docs:
+        rp.docs_submitted_at = utcnow()
+        rp.is_verified = bool(payload.is_verified)
+        rp.verification_status = "verified" if payload.is_verified else "pending"
     db.add(rp)
     db.commit()
     return {"id": user.id, "full_name": user.full_name, "phone": user.phone, "bike_plate": rp.bike_plate}
@@ -645,24 +672,39 @@ def update_rider_config(
     for p_field in ("rider_photo", "vehicle_photo", "cnic_front_photo", "cnic_back_photo"):
         pval = getattr(payload, p_field, None)
         if pval is not None:
-            setattr(rp, p_field, pval.strip() or None)
-    if payload.verification_status is not None:
-        rp.verification_status = payload.verification_status
-        if payload.verification_status == "verified":
-            rp.is_verified = True
-            rp.verification_note = None
-        elif payload.verification_status == "rejected":
+            cleaned = clean_image_data_uri(pval)
+            setattr(rp, p_field, cleaned or None)
+
+    missing_docs = get_missing_captain_docs(rp)
+    wants_verify = (payload.verification_status == "verified") or (payload.is_verified is True)
+    wants_reject = payload.verification_status == "rejected"
+
+    if wants_verify:
+        if missing_docs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot verify Captain yet. Complete all documents first — missing: {', '.join(missing_docs)}",
+            )
+        rp.is_verified = True
+        rp.verification_status = "verified"
+        rp.verification_note = None
+    elif wants_reject:
+        rp.is_verified = False
+        rp.is_online = False
+        rp.verification_status = "rejected"
+    elif payload.is_verified is False:
+        rp.is_verified = False
+        rp.is_online = False
+        rp.verification_status = "rejected" if payload.verification_note else ("pending" if not missing_docs else "incomplete")
+    else:
+        if missing_docs:
             rp.is_verified = False
             rp.is_online = False
-    if payload.is_verified is not None:
-        rp.is_verified = payload.is_verified
-        if payload.is_verified:
-            rp.verification_status = "verified"
-            rp.verification_note = None
-        else:
-            rp.is_online = False
-            if rp.verification_status == "verified":
-                rp.verification_status = "rejected" if payload.verification_note else "pending"
+            if rp.verification_status != "rejected":
+                rp.verification_status = "incomplete"
+        elif not rp.is_verified and rp.verification_status != "rejected":
+            rp.docs_submitted_at = rp.docs_submitted_at or utcnow()
+            rp.verification_status = "pending"
     if payload.is_active is not None:
         user.is_active = payload.is_active
         if not payload.is_active:
@@ -937,6 +979,9 @@ def get_admin_live_map(
                 "zone_name": rp.zone_name,
                 "is_online": rp.is_online,
                 "is_verified": rp.is_verified,
+                "verification_status": getattr(rp, "verification_status", None),
+                "rider_photo": getattr(rp, "rider_photo", None),
+                "vehicle_photo": getattr(rp, "vehicle_photo", None),
                 "lat": lat,
                 "lng": lng,
                 "location_updated_at": rp.location_updated_at,

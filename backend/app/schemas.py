@@ -148,7 +148,11 @@ class AdminCreateRider(BaseModel):
     credit_limit: float = Field(1500.0, ge=0)
     custom_commission_type: Optional[str] = Field(None, pattern="^(percent|fixed)$")
     custom_commission_value: Optional[float] = Field(None, ge=0)
-    is_verified: bool = True
+    rider_photo: Optional[str] = Field(None, max_length=950000)
+    vehicle_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_front_photo: Optional[str] = Field(None, max_length=950000)
+    cnic_back_photo: Optional[str] = Field(None, max_length=950000)
+    is_verified: bool = False
 
 
 class RiderConfigUpdate(BaseModel):

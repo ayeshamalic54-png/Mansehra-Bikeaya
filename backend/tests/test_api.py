@@ -75,6 +75,7 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     )
     assert rider_login.status_code == 200
     rider_token = rider_login.json()["access_token"]
+    rider_user = rider_login.json()["user"]
 
     admin_login = client.post(
         "/api/auth/login",
@@ -82,6 +83,59 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     )
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
+
+    # Fresh Captain starts unverified; partial doc saves progress, blocks verify until all 4 docs + Admin approval
+    sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+    assert rider_user["rider_profile"]["is_verified"] is False
+    blocked_verify = client.patch(
+        f"/api/admin/riders/{rider_user['id']}",
+        headers=_auth_header(admin_token),
+        json={"is_verified": True},
+    )
+    assert blocked_verify.status_code == 400
+
+    partial = client.patch(
+        "/api/riders/profile",
+        headers=_auth_header(rider_token),
+        json={"rider_photo": sample_jpg},
+    )
+    assert partial.status_code == 200
+    p_rp = partial.json()["rider_profile"]
+    assert p_rp["rider_photo"] == sample_jpg
+    assert p_rp["has_required_docs"] is False
+    assert p_rp["is_verified"] is False
+    assert p_rp["verification_status"] == "incomplete"
+    assert len(p_rp["missing_required_docs"]) == 3
+
+    blocked_partial = client.patch(
+        f"/api/admin/riders/{rider_user['id']}",
+        headers=_auth_header(admin_token),
+        json={"is_verified": True},
+    )
+    assert blocked_partial.status_code == 400
+
+    completed_docs = client.patch(
+        "/api/riders/profile",
+        headers=_auth_header(rider_token),
+        json={
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    )
+    assert completed_docs.status_code == 200
+    c_rp = completed_docs.json()["rider_profile"]
+    assert c_rp["has_required_docs"] is True
+    assert c_rp["is_verified"] is False
+    assert c_rp["verification_status"] == "pending"
+
+    approved = client.patch(
+        f"/api/admin/riders/{rider_user['id']}",
+        headers=_auth_header(admin_token),
+        json={"is_verified": True},
+    )
+    assert approved.status_code == 200
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(rider_token)).status_code == 200
 
     # 2. Customer books a 4 km ride (base 100 + 4*50 = 300) with MANSEHRA20 promo -> 280
     est = client.post(
@@ -518,6 +572,8 @@ def test_live_gps_nearby_captains_and_admin_live_map(client):
     assert len(caps) >= 1
     assert "phone" not in caps[0]
     assert caps[0]["lat"] is not None and caps[0]["eta_min"] >= 2
+    assert caps[0]["rider_photo"].startswith("data:image/")
+    assert caps[0]["vehicle_photo"].startswith("data:image/")
 
     # 3. Customer books from home GPS pin -> Rider accepts -> Customer sees rider GPS & Admin live-map shows both
     cust_token = client.post(
@@ -559,6 +615,7 @@ def test_live_gps_nearby_captains_and_admin_live_map(client):
     assert live_map.status_code == 200
     lm = live_map.json()
     assert len(lm["captains"]) >= 2
+    assert any(c.get("rider_photo", "").startswith("data:image/") for c in lm["captains"])
     assert any(b["id"] == bk["id"] and b["pickup_lat"] == 34.3361 for b in lm["active_bookings"])
 
 
@@ -866,6 +923,7 @@ def test_indrive_direct_bidding_and_equal_bike_car_verification_uploads(client):
             "rider_photo": sample_jpg,
             "vehicle_photo": sample_jpg,
             "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
         },
     )
     assert bike_reg.status_code == 201

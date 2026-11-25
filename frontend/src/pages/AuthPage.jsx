@@ -323,6 +323,9 @@ export function AuthPage({ onNavigate }) {
                             {showDocUpload ? 'Upload Later in Profile' : 'Show Photo Uploads'}
                           </button>
                         </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Jo photos abhi upload kareinge woh save ho jayengi — lekin Admin verification aur online duty tabhi khulegi jab tamam 4 photos + CNIC # complete honge aur Admin khud approve karega.
+                        </p>
                         {showDocUpload && (
                           <CaptainPhotoUploads
                             vehicleType={vehicleType}

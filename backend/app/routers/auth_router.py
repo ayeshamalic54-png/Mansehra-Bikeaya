@@ -5,18 +5,22 @@ from app.database import get_db
 from app.models import MansehraZone, RiderProfile, SystemSetting, User
 from app.schemas import LoginRequest, RegisterRequest
 from app.services.finance import utcnow
-from app.services.media import clean_image_data_uri
+from app.services.media import clean_image_data_uri, get_missing_captain_docs, has_complete_captain_docs
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 def serialize_rider_profile(rp: RiderProfile) -> dict:
-    has_required_docs = bool(rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
+    missing_docs = get_missing_captain_docs(rp)
+    has_required_docs = len(missing_docs) == 0
+    is_verified = bool(rp.is_verified and has_required_docs)
     v_status = getattr(rp, "verification_status", None) or (
-        "verified" if rp.is_verified else ("pending" if has_required_docs else "incomplete")
+        "verified" if is_verified else ("pending" if has_required_docs else "incomplete")
     )
-    if rp.is_verified:
+    if is_verified:
         v_status = "verified"
+    elif not has_required_docs and v_status != "rejected":
+        v_status = "incomplete"
     return {
         "id": rp.id,
         "cnic_number": rp.cnic_number,
@@ -28,11 +32,12 @@ def serialize_rider_profile(rp: RiderProfile) -> dict:
         "current_lat": rp.current_lat,
         "current_lng": rp.current_lng,
         "location_updated_at": rp.location_updated_at,
-        "is_verified": rp.is_verified,
+        "is_verified": is_verified,
         "verification_status": v_status,
         "verification_note": getattr(rp, "verification_note", None),
         "docs_submitted_at": getattr(rp, "docs_submitted_at", None),
         "has_required_docs": has_required_docs,
+        "missing_required_docs": missing_docs,
         "rider_photo": getattr(rp, "rider_photo", None),
         "vehicle_photo": getattr(rp, "vehicle_photo", None),
         "cnic_front_photo": getattr(rp, "cnic_front_photo", None),
@@ -101,7 +106,15 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             and any(w in payload.bike_model.lower() for w in ("alto", "corolla", "civic", "mehran", "cultus", "car", "vitz", "wagon", "hiace"))
             else "bike"
         )
-        has_docs = bool(rider_photo and vehicle_photo and cnic_front_photo)
+        has_docs = bool(
+            rider_photo
+            and vehicle_photo
+            and cnic_front_photo
+            and cnic_back_photo
+            and (payload.cnic_number or "").strip()
+            and (payload.bike_model or ("Suzuki Alto" if vtype == "car" else "Honda CD-70")).strip()
+            and payload.bike_plate.strip()
+        )
         rp = RiderProfile(
             user_id=user.id,
             cnic_number=payload.cnic_number,

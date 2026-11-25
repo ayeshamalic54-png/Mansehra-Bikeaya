@@ -8,6 +8,20 @@ function esc(str) {
     .replace(/>/g, '&gt;');
 }
 
+function safePhotoUrl(raw) {
+  const val = String(raw || '').trim();
+  if (!val) return '';
+  if (
+    val.startsWith('data:image/') ||
+    val.startsWith('https://') ||
+    val.startsWith('http://') ||
+    val.startsWith('/')
+  ) {
+    return val.replace(/["'<>]/g, '');
+  }
+  return '';
+}
+
 function makePinIcon(bg, badge, subtitle) {
   return L.divIcon({
     className: 'safargo-div-icon',
@@ -31,14 +45,37 @@ function makeCaptainIcon(c) {
   const online = c.is_online !== false;
   const bg = !online ? '#64748B' : isCar ? '#0284C7' : '#009E4D';
   const dot = online ? '#4ADE80' : '#CBD5E1';
+  const photoUrl = safePhotoUrl(c.rider_photo);
+  const shortName = esc((c.full_name || c.display_name || (isCar ? 'CAR' : 'BIKE')).split(' ')[0]);
+
+  if (photoUrl) {
+    return L.divIcon({
+      className: 'safargo-div-icon',
+      iconSize: [48, 56],
+      iconAnchor: [24, 24],
+      popupAnchor: [0, -24],
+      html: `
+        <div style="display:flex;flex-direction:column;align-items:center;">
+          <div style="position:relative;width:40px;height:40px;border-radius:9999px;border:3px solid ${bg};background:#fff;box-shadow:0 4px 14px rgba(15,23,42,0.34);overflow:hidden;">
+            <img src="${photoUrl}" alt="${shortName}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+          </div>
+          <span style="position:absolute;top:0;right:2px;width:11px;height:11px;border-radius:9999px;background:${dot};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+          <div style="margin-top:2px;padding:1px 6px;border-radius:9999px;background:${bg};color:#fff;font-size:9px;font-weight:800;border:1.5px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(15,23,42,0.22);">
+            ${shortName}
+          </div>
+        </div>
+      `,
+    });
+  }
+
   const glyph = isCar
     ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>`
     : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>`;
 
   return L.divIcon({
     className: 'safargo-div-icon',
-    iconSize: [38, 30],
-    iconAnchor: [19, 15],
+    iconSize: [44, 30],
+    iconAnchor: [22, 15],
     popupAnchor: [0, -16],
     html: `
       <div style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:9999px;background:${bg};color:#fff;font-size:10px;font-weight:800;border:2px solid #fff;box-shadow:0 4px 12px rgba(15,23,42,0.28);white-space:nowrap;">
@@ -244,13 +281,22 @@ export function SafarGoMap({
       if (c.lat == null || c.lng == null) continue;
       const m = L.marker([c.lat, c.lng], { icon: makeCaptainIcon(c) }).addTo(layer);
       const title = c.full_name || c.display_name || 'SafarGo Captain';
+      const riderImg = safePhotoUrl(c.rider_photo);
+      const vehImg = safePhotoUrl(c.vehicle_photo);
       m.bindPopup(
-        `<div style="font-size:12px;line-height:1.4;">
-          <strong>${esc(title)}</strong><br/>
-          ${esc(c.vehicle_type === 'car' ? 'Car' : 'Bike')}: ${esc(c.bike_model || '')} ${c.bike_plate ? `(${esc(c.bike_plate)})` : ''}<br/>
+        `<div style="font-size:12px;line-height:1.4;min-width:190px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            ${riderImg ? `<img src="${riderImg}" alt="${esc(title)}" style="width:38px;height:38px;border-radius:9999px;object-fit:cover;border:2px solid #009E4D;flex-shrink:0;" />` : ''}
+            ${vehImg ? `<img src="${vehImg}" alt="Vehicle" style="width:46px;height:34px;border-radius:8px;object-fit:cover;border:1px solid #cbd5e1;flex-shrink:0;" />` : ''}
+            <div>
+              <strong>${esc(title)}</strong><br/>
+              <span style="font-size:11px;color:#475569;">${esc(c.vehicle_type === 'car' ? 'AC Car' : 'Bike')}: ${esc(c.bike_model || '')} ${c.bike_plate ? `(${esc(c.bike_plate)})` : ''}</span>
+            </div>
+          </div>
           Area: ${esc(c.zone_name || '-')}<br/>
           ${c.distance_km != null ? `Distance: <strong>${esc(c.distance_km)} km (~${esc(c.eta_min || 3)} min)</strong><br/>` : ''}
           Status: <strong>${c.is_online !== false ? 'ONLINE' : 'OFFLINE'}</strong>
+          ${c.is_verified === false ? ' · <span style="color:#D97706;font-weight:700;">Unverified Docs</span>' : ''}
           ${c.active_booking_code ? `<br/>Active Trip: <strong>${esc(c.active_booking_code)}</strong>` : ''}
           <br/><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.lat},${c.lng}`)}" target="_blank" rel="noopener noreferrer" style="color:#0284C7;font-weight:700;text-decoration:underline;">Locate on Google Maps ↗</a>
         </div>`

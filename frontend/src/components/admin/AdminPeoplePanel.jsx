@@ -124,10 +124,10 @@ export function AdminPeoplePanel({
               riderForm.custom_commission_type !== 'none' && riderForm.custom_commission_value !== ''
                 ? Number(riderForm.custom_commission_value)
                 : null,
-            is_verified: true,
+            is_verified: false,
           },
         });
-        onNotify(`New ${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain added & verified!`);
+        onNotify(`New ${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain registered! Upload all 4 verification docs before Admin approval.`);
       }
       resetRiderForm();
       onReloadRiders();
@@ -236,6 +236,16 @@ export function AdminPeoplePanel({
             const dr = riders.find((r) => r.id === docsRiderId);
             if (!dr) return null;
             const isCar = dr.vehicle_type === 'car';
+            const missingList = [
+              !dr.rider_photo && 'Captain Selfie / Photo',
+              !dr.vehicle_photo && (isCar ? 'Car Photo' : 'Bike Photo'),
+              !dr.cnic_front_photo && 'CNIC Front Photo',
+              !dr.cnic_back_photo && 'CNIC Back / Driving License',
+              !(dr.cnic_number || '').trim() && 'CNIC Number',
+              !(dr.bike_model || '').trim() && 'Vehicle Model',
+              !(dr.bike_plate || '').trim() && 'Number Plate',
+            ].filter(Boolean);
+            const allDocsComplete = missingList.length === 0;
             return (
               <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-y-auto">
                 <div className="bg-white border border-slate-200 rounded-3xl p-5 w-full max-w-2xl space-y-4 shadow-2xl my-auto">
@@ -287,6 +297,11 @@ export function AdminPeoplePanel({
                   />
 
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                    {!allDocsComplete && (
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold">
+                        Incomplete Documents — Admin cannot verify yet. Missing: <span className="text-rose-700">{missingList.join(', ')}</span>
+                      </div>
+                    )}
                     <input
                       type="text"
                       placeholder="Optional note or rejection reason (e.g. Upload clearer CNIC front)"
@@ -297,20 +312,25 @@ export function AdminPeoplePanel({
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
+                        disabled={!allDocsComplete}
                         onClick={async () => {
-                          await apiRequest(`/api/admin/riders/${dr.id}`, {
-                            method: 'PATCH',
-                            body: { is_verified: true, verification_status: 'verified' },
-                          });
-                          onNotify(`${dr.full_name} verified and unlocked for live rides!`);
-                          setDocsRiderId(null);
-                          setRejectNote('');
-                          onReloadRiders();
+                          try {
+                            await apiRequest(`/api/admin/riders/${dr.id}`, {
+                              method: 'PATCH',
+                              body: { is_verified: true, verification_status: 'verified' },
+                            });
+                            onNotify(`${dr.full_name} verified and unlocked for live rides!`);
+                            setDocsRiderId(null);
+                            setRejectNote('');
+                            onReloadRiders();
+                          } catch (err) {
+                            onNotify(err.message, true);
+                          }
                         }}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-extrabold inline-flex items-center justify-center gap-1.5"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        Approve &amp; Verify Captain ✓
+                        {allDocsComplete ? 'Approve & Verify Captain ✓' : 'Complete All Docs to Approve'}
                       </button>
                       <button
                         type="button"
@@ -343,7 +363,7 @@ export function AdminPeoplePanel({
           <form onSubmit={handleSaveRider} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-sm text-slate-900">
-                {editingRiderId ? 'Edit Bike / AC Car Captain' : '+ Register & Verify Bike / AC Car Captain'}
+                {editingRiderId ? 'Edit Bike / AC Car Captain' : '+ Register New Bike / AC Car Captain (Admin Verifies After Docs)'}
               </span>
               {editingRiderId && (
                 <button type="button" onClick={resetRiderForm} className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
@@ -467,6 +487,7 @@ export function AdminPeoplePanel({
               <tbody className="divide-y divide-slate-100">
                 {riders.map((r) => {
                   const docCount = [r.rider_photo, r.vehicle_photo, r.cnic_front_photo, r.cnic_back_photo].filter(Boolean).length;
+                  const canApproveRow = docCount === 4 && Boolean(r.has_required_docs && (r.cnic_number || '').trim() && (r.bike_model || '').trim() && (r.bike_plate || '').trim());
                   const isCar = r.vehicle_type === 'car';
                   return (
                   <tr key={r.id}>
@@ -506,7 +527,7 @@ export function AdminPeoplePanel({
                             setRejectNote(r.verification_note || '');
                           }}
                           className={`px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 ${
-                            docCount >= 3 ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-slate-100 text-slate-700 border-slate-200'
+                            canApproveRow ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-amber-50 text-amber-800 border-amber-200'
                           }`}
                         >
                           <FileCheck2 className="w-3 h-3" />
@@ -538,15 +559,37 @@ export function AdminPeoplePanel({
                     </td>
                     <td className="p-3.5 whitespace-nowrap space-x-1.5">
                       {!r.is_verified && (
-                        <button
-                          onClick={async () => {
-                            await apiRequest(`/api/admin/riders/${r.id}`, { method: 'PATCH', body: { is_verified: true } });
-                            onReloadRiders();
-                          }}
-                          className="px-2 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
-                        >
-                          Verify
-                        </button>
+                        canApproveRow ? (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await apiRequest(`/api/admin/riders/${r.id}`, {
+                                  method: 'PATCH',
+                                  body: { is_verified: true, verification_status: 'verified' },
+                                });
+                                onNotify(`${r.full_name} verified!`);
+                                onReloadRiders();
+                              } catch (err) {
+                                onNotify(err.message, true);
+                              }
+                            }}
+                            className="px-2 py-1 rounded-lg bg-[#009E4D] text-white font-bold"
+                          >
+                            Verify
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDocsRiderId(r.id);
+                              setRejectNote(r.verification_note || '');
+                            }}
+                            className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-bold"
+                            title="Upload all 4 documents + CNIC before Admin verification"
+                          >
+                            Docs ({docCount}/4)
+                          </button>
+                        )
                       )}
                       <button
                         onClick={async () => {

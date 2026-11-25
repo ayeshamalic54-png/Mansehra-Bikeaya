@@ -38,8 +38,8 @@ export function CaptainPhotoUploads({
     {
       key: 'cnic_back_photo',
       label: 'CNIC Back / Driving License',
-      sub: 'ID back or Driving License (recommended)',
-      required: false,
+      sub: 'Clear ID back or Driving License photo (required)',
+      required: true,
       icon: CreditCard,
     },
   ];

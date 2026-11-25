@@ -196,7 +196,7 @@ export function RiderApp({ onOpenDownloads }) {
     setMsg('');
     setSavingProfile(true);
     try {
-      await apiRequest('/api/riders/profile', {
+      const updatedUser = await apiRequest('/api/riders/profile', {
         method: 'PATCH',
         body: {
           full_name: profileForm.full_name,
@@ -213,7 +213,14 @@ export function RiderApp({ onOpenDownloads }) {
         },
       });
       await refreshMe();
-      setMsg('Profile & verification photos saved! Admin will verify uploaded documents shortly.');
+      const missing = updatedUser?.rider_profile?.missing_required_docs || [];
+      if (missing.length > 0) {
+        setMsg(
+          `Uploaded documents save ho gaye hain! Abhi yeh baqi documents complete karein: ${missing.join(', ')} — Jab tak tamam documents complete aur Admin khud verify na kare, verification nahi hogi.`
+        );
+      } else {
+        setMsg('Tamam documents save aur submit ho gaye hain! Admin khud review karke verify karega tab ride active hogi.');
+      }
     } catch (e2) {
       setErr(e2.message);
     } finally {
@@ -306,8 +313,8 @@ export function RiderApp({ onOpenDownloads }) {
                 {rp?.verification_status === 'rejected'
                   ? `Docs Returned: ${rp.verification_note || 'Please upload clearer Selfie, Vehicle & CNIC photos in Profile.'}`
                   : !rp?.has_required_docs
-                  ? `Upload your Captain Selfie, ${isCarCaptain ? 'Car' : 'Bike'} Photo & CNIC Photo in Profile to unlock live rides.`
-                  : `Your ${isCarCaptain ? 'AC Car' : 'Bike'} Captain docs are uploaded and awaiting verification.`}
+                  ? `Apnay baqi documents complete karein (${(rp?.missing_required_docs || ['Selfie', isCarCaptain ? 'Car Photo' : 'Bike Photo', 'CNIC Front', 'CNIC Back / License', 'CNIC #']).join(', ')}) — jab tak tamam documents complete aur Admin khud verify na kare, verification nahi hogi.`
+                  : `Tamam ${isCarCaptain ? 'AC Car' : 'Bike'} Captain documents complete hain — ab Admin manual review & verification ka intezar karein.`}
               </span>
             </div>
             <button
@@ -1061,9 +1068,40 @@ export function RiderApp({ onOpenDownloads }) {
                   Captain Verification Documents ({profileForm.vehicle_type === 'car' ? 'AC Car Captain' : 'Bike Captain'})
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Upload clear photos of yourself, your {profileForm.vehicle_type === 'car' ? 'Car' : 'Motorbike'}, and your CNIC so Customers trust you and SafarGo verifies your account.
+                  Apnay 4 documents (Selfie, {profileForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Photo, CNIC Front, CNIC Back / License) + CNIC number upload karke Save dabayein. Jo photos abhi lagayenge woh save ho jayengi; verification tab hogi jab tamam documents complete honge aur Admin khud approve karega.
                 </p>
               </div>
+
+              {(() => {
+                const draftMissing = [
+                  !profileForm.rider_photo && 'Captain Selfie / Photo',
+                  !profileForm.vehicle_photo && (profileForm.vehicle_type === 'car' ? 'Car Photo' : 'Bike Photo'),
+                  !profileForm.cnic_front_photo && 'CNIC Front Photo',
+                  !profileForm.cnic_back_photo && 'CNIC Back / Driving License',
+                  !(profileForm.cnic_number || '').trim() && 'CNIC Number',
+                  !(profileForm.bike_model || '').trim() && 'Vehicle Model',
+                  !(profileForm.bike_plate || '').trim() && 'Number Plate',
+                ].filter(Boolean);
+                if (draftMissing.length > 0) {
+                  return (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold">
+                      Baqi Documents Complete Karein ({4 - [profileForm.rider_photo, profileForm.vehicle_photo, profileForm.cnic_front_photo, profileForm.cnic_back_photo].filter(Boolean).length} photos missing):{' '}
+                      <span className="text-rose-700">{draftMissing.join(' · ')}</span>
+                      <div className="text-[10px] text-amber-800 mt-1">
+                        Aap abhi jo kuch upload kar chuke hain woh Save click karne par safe save ho jayega, lekin verification aur online duty sab documents complete hone aur Admin ke khud verify karne par hi khulegi.
+                      </div>
+                    </div>
+                  );
+                }
+                if (!rp?.is_verified) {
+                  return (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#008741] text-[11px] font-bold">
+                      Tamam 4 documents complete hain — Save button dabakar Admin manual approval ka intezar karein.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <CaptainPhotoUploads
                 vehicleType={profileForm.vehicle_type}

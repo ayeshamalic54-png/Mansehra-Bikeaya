@@ -133,6 +133,7 @@ def get_nearby_captains(
                     "eta_min": max(2, int(round(dist / 0.45))),
                     "rating_avg": rp.rating_avg,
                     "rider_photo": getattr(rp, "rider_photo", None),
+                    "vehicle_photo": getattr(rp, "vehicle_photo", None),
                     "location_updated_at": rp.location_updated_at,
                 }
             )

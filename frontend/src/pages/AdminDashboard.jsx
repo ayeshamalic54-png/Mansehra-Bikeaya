@@ -834,20 +834,39 @@ export function AdminDashboard({ onOpenDownloads }) {
                     Captain Fleet Locations ({liveMap.captains.length})
                   </div>
                   {liveMap.captains.map((c) => (
-                    <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
-                      <div>
-                        <div className="font-bold text-slate-900">
-                          {c.full_name} · <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">{c.vehicle_type}</span>
-                        </div>
-                        <div className="text-slate-600 mono-num">
-                          {c.bike_model} ({c.bike_plate}) · {c.zone_name}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mono-num">
-                          GPS: {Number(c.lat).toFixed(4)}, {Number(c.lng).toFixed(4)}
-                          {c.active_booking_code ? ` · Trip: ${c.active_booking_code}` : ''}
+                    <div key={c.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {c.rider_photo ? (
+                          <img
+                            src={c.rider_photo}
+                            alt={c.full_name}
+                            className="w-10 h-10 rounded-full object-cover border-2 border-[#009E4D] shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 font-extrabold flex items-center justify-center shrink-0">
+                            {(c.full_name || 'C')[0]}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
+                            <span>{c.full_name}</span>
+                            <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">{c.vehicle_type}</span>
+                            {!c.is_verified && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-extrabold">
+                                Docs Pending
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-slate-600 mono-num truncate">
+                            {c.bike_model} ({c.bike_plate}) · {c.zone_name}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mono-num">
+                            GPS: {Number(c.lat).toFixed(4)}, {Number(c.lng).toFixed(4)}
+                            {c.active_booking_code ? ` · Trip: ${c.active_booking_code}` : ''}
+                          </div>
                         </div>
                       </div>
-                      <span className={`px-2 py-1 rounded-full font-bold ${c.is_online ? 'bg-emerald-100 text-[#008741]' : 'bg-slate-200 text-slate-600'}`}>
+                      <span className={`px-2 py-1 rounded-full font-bold shrink-0 ${c.is_online ? 'bg-emerald-100 text-[#008741]' : 'bg-slate-200 text-slate-600'}`}>
                         {c.is_online ? 'ONLINE' : 'OFFLINE'}
                       </span>
                     </div>

@@ -322,9 +322,9 @@ def seed_initial_data(db: Session) -> None:
             current_lat=34.3195,
             current_lng=73.1938,
             location_updated_at=utcnow(),
-            is_verified=True,
-            verification_status="verified",
-            is_online=True,
+            is_verified=False,
+            verification_status="incomplete",
+            is_online=False,
             credit_limit=1500.0,
         )
     )
@@ -353,9 +353,9 @@ def seed_initial_data(db: Session) -> None:
             current_lat=34.3420,
             current_lng=73.2022,
             location_updated_at=utcnow(),
-            is_verified=True,
-            verification_status="verified",
-            is_online=True,
+            is_verified=False,
+            verification_status="incomplete",
+            is_online=False,
             credit_limit=1500.0,
         )
     )
@@ -384,9 +384,9 @@ def seed_initial_data(db: Session) -> None:
             current_lat=34.3289,
             current_lng=73.1892,
             location_updated_at=utcnow(),
-            is_verified=True,
-            verification_status="verified",
-            is_online=True,
+            is_verified=False,
+            verification_status="incomplete",
+            is_online=False,
             credit_limit=3000.0,
         )
     )

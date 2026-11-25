@@ -796,6 +796,8 @@ export function CustomerApp({ onOpenDownloads }) {
                                   vehicle_type: b.rider.vehicle_type,
                                   bike_model: b.rider.bike_model,
                                   bike_plate: b.rider.bike_plate,
+                                  rider_photo: b.rider.rider_photo,
+                                  vehicle_photo: b.rider.vehicle_photo,
                                   lat: b.rider.current_lat,
                                   lng: b.rider.current_lng,
                                   is_online: true,

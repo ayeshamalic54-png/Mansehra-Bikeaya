@@ -27,7 +27,7 @@ from app.services.finance import (
     compute_commission,
     utcnow,
 )
-from app.services.media import clean_image_data_uri
+from app.services.media import clean_image_data_uri, has_complete_captain_docs
 
 router = APIRouter(prefix="/api/riders", tags=["Rider Captain"])
 
@@ -58,14 +58,22 @@ def update_my_captain_profile(
 
     if payload.full_name is not None:
         current_user.full_name = payload.full_name.strip()
-    if payload.vehicle_type is not None:
+    identity_or_docs_changed = False
+    if payload.vehicle_type is not None and payload.vehicle_type != rp.vehicle_type:
         rp.vehicle_type = payload.vehicle_type
+        identity_or_docs_changed = True
     if payload.bike_model is not None:
         rp.bike_model = payload.bike_model.strip()
     if payload.bike_plate is not None:
-        rp.bike_plate = payload.bike_plate.strip().upper()
+        new_plate = payload.bike_plate.strip().upper()
+        if new_plate != (rp.bike_plate or ""):
+            rp.bike_plate = new_plate
+            identity_or_docs_changed = True
     if payload.cnic_number is not None:
-        rp.cnic_number = payload.cnic_number.strip() or None
+        new_cnic = payload.cnic_number.strip() or None
+        if new_cnic != rp.cnic_number:
+            rp.cnic_number = new_cnic
+            identity_or_docs_changed = True
     if payload.license_no is not None:
         rp.license_no = payload.license_no.strip() or None
     if payload.zone_name is not None:
@@ -74,17 +82,23 @@ def update_my_captain_profile(
     for field in ("rider_photo", "vehicle_photo", "cnic_front_photo", "cnic_back_photo"):
         val = getattr(payload, field)
         if val is not None:
-            cleaned = clean_image_data_uri(val)
-            setattr(rp, field, cleaned or None)
+            cleaned = clean_image_data_uri(val) or None
+            if cleaned != getattr(rp, field, None):
+                setattr(rp, field, cleaned)
+                identity_or_docs_changed = True
 
-    has_required_docs = bool(rp.rider_photo and rp.vehicle_photo and rp.cnic_front_photo)
-    if has_required_docs:
-        rp.docs_submitted_at = utcnow()
-        if not rp.is_verified:
-            rp.verification_status = "pending"
-            rp.verification_note = None
-    elif not rp.is_verified:
+    has_required_docs = has_complete_captain_docs(rp)
+    if not has_required_docs:
+        rp.is_verified = False
+        rp.is_online = False
         rp.verification_status = "incomplete"
+    elif identity_or_docs_changed or not rp.is_verified:
+        # Uploading or changing any verification photo/ID requires fresh Admin review & approval.
+        rp.docs_submitted_at = utcnow()
+        rp.is_verified = False
+        rp.is_online = False
+        rp.verification_status = "pending"
+        rp.verification_note = None
 
     db.commit()
     db.refresh(current_user)
