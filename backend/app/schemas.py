@@ -158,16 +158,20 @@ class AdminCreateRider(BaseModel):
 class RiderConfigUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=120)
     phone: Optional[str] = Field(None, min_length=7, max_length=32)
+    email: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=4, max_length=100)
     cnic_number: Optional[str] = None
     vehicle_type: Optional[str] = Field(None, pattern="^(bike|car)$")
     bike_model: Optional[str] = None
     bike_plate: Optional[str] = None
     license_no: Optional[str] = None
     is_verified: Optional[bool] = None
+    is_online: Optional[bool] = None
     verification_status: Optional[str] = Field(None, pattern="^(incomplete|pending|verified|rejected)$")
     verification_note: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
     zone_name: Optional[str] = None
+    sync_zone_coords: Optional[bool] = None
     rider_photo: Optional[str] = Field(None, max_length=950000)
     vehicle_photo: Optional[str] = Field(None, max_length=950000)
     cnic_front_photo: Optional[str] = Field(None, max_length=950000)
@@ -206,6 +210,7 @@ class AdminCustomerUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=120)
     phone: Optional[str] = Field(None, min_length=7, max_length=32)
     email: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=4, max_length=100)
     is_active: Optional[bool] = None
 
 

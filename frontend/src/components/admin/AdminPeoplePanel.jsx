@@ -20,8 +20,7 @@ export function AdminPeoplePanel({
   const [docsRiderId, setDocsRiderId] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
 
-  // Rider Form State (Create or Edit)
-  const [editingRiderId, setEditingRiderId] = useState(null);
+  // Create Captain Form State
   const [riderForm, setRiderForm] = useState({
     full_name: '',
     phone: '',
@@ -35,10 +34,21 @@ export function AdminPeoplePanel({
     credit_limit: 1500,
     custom_commission_type: 'none',
     custom_commission_value: '',
+    is_verified: false,
   });
 
-  // Customer Form State (Create or Edit)
+  // Dedicated Full Edit Modal States (Captain & Customer)
+  const [editingRiderId, setEditingRiderId] = useState(null);
+  const [editRiderForm, setEditRiderForm] = useState(null);
+  const [editRiderErr, setEditRiderErr] = useState('');
+  const [savingEditRider, setSavingEditRider] = useState(false);
+
   const [editingCustomerId, setEditingCustomerId] = useState(null);
+  const [editCustForm, setEditCustForm] = useState(null);
+  const [editCustErr, setEditCustErr] = useState('');
+  const [savingEditCust, setSavingEditCust] = useState(false);
+
+  // Create Customer Form State
   const [custForm, setCustForm] = useState({
     full_name: '',
     phone: '',
@@ -63,7 +73,6 @@ export function AdminPeoplePanel({
   };
 
   const resetRiderForm = () => {
-    setEditingRiderId(null);
     setRiderForm({
       full_name: '',
       phone: '',
@@ -77,58 +86,122 @@ export function AdminPeoplePanel({
       credit_limit: 1500,
       custom_commission_type: 'none',
       custom_commission_value: '',
+      is_verified: false,
     });
+  };
+
+  const openEditRiderModal = (r) => {
+    setEditRiderErr('');
+    setEditingRiderId(r.id);
+    setEditRiderForm({
+      full_name: r.full_name || '',
+      phone: r.phone || '',
+      email: r.email || '',
+      password: '',
+      vehicle_type: r.vehicle_type || 'bike',
+      bike_model: r.bike_model || '',
+      bike_plate: r.bike_plate || '',
+      cnic_number: r.cnic_number || '',
+      license_no: r.license_no || '',
+      zone_name: r.zone_name || zones?.[0]?.name || 'Main Bazar / Lari Adda',
+      sync_zone_coords: false,
+      credit_limit: r.credit_limit ?? 1500,
+      custom_commission_type: r.custom_commission_type || 'none',
+      custom_commission_value: r.custom_commission_value ?? '',
+      is_active: r.is_active !== false,
+      is_verified: Boolean(r.is_verified),
+      verification_status: r.is_verified ? 'verified' : r.verification_status || 'incomplete',
+      verification_note: r.verification_note || '',
+      is_online: Boolean(r.is_online),
+      rider_photo: r.rider_photo || '',
+      vehicle_photo: r.vehicle_photo || '',
+      cnic_front_photo: r.cnic_front_photo || '',
+      cnic_back_photo: r.cnic_back_photo || '',
+    });
+  };
+
+  const handleSaveEditRiderModal = async (e) => {
+    e.preventDefault();
+    if (!editingRiderId || !editRiderForm) return;
+    setEditRiderErr('');
+    setSavingEditRider(true);
+    try {
+      const body = {
+        full_name: editRiderForm.full_name.trim(),
+        phone: editRiderForm.phone.trim(),
+        email: editRiderForm.email.trim(),
+        vehicle_type: editRiderForm.vehicle_type,
+        bike_model: editRiderForm.bike_model.trim(),
+        bike_plate: editRiderForm.bike_plate.trim().toUpperCase(),
+        cnic_number: editRiderForm.cnic_number.trim(),
+        license_no: editRiderForm.license_no.trim(),
+        zone_name: editRiderForm.zone_name,
+        sync_zone_coords: Boolean(editRiderForm.sync_zone_coords),
+        credit_limit: editRiderForm.credit_limit === '' ? 1500 : Number(editRiderForm.credit_limit),
+        custom_commission_type: editRiderForm.custom_commission_type || 'none',
+        custom_commission_value:
+          editRiderForm.custom_commission_type !== 'none' && editRiderForm.custom_commission_value !== ''
+            ? Number(editRiderForm.custom_commission_value)
+            : null,
+        is_active: Boolean(editRiderForm.is_active),
+        is_verified: Boolean(editRiderForm.is_verified),
+        verification_status: editRiderForm.is_verified
+          ? 'verified'
+          : editRiderForm.verification_status === 'verified'
+          ? 'pending'
+          : editRiderForm.verification_status,
+        verification_note: editRiderForm.verification_note.trim(),
+        is_online: Boolean(editRiderForm.is_online && editRiderForm.is_verified && editRiderForm.is_active),
+        rider_photo: editRiderForm.rider_photo || '',
+        vehicle_photo: editRiderForm.vehicle_photo || '',
+        cnic_front_photo: editRiderForm.cnic_front_photo || '',
+        cnic_back_photo: editRiderForm.cnic_back_photo || '',
+      };
+      if (editRiderForm.password.trim()) {
+        body.password = editRiderForm.password.trim();
+      }
+      await apiRequest(`/api/admin/riders/${editingRiderId}`, { method: 'PATCH', body });
+      onNotify(`Saved all changes for Captain ${body.full_name}!`);
+      setEditingRiderId(null);
+      setEditRiderForm(null);
+      onReloadRiders();
+    } catch (err) {
+      setEditRiderErr(err.message);
+    } finally {
+      setSavingEditRider(false);
+    }
   };
 
   const handleSaveRider = async (e) => {
     e.preventDefault();
     try {
-      if (editingRiderId) {
-        await apiRequest(`/api/admin/riders/${editingRiderId}`, {
-          method: 'PATCH',
-          body: {
-            full_name: riderForm.full_name,
-            phone: riderForm.phone,
-            vehicle_type: riderForm.vehicle_type,
-            bike_model: riderForm.bike_model,
-            bike_plate: riderForm.bike_plate,
-            cnic_number: riderForm.cnic_number || null,
-            license_no: riderForm.license_no || null,
-            zone_name: riderForm.zone_name,
-            credit_limit: Number(riderForm.credit_limit),
-            custom_commission_type: riderForm.custom_commission_type || 'none',
-            custom_commission_value:
-              riderForm.custom_commission_type !== 'none' && riderForm.custom_commission_value !== ''
-                ? Number(riderForm.custom_commission_value)
-                : null,
-          },
-        });
-        onNotify(`${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain details updated!`);
-      } else {
-        await apiRequest('/api/admin/riders', {
-          method: 'POST',
-          body: {
-            full_name: riderForm.full_name,
-            phone: riderForm.phone,
-            password: riderForm.password,
-            vehicle_type: riderForm.vehicle_type,
-            bike_model: riderForm.bike_model,
-            bike_plate: riderForm.bike_plate,
-            cnic_number: riderForm.cnic_number || null,
-            license_no: riderForm.license_no || null,
-            zone_name: riderForm.zone_name,
-            credit_limit: Number(riderForm.credit_limit),
-            custom_commission_type:
-              riderForm.custom_commission_type !== 'none' ? riderForm.custom_commission_type : null,
-            custom_commission_value:
-              riderForm.custom_commission_type !== 'none' && riderForm.custom_commission_value !== ''
-                ? Number(riderForm.custom_commission_value)
-                : null,
-            is_verified: false,
-          },
-        });
-        onNotify(`New ${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain registered! Upload all 4 verification docs before Admin approval.`);
-      }
+      await apiRequest('/api/admin/riders', {
+        method: 'POST',
+        body: {
+          full_name: riderForm.full_name,
+          phone: riderForm.phone,
+          password: riderForm.password,
+          vehicle_type: riderForm.vehicle_type,
+          bike_model: riderForm.bike_model,
+          bike_plate: riderForm.bike_plate,
+          cnic_number: riderForm.cnic_number || null,
+          license_no: riderForm.license_no || null,
+          zone_name: riderForm.zone_name,
+          credit_limit: Number(riderForm.credit_limit || 1500),
+          custom_commission_type:
+            riderForm.custom_commission_type !== 'none' ? riderForm.custom_commission_type : null,
+          custom_commission_value:
+            riderForm.custom_commission_type !== 'none' && riderForm.custom_commission_value !== ''
+              ? Number(riderForm.custom_commission_value)
+              : null,
+          is_verified: Boolean(riderForm.is_verified),
+        },
+      });
+      onNotify(
+        `New ${riderForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Captain ${
+          riderForm.is_verified ? 'added & verified!' : 'registered!'
+        }`
+      );
       resetRiderForm();
       onReloadRiders();
     } catch (err) {
@@ -147,32 +220,46 @@ export function AdminPeoplePanel({
     }
   };
 
+  const handleSaveEditCustomerModal = async (e) => {
+    e.preventDefault();
+    if (!editingCustomerId || !editCustForm) return;
+    setEditCustErr('');
+    setSavingEditCust(true);
+    try {
+      const body = {
+        full_name: editCustForm.full_name.trim(),
+        phone: editCustForm.phone.trim(),
+        email: editCustForm.email.trim(),
+        is_active: Boolean(editCustForm.is_active),
+      };
+      if (editCustForm.password.trim()) {
+        body.password = editCustForm.password.trim();
+      }
+      await apiRequest(`/api/admin/customers/${editingCustomerId}`, { method: 'PATCH', body });
+      onNotify(`Saved Customer ${body.full_name}!`);
+      setEditingCustomerId(null);
+      setEditCustForm(null);
+      onReloadCustomers();
+    } catch (err) {
+      setEditCustErr(err.message);
+    } finally {
+      setSavingEditCust(false);
+    }
+  };
+
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
     try {
-      if (editingCustomerId) {
-        await apiRequest(`/api/admin/customers/${editingCustomerId}`, {
-          method: 'PATCH',
-          body: {
-            full_name: custForm.full_name,
-            phone: custForm.phone,
-            email: custForm.email || null,
-          },
-        });
-        onNotify('Customer details updated!');
-      } else {
-        await apiRequest('/api/admin/customers', {
-          method: 'POST',
-          body: {
-            full_name: custForm.full_name,
-            phone: custForm.phone,
-            email: custForm.email || null,
-            password: custForm.password,
-          },
-        });
-        onNotify('New Customer added!');
-      }
-      setEditingCustomerId(null);
+      await apiRequest('/api/admin/customers', {
+        method: 'POST',
+        body: {
+          full_name: custForm.full_name,
+          phone: custForm.phone,
+          email: custForm.email || null,
+          password: custForm.password,
+        },
+      });
+      onNotify('New Customer added!');
       setCustForm({ full_name: '', phone: '', email: '', password: 'user123' });
       onReloadCustomers();
     } catch (err) {
@@ -362,16 +449,294 @@ export function AdminPeoplePanel({
             );
           })()}
 
+          {/* Full Captain Edit Modal (All Data, Vehicle, Commission, Verification & 4 Photos) */}
+          {editingRiderId && editRiderForm && (
+            <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-y-auto">
+              <form
+                onSubmit={handleSaveEditRiderModal}
+                className="bg-white border border-slate-200 rounded-3xl p-5 w-full max-w-3xl space-y-4 shadow-2xl my-auto max-h-[92vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                  <div>
+                    <div className="font-extrabold text-base text-slate-900">
+                      Edit Complete Captain Data — {editRiderForm.full_name}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Edit profile, vehicle, zone, verification, commission, password, aur sab 4 photos ek sath save karein.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRiderId(null);
+                      setEditRiderForm(null);
+                      setEditRiderErr('');
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {editRiderErr && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs">
+                    {editRiderErr}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editRiderForm.full_name}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, full_name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Mobile Phone</label>
+                    <input
+                      type="text"
+                      required
+                      value={editRiderForm.phone}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, phone: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 mono-num"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Email (optional)</label>
+                    <input
+                      type="email"
+                      value={editRiderForm.email}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, email: e.target.value })}
+                      placeholder="captain@safargo.pk"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Vehicle Category</label>
+                    <select
+                      value={editRiderForm.vehicle_type}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, vehicle_type: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                    >
+                      <option value="bike">Bike Captain</option>
+                      <option value="car">AC Car Captain</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Vehicle Model</label>
+                    <input
+                      type="text"
+                      required
+                      value={editRiderForm.bike_model}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, bike_model: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Number Plate</label>
+                    <input
+                      type="text"
+                      required
+                      value={editRiderForm.bike_plate}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, bike_plate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 uppercase mono-num"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">CNIC Number</label>
+                    <input
+                      type="text"
+                      value={editRiderForm.cnic_number}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, cnic_number: e.target.value })}
+                      placeholder="13503-XXXXXXX-X"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 mono-num"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Driving License #</label>
+                    <input
+                      type="text"
+                      value={editRiderForm.license_no}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, license_no: e.target.value })}
+                      placeholder="MNS-DL-..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">New Password (leave blank to keep)</label>
+                    <input
+                      type="text"
+                      value={editRiderForm.password}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, password: e.target.value })}
+                      placeholder="Optional reset..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Zone / Chowk Area</label>
+                    <select
+                      value={editRiderForm.zone_name}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, zone_name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-semibold"
+                    >
+                      {!zones.some((z) => z.name === editRiderForm.zone_name) && editRiderForm.zone_name && (
+                        <option value={editRiderForm.zone_name}>{editRiderForm.zone_name}</option>
+                      )}
+                      {zones.map((z) => (
+                        <option key={z.id} value={z.name}>
+                          {z.name}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editRiderForm.sync_zone_coords)}
+                        onChange={(e) =>
+                          setEditRiderForm({ ...editRiderForm, sync_zone_coords: e.target.checked })
+                        }
+                      />
+                      Move Captain map pin to selected Chowk/Zone coordinates
+                    </label>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Credit Cap (Rs.)</label>
+                    <input
+                      type="number"
+                      value={editRiderForm.credit_limit}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, credit_limit: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white mono-num"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Commission Rule</label>
+                    <select
+                      value={editRiderForm.custom_commission_type}
+                      onChange={(e) =>
+                        setEditRiderForm({ ...editRiderForm, custom_commission_type: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                    >
+                      <option value="none">Global Comm. Rate</option>
+                      <option value="percent">Custom %</option>
+                      <option value="fixed">Custom Flat Rs.</option>
+                    </select>
+                  </div>
+                  {editRiderForm.custom_commission_type !== 'none' && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">Commission Value</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={editRiderForm.custom_commission_value}
+                        onChange={(e) =>
+                          setEditRiderForm({ ...editRiderForm, custom_commission_value: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-bold"
+                      />
+                    </div>
+                  )}
+                  <div className="sm:col-span-3 flex flex-wrap gap-4 pt-1">
+                    <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editRiderForm.is_verified}
+                        onChange={(e) =>
+                          setEditRiderForm({
+                            ...editRiderForm,
+                            is_verified: e.target.checked,
+                            verification_status: e.target.checked ? 'verified' : 'pending',
+                          })
+                        }
+                      />
+                      Verified by Admin (Approved)
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editRiderForm.is_active}
+                        onChange={(e) => setEditRiderForm({ ...editRiderForm, is_active: e.target.checked })}
+                      />
+                      Account Active (Uncheck to Suspend)
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editRiderForm.is_online}
+                        disabled={!editRiderForm.is_verified || !editRiderForm.is_active}
+                        onChange={(e) => setEditRiderForm({ ...editRiderForm, is_online: e.target.checked })}
+                      />
+                      Duty ONLINE on Map
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Verification Note (optional)</label>
+                  <input
+                    type="text"
+                    value={editRiderForm.verification_note}
+                    onChange={(e) => setEditRiderForm({ ...editRiderForm, verification_note: e.target.value })}
+                    placeholder="Admin note or doc instruction..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="text-xs font-extrabold text-slate-900">
+                    Captain Photos &amp; Verification Documents
+                  </div>
+                  <CaptainPhotoUploads
+                    vehicleType={editRiderForm.vehicle_type}
+                    photos={editRiderForm}
+                    compact={true}
+                    onChangePhoto={(k, val) => setEditRiderForm((prev) => ({ ...prev, [k]: val }))}
+                  />
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRiderId(null);
+                      setEditRiderForm(null);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEditRider}
+                    className="px-6 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold disabled:opacity-60"
+                  >
+                    {savingEditRider ? 'Saving Changes...' : 'Save All Captain Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <form onSubmit={handleSaveRider} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-sm text-slate-900">
-                {editingRiderId ? 'Edit Bike / AC Car Captain' : '+ Register New Bike / AC Car Captain (Admin Verifies After Docs)'}
+                + Register New Bike / AC Car Captain
               </span>
-              {editingRiderId && (
-                <button type="button" onClick={resetRiderForm} className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
-                  <X className="w-3.5 h-3.5" /> Cancel Edit
-                </button>
-              )}
+              <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(riderForm.is_verified)}
+                  onChange={(e) => setRiderForm({ ...riderForm, is_verified: e.target.checked })}
+                />
+                Verify Immediately (Admin Override)
+              </label>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
               <input
@@ -415,12 +780,19 @@ export function AdminPeoplePanel({
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
               <input
                 type="text"
                 placeholder="CNIC"
                 value={riderForm.cnic_number}
                 onChange={(e) => setRiderForm({ ...riderForm, cnic_number: e.target.value })}
+                className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
+              />
+              <input
+                type="text"
+                placeholder="Driving License #"
+                value={riderForm.license_no}
+                onChange={(e) => setRiderForm({ ...riderForm, license_no: e.target.value })}
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
               <select
@@ -457,7 +829,7 @@ export function AdminPeoplePanel({
                   onChange={(e) => setRiderForm({ ...riderForm, custom_commission_value: e.target.value })}
                   className="px-3 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-bold"
                 />
-              ) : !editingRiderId ? (
+              ) : (
                 <input
                   type="text"
                   placeholder="Initial Password"
@@ -465,12 +837,10 @@ export function AdminPeoplePanel({
                   onChange={(e) => setRiderForm({ ...riderForm, password: e.target.value })}
                   className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
                 />
-              ) : (
-                <div />
               )}
             </div>
             <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
-              {editingRiderId ? 'Save Captain Changes' : 'Save New Captain'}
+              Save New Captain
             </button>
           </form>
 
@@ -590,27 +960,13 @@ export function AdminPeoplePanel({
                         {r.is_active ? 'Suspend' : 'Activate'}
                       </button>
                       <button
-                        onClick={() => {
-                          setEditingRiderId(r.id);
-                          setRiderForm({
-                            full_name: r.full_name,
-                            phone: r.phone,
-                            password: '',
-                            vehicle_type: r.vehicle_type || 'bike',
-                            bike_model: r.bike_model || 'Honda CD-70',
-                            bike_plate: r.bike_plate || '',
-                            cnic_number: r.cnic_number || '',
-                            license_no: r.license_no || '',
-                            zone_name: r.zone_name || zones?.[0]?.name || '',
-                            credit_limit: r.credit_limit ?? 1500,
-                            custom_commission_type: r.custom_commission_type || 'none',
-                            custom_commission_value: r.custom_commission_value ?? '',
-                          });
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-50/80 text-slate-700 hover:bg-slate-200"
-                        title="Edit Captain"
+                        type="button"
+                        onClick={() => openEditRiderModal(r)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 hover:bg-slate-200 font-bold inline-flex items-center gap-1"
+                        title="Edit All Captain Data & Photos"
                       >
-                        <Pencil className="w-3.5 h-3.5 inline" />
+                        <Pencil className="w-3 h-3" />
+                        Edit
                       </button>
                       <button
                         onClick={() => setPwTarget({ id: r.id, name: r.full_name, role: 'rider' })}
@@ -685,23 +1041,106 @@ export function AdminPeoplePanel({
         </>
       ) : (
         <>
+          {editingCustomerId && editCustForm && (
+            <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+              <form
+                onSubmit={handleSaveEditCustomerModal}
+                className="bg-white border border-slate-200 rounded-3xl p-5 w-full max-w-md space-y-3 shadow-2xl"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="font-extrabold text-sm text-slate-900">
+                    Edit Customer — {editCustForm.full_name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCustomerId(null);
+                      setEditCustForm(null);
+                      setEditCustErr('');
+                    }}
+                    className="p-1 rounded-lg bg-slate-100 text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {editCustErr && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs">
+                    {editCustErr}
+                  </div>
+                )}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustForm.full_name}
+                    onChange={(e) => setEditCustForm({ ...editCustForm, full_name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Mobile Phone</label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustForm.phone}
+                    onChange={(e) => setEditCustForm({ ...editCustForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 mono-num"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Email (optional)</label>
+                  <input
+                    type="email"
+                    value={editCustForm.email}
+                    onChange={(e) => setEditCustForm({ ...editCustForm, email: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">New Password (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Leave blank to keep existing"
+                    value={editCustForm.password}
+                    onChange={(e) => setEditCustForm({ ...editCustForm, password: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editCustForm.is_active}
+                    onChange={(e) => setEditCustForm({ ...editCustForm, is_active: e.target.checked })}
+                  />
+                  Account Active (Uncheck to Block)
+                </label>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCustomerId(null);
+                      setEditCustForm(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEditCust}
+                    className="px-5 py-2 rounded-xl bg-[#009E4D] text-white font-extrabold"
+                  >
+                    {savingEditCust ? 'Saving...' : 'Save Customer Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <form onSubmit={handleSaveCustomer} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-extrabold text-sm text-slate-900">
-                {editingCustomerId ? 'Edit Customer Account' : '+ Add New Customer'}
-              </span>
-              {editingCustomerId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingCustomerId(null);
-                    setCustForm({ full_name: '', phone: '', email: '', password: 'user123' });
-                  }}
-                  className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
-                >
-                  <X className="w-3.5 h-3.5" /> Cancel Edit
-                </button>
-              )}
+              <span className="font-extrabold text-sm text-slate-900">+ Add New Customer</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <input
@@ -727,19 +1166,17 @@ export function AdminPeoplePanel({
                 onChange={(e) => setCustForm({ ...custForm, email: e.target.value })}
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
               />
-              {!editingCustomerId && (
-                <input
-                  type="text"
-                  required
-                  placeholder="Initial Password"
-                  value={custForm.password}
-                  onChange={(e) => setCustForm({ ...custForm, password: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
-                />
-              )}
+              <input
+                type="text"
+                required
+                placeholder="Initial Password"
+                value={custForm.password}
+                onChange={(e) => setCustForm({ ...custForm, password: e.target.value })}
+                className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80"
+              />
             </div>
             <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
-              {editingCustomerId ? 'Save Customer Changes' : 'Create Customer'}
+              Create Customer
             </button>
           </form>
 
@@ -780,19 +1217,23 @@ export function AdminPeoplePanel({
                     </td>
                     <td className="p-3.5 whitespace-nowrap space-x-1.5">
                       <button
+                        type="button"
                         onClick={() => {
+                          setEditCustErr('');
                           setEditingCustomerId(c.id);
-                          setCustForm({
-                            full_name: c.full_name,
-                            phone: c.phone,
+                          setEditCustForm({
+                            full_name: c.full_name || '',
+                            phone: c.phone || '',
                             email: c.email || '',
                             password: '',
+                            is_active: c.is_active !== false,
                           });
                         }}
-                        className="p-1.5 rounded-lg bg-slate-50/80 text-slate-700 hover:bg-slate-200"
-                        title="Edit Customer"
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 hover:bg-slate-200 font-bold inline-flex items-center gap-1"
+                        title="Edit Complete Customer Data"
                       >
-                        <Pencil className="w-3.5 h-3.5 inline" />
+                        <Pencil className="w-3 h-3" />
+                        Edit
                       </button>
                       <button
                         onClick={() => setPwTarget({ id: c.id, name: c.full_name, role: 'customer' })}

@@ -1134,6 +1134,69 @@ def test_live_gps_resolves_baidra_chowk_and_notifies_closest_captain_and_admin(c
     assert recent["nearest_captains"][0]["zone_name"] == "Mansehra — Baidra Chowk"
 
 
+def test_admin_full_rider_and_customer_complete_edit(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    riders = client.get("/api/admin/riders", headers=_auth_header(admin_token)).json()
+    bilal = next(r for r in riders if r["phone"] == "03123333333")
+
+    upd = client.patch(
+        f"/api/admin/riders/{bilal['id']}",
+        headers=_auth_header(admin_token),
+        json={
+            "full_name": "Bilal Ahmed Updated",
+            "email": "bilal.updated@safargo.pk",
+            "password": "newpass99",
+            "vehicle_type": "car",
+            "bike_model": "Suzuki WagonR AC",
+            "bike_plate": "MNS-9900",
+            "cnic_number": "13503-9999999-9",
+            "license_no": "MNS-DL-9900",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "sync_zone_coords": True,
+            "is_verified": True,
+            "is_online": True,
+            "credit_limit": 4500.0,
+            "custom_commission_type": "percent",
+            "custom_commission_value": 12.0,
+        },
+    )
+    assert upd.status_code == 200
+
+    riders_after = client.get("/api/admin/riders", headers=_auth_header(admin_token)).json()
+    edited = next(r for r in riders_after if r["id"] == bilal["id"])
+    assert edited["full_name"] == "Bilal Ahmed Updated"
+    assert edited["email"] == "bilal.updated@safargo.pk"
+    assert edited["vehicle_type"] == "car"
+    assert edited["bike_model"] == "Suzuki WagonR AC"
+    assert edited["bike_plate"] == "MNS-9900"
+    assert edited["license_no"] == "MNS-DL-9900"
+    assert edited["zone_name"] == "Mansehra — Punjab Chowk"
+    assert edited["is_verified"] is True
+    assert edited["is_online"] is True
+    assert edited["credit_limit"] == 4500.0
+    assert abs(edited["current_lat"] - 34.328548) < 0.001
+
+    login_new = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03123333333", "password": "newpass99"},
+    )
+    assert login_new.status_code == 200
+
+    custs = client.get("/api/admin/customers", headers=_auth_header(admin_token)).json()
+    target_cust = next(c for c in custs if c["phone"] == "03334444444")
+    c_upd = client.patch(
+        f"/api/admin/customers/{target_cust['id']}",
+        headers=_auth_header(admin_token),
+        json={"full_name": "Hammad Raza Edited", "email": "hammad.edited@safargo.pk"},
+    )
+    assert c_upd.status_code == 200
+    assert c_upd.json()["full_name"] == "Hammad Raza Edited"
+
+
 
 
 

@@ -538,6 +538,7 @@ def list_riders(
                 "id": u.id,
                 "full_name": u.full_name,
                 "phone": u.phone,
+                "email": u.email,
                 "is_active": u.is_active,
                 "created_at": u.created_at,
                 "cnic_number": rp.cnic_number if rp else None,
@@ -668,16 +669,23 @@ def update_rider_config(
         if db.query(User).filter(User.phone == payload.phone.strip(), User.id != user.id).first():
             raise HTTPException(status_code=400, detail="Phone already registered to another user")
         user.phone = payload.phone.strip()
+    if payload.email is not None:
+        clean_email = payload.email.strip() or None
+        if clean_email and db.query(User).filter(User.email == clean_email, User.id != user.id).first():
+            raise HTTPException(status_code=400, detail="Email already registered to another user")
+        user.email = clean_email
+    if payload.password and payload.password.strip():
+        user.password_hash = hash_password(payload.password.strip())
     if payload.cnic_number is not None:
-        rp.cnic_number = payload.cnic_number
+        rp.cnic_number = payload.cnic_number.strip() or None
     if payload.vehicle_type is not None:
         rp.vehicle_type = payload.vehicle_type
     if payload.bike_model is not None:
-        rp.bike_model = payload.bike_model
+        rp.bike_model = payload.bike_model.strip()
     if payload.bike_plate is not None:
         rp.bike_plate = payload.bike_plate.strip().upper()
     if payload.license_no is not None:
-        rp.license_no = payload.license_no
+        rp.license_no = payload.license_no.strip() or None
     if payload.verification_note is not None:
         rp.verification_note = payload.verification_note.strip() or None
     for p_field in ("rider_photo", "vehicle_photo", "cnic_front_photo", "cnic_back_photo"):
@@ -713,8 +721,16 @@ def update_rider_config(
         user.is_active = payload.is_active
         if not payload.is_active:
             rp.is_online = False
+    if payload.is_online is not None:
+        rp.is_online = bool(payload.is_online and rp.is_verified and user.is_active)
     if payload.zone_name is not None:
         rp.zone_name = payload.zone_name
+        if payload.sync_zone_coords:
+            z = db.query(MansehraZone).filter(MansehraZone.name == payload.zone_name).first()
+            if z and z.lat is not None and z.lng is not None:
+                rp.current_lat = z.lat
+                rp.current_lng = z.lng
+                rp.location_updated_at = utcnow()
     if payload.current_lat is not None and payload.current_lng is not None:
         rp.current_lat = payload.current_lat
         rp.current_lng = payload.current_lng
@@ -836,6 +852,8 @@ def admin_update_customer(
         if clean_email and db.query(User).filter(User.email == clean_email, User.id != user.id).first():
             raise HTTPException(status_code=400, detail="Email already in use")
         user.email = clean_email
+    if payload.password and payload.password.strip():
+        user.password_hash = hash_password(payload.password.strip())
     if payload.is_active is not None:
         user.is_active = payload.is_active
     db.commit()
