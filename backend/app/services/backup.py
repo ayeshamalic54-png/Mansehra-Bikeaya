@@ -359,6 +359,9 @@ def serialize_backup_summary(rec: DatabaseBackup) -> dict:
         counts = json.loads(rec.row_counts_json or "{}")
     except json.JSONDecodeError:
         counts = {}
+    email_status = rec.email_status
+    if rec.trigger_type == "pre_restore" and email_status == "pending":
+        email_status = "local_only"
     return {
         "id": rec.id,
         "backup_date_pkt": rec.backup_date_pkt,
@@ -371,7 +374,7 @@ def serialize_backup_summary(rec: DatabaseBackup) -> dict:
         "size_kb": round(rec.size_bytes / 1024.0, 2),
         "sha256": rec.sha256,
         "emailed_to": rec.emailed_to,
-        "email_status": rec.email_status,
+        "email_status": email_status,
         "email_error": rec.email_error,
         "has_download": bool(rec.payload_gz_b64 or (BACKUP_DIR / rec.file_name).exists()),
         "local_path": str(BACKUP_DIR / rec.file_name) if (BACKUP_DIR / rec.file_name).exists() else None,

@@ -1112,32 +1112,42 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                       <div className="text-slate-500">{b.size_kb} KB (.json.gz)</div>
                     </td>
                     <td className="p-3.5 max-w-xs">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          b.email_status === 'sent'
-                            ? 'bg-emerald-100 text-[#008741]'
-                            : b.email_status === 'local_only'
-                            ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                            : b.email_status === 'failed'
-                            ? 'bg-rose-100 text-rose-700'
-                            : 'bg-amber-50 text-amber-800'
-                        }`}
-                      >
-                        {b.email_status === 'sent'
-                          ? `Sent to ${b.emailed_to}`
-                          : b.email_status === 'local_only'
-                          ? 'Saved Locally (Pre-Restore)'
-                          : b.email_status === 'smtp_not_configured'
-                          ? 'Relay / SMTP Needed'
-                          : b.email_status === 'failed'
-                          ? 'Email Failed'
-                          : b.email_status}
-                      </span>
-                      {b.email_error && b.email_status !== 'sent' && b.email_status !== 'local_only' && (
-                        <div className="text-[10px] text-rose-700 mt-1 leading-snug break-words" title={b.email_error}>
-                          {b.email_error}
-                        </div>
-                      )}
+                      {(() => {
+                        const effectiveEmailStatus =
+                          b.trigger_type === 'pre_restore' && b.email_status === 'pending'
+                            ? 'local_only'
+                            : b.email_status;
+                        return (
+                          <>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                effectiveEmailStatus === 'sent'
+                                  ? 'bg-emerald-100 text-[#008741]'
+                                  : effectiveEmailStatus === 'local_only'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : effectiveEmailStatus === 'failed'
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-amber-50 text-amber-800'
+                              }`}
+                            >
+                              {effectiveEmailStatus === 'sent'
+                                ? `Sent to ${b.emailed_to}`
+                                : effectiveEmailStatus === 'local_only'
+                                ? 'Saved Locally (Pre-Restore)'
+                                : effectiveEmailStatus === 'smtp_not_configured'
+                                ? 'Relay / SMTP Needed'
+                                : effectiveEmailStatus === 'failed'
+                                ? 'Email Failed'
+                                : effectiveEmailStatus}
+                            </span>
+                            {b.email_error && effectiveEmailStatus !== 'sent' && effectiveEmailStatus !== 'local_only' && (
+                              <div className="text-[10px] text-rose-700 mt-1 leading-snug break-words" title={b.email_error}>
+                                {b.email_error}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td className="p-3.5 whitespace-nowrap space-x-1.5">
                       {b.has_download && (
