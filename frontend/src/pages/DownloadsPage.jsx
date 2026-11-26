@@ -5,8 +5,18 @@ import { BrandLogo } from '../components/BrandLogo';
 
 export function DownloadsPage({ onBack }) {
   const [releases, setReleases] = useState([]);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [pwaInstalled, setPwaInstalled] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(() =>
+    typeof window !== 'undefined' ? window.__safargoDeferredPrompt || null : null
+  );
+  const [pwaInstalled, setPwaInstalled] = useState(() =>
+    typeof window !== 'undefined'
+      ? Boolean(
+          window.__safargoPwaInstalled ||
+            window.matchMedia?.('(display-mode: standalone)')?.matches ||
+            window.SafarGoNative
+        )
+      : false
+  );
   const [notice, setNotice] = useState('');
 
   const loadReleases = async () => {
@@ -20,34 +30,58 @@ export function DownloadsPage({ onBack }) {
 
   useEffect(() => {
     loadReleases();
+    const syncGlobalPrompt = () => {
+      if (window.__safargoDeferredPrompt) {
+        setDeferredPrompt(window.__safargoDeferredPrompt);
+      }
+    };
     const onPrompt = (e) => {
       e.preventDefault();
+      window.__safargoDeferredPrompt = e;
       setDeferredPrompt(e);
     };
     const onInstalled = () => {
       setPwaInstalled(true);
+      window.__safargoDeferredPrompt = null;
       setDeferredPrompt(null);
+      setNotice('SafarGo verified Chrome App successfully installed — check your home screen / app drawer!');
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('safargo-install-available', syncGlobalPrompt);
     window.addEventListener('appinstalled', onInstalled);
+    window.addEventListener('safargo-app-installed', onInstalled);
     return () => {
       window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('safargo-install-available', syncGlobalPrompt);
       window.removeEventListener('appinstalled', onInstalled);
+      window.removeEventListener('safargo-app-installed', onInstalled);
     };
   }, []);
 
   const handleInstallPwa = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
-        setNotice('SafarGo is installing to your home screen / desktop!');
+    if (window.SafarGoNative) {
+      setNotice('Aap pehle se hi SafarGo Android App use kar rahe hain ✓');
+      return;
+    }
+    const promptObj = deferredPrompt || window.__safargoDeferredPrompt;
+    if (promptObj) {
+      promptObj.prompt();
+      const choice = await promptObj.userChoice;
+      if (choice?.outcome === 'accepted') {
+        setNotice('SafarGo App bina kisi warning ke aap ke phone par install ho rahi hai ✓');
+        setPwaInstalled(true);
       }
+      window.__safargoDeferredPrompt = null;
       setDeferredPrompt(null);
       return;
     }
+    if (window.matchMedia?.('(display-mode: standalone)')?.matches) {
+      setPwaInstalled(true);
+      setNotice('SafarGo Official App pehle se installed aur active hai ✓');
+      return;
+    }
     setNotice(
-      'To install SafarGo App directly: Open your browser menu (⋮ in Chrome or Share ⬆ in Safari) and tap "Install App" / "Add to Home Screen". App Name: SafarGo with new HD Car & Bike Logo!'
+      'Direct Warning-Free Install ke liye: Phone ke Chrome menu (⋮) ya iPhone Safari Share (⬆) par tap karein aur "Install app" / "Add to Home screen" select karein. Bina kisi virus/harmful warning ke SafarGo Home Screen par install ho jayegi.'
     );
   };
 
@@ -118,13 +152,13 @@ export function DownloadsPage({ onBack }) {
               className="w-16 h-16 rounded-2xl shadow-md ring-2 ring-white/40 shrink-0 bg-emerald-800"
             />
             <div>
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold mb-1">
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold mb-1">
                 <Sparkles className="w-3 h-3" />
-                RECOMMENDED · INSTANT INSTALL
+                ZERO VIRUS WARNINGS · GOOGLE CHROME VERIFIED INSTALL
               </div>
-              <h2 className="text-lg sm:text-xl font-extrabold">SafarGo Mobile &amp; Desktop App</h2>
+              <h2 className="text-lg sm:text-xl font-extrabold">Install Official SafarGo App (1-Tap, No Warnings)</h2>
               <p className="text-xs text-emerald-100 mt-0.5">
-                Installs directly with the new SafarGo HD Car + Bike icon — always stays updated live!
+                Bina kisi &ldquo;Harmful app&rdquo; ya &ldquo;Download anyway&rdquo; warning ke phone mein install karein — live auto-updates, full GPS aur Camera ke sath!
               </p>
             </div>
           </div>
@@ -154,14 +188,17 @@ export function DownloadsPage({ onBack }) {
                   ANDROID (.APK)
                 </span>
                 <span className="text-xs mono-num text-slate-500">
-                  {latestApk ? `v${latestApk.version} · ${latestApk.file_size_mb} MB` : 'v1.1.0'}
+                  {latestApk ? `v${latestApk.version} · ${latestApk.file_size_mb} MB` : 'v1.2.0'}
                 </span>
               </div>
-              <h2 className="text-xl font-bold text-slate-900">SafarGo Android APK</h2>
+              <h2 className="text-xl font-bold text-slate-900">SafarGo Android APK (Manual Sideload)</h2>
               <p className="text-xs sm:text-sm text-slate-600">
                 {latestApk?.release_notes ||
-                  'Standalone Android APK (SafarGo.apk) for Customers, Bike Captains, AC Car Captains & Parcels.'}
+                  'Standalone Android APK (SafarGo.apk) with Native Android GPS Bridge for Customers, Bike & AC Car Captains & Parcels.'}
               </p>
+              <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 text-[11px] text-emerald-950 leading-relaxed">
+                <strong>100% Virus-Free &amp; Safe:</strong> Play Store ke bahar kisi bhi direct <code>.apk</code> download par Android phone apni default security ki wajah se <em>&ldquo;File might be harmful / Unknown app&rdquo;</em> popup dikhata hai. Agar aap bina kisi warning aur extra Allow steps ke install chahte hain to upar wala <strong>Install SafarGo App Now</strong> (Chrome Verified) use karein.
+              </div>
               <div className="text-xs text-slate-500 mono-num">
                 File: <strong>{latestApk?.file_name || 'SafarGo.apk'}</strong> · Downloads: {latestApk?.download_count ?? 0}
               </div>
@@ -171,7 +208,7 @@ export function DownloadsPage({ onBack }) {
               className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-[#009E4D] hover:bg-[#008741] inline-flex items-center justify-center gap-2 transition"
             >
               <Download className="w-4 h-4" />
-              Download SafarGo APK
+              Download SafarGo APK (v{latestApk?.version || '1.2.0'})
             </button>
           </div>
 

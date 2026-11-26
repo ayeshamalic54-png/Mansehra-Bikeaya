@@ -8,6 +8,7 @@ import {
   reverseGeocode,
   searchPakistanPlaces,
 } from '../utils/geo';
+import { getReliableDevicePosition } from '../utils/deviceGps';
 
 /**
  * Pure InDrive-style Pickup & Drop Map Widget:
@@ -90,30 +91,37 @@ export function InteractiveRoutePicker({
     });
   };
 
-  const locateCurrentCustomer = (silentIfDenied = false) => {
-    if (!navigator.geolocation) {
-      if (!silentIfDenied) setGpsStatus('GPS not supported — tap the map to mark your location.');
-      return;
-    }
+  const locateCurrentCustomer = async (silentIfDenied = false) => {
     setLocating(true);
-    if (!silentIfDenied) setGpsStatus('');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(6));
-        const lng = Number(pos.coords.longitude.toFixed(6));
-        await handlePinPick('pickup', lat, lng);
-        setGpsStatus('Live GPS pinned');
-        setLocating(false);
-      },
-      () => {
-        if (!silentIfDenied) {
-          setGpsStatus('Allow location permission or tap map to pin your home.');
-        }
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 7000 }
-    );
+    if (!silentIfDenied) setGpsStatus('Detecting location...');
+    try {
+      const pos = await getReliableDevicePosition({
+        timeoutMs: 14000,
+        onRefine: async (betterPos) => {
+          await handlePinPick('pickup', betterPos.lat, betterPos.lng);
+          setGpsStatus('Live GPS pinned');
+        },
+      });
+      await handlePinPick('pickup', pos.lat, pos.lng);
+      setGpsStatus(pos.source === 'cached_device' ? 'Recent GPS pinned' : 'Live GPS pinned');
+    } catch (err) {
+      if (!silentIfDenied) {
+        setGpsStatus(err?.message || 'Allow location permission or tap map to pin your pickup.');
+      }
+    } finally {
+      setLocating(false);
+    }
   };
+
+  useEffect(() => {
+    const onNativeReady = () => {
+      if (autoLocate && !pickupText) {
+        locateCurrentCustomer(true);
+      }
+    };
+    window.addEventListener('safargo-location-ready', onNativeReady);
+    return () => window.removeEventListener('safargo-location-ready', onNativeReady);
+  }, [autoLocate, pickupText]);
 
   useEffect(() => {
     if (!autoLocate || autoLocatedOnce.current || zones.length === 0) return;

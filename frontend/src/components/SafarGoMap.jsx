@@ -88,6 +88,19 @@ function getCaptainKey(c, fallbackIdx = 0) {
   return String(c?.id ?? c?.rider_id ?? c?.phone ?? fallbackIdx);
 }
 
+function resolveMinHeightPx(heightClass) {
+  const match = String(heightClass || '').match(/h-\[(\d+)px\]/);
+  if (match) return Number(match[1]);
+  if (String(heightClass).includes('h-72')) return 288;
+  if (String(heightClass).includes('h-64')) return 256;
+  if (String(heightClass).includes('h-60')) return 240;
+  if (String(heightClass).includes('h-56')) return 224;
+  if (String(heightClass).includes('h-48')) return 192;
+  if (String(heightClass).includes('h-44')) return 176;
+  if (String(heightClass).includes('h-40')) return 160;
+  return 240;
+}
+
 function getSpreadPosition(c, idx, allList) {
   let duplicatesBefore = 0;
   for (let i = 0; i < idx; i += 1) {
@@ -164,10 +177,16 @@ export function SafarGoMap({
       zoomControl: true,
     });
 
+    // Primary: OpenStreetMap street tiles (detailed Mansehra roads & chowks, 0 watermarks)
+    // Auto-failover: Esri World Street Map CDN if OSM tiles fail on any mobile network
     const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     });
+    const backupStreetLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '&copy; Esri &amp; Contributors', maxZoom: 19 }
+    );
     const satelliteLayer = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { attribution: '&copy; Esri World Imagery', maxZoom: 19 }
@@ -181,8 +200,26 @@ export function SafarGoMap({
       { maxZoom: 19 }
     );
 
-    streetLayer.addTo(map);
-    baseLayersRef.current = { streetLayer, satelliteLayer, satelliteLabels, satelliteRoads };
+    let activeStreetLayer = streetLayer;
+    let errCount = 0;
+    streetLayer.on('tileerror', () => {
+      errCount += 1;
+      if (errCount >= 4 && map.hasLayer(streetLayer) && !map.hasLayer(satelliteLayer)) {
+        map.removeLayer(streetLayer);
+        backupStreetLayer.addTo(map);
+        activeStreetLayer = backupStreetLayer;
+      }
+    });
+
+    activeStreetLayer.addTo(map);
+    baseLayersRef.current = {
+      getActiveStreet: () => activeStreetLayer,
+      streetLayer,
+      backupStreetLayer,
+      satelliteLayer,
+      satelliteLabels,
+      satelliteRoads,
+    };
 
     const group = L.layerGroup().addTo(map);
     map.on('click', (ev) => {
@@ -195,9 +232,29 @@ export function SafarGoMap({
     mapRef.current = map;
     layerRef.current = group;
 
-    const timer = setTimeout(() => map.invalidateSize(), 200);
+    const triggerInvalidate = () => {
+      try {
+        map.invalidateSize({ pan: false });
+      } catch {
+        // ignore if unmounted
+      }
+    };
+    map.whenReady(() => setTimeout(triggerInvalidate, 60));
+    const timer1 = setTimeout(triggerInvalidate, 180);
+    const timer2 = setTimeout(triggerInvalidate, 550);
+    window.addEventListener('resize', triggerInvalidate);
+
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(() => triggerInvalidate());
+      ro.observe(containerRef.current);
+    }
+
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      window.removeEventListener('resize', triggerInvalidate);
+      if (ro) ro.disconnect();
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
@@ -209,8 +266,10 @@ export function SafarGoMap({
     const map = mapRef.current;
     const layers = baseLayersRef.current;
     if (!map || !layers) return;
+    const activeStreet = layers.getActiveStreet();
     if (mapStyle === 'satellite') {
       if (map.hasLayer(layers.streetLayer)) map.removeLayer(layers.streetLayer);
+      if (map.hasLayer(layers.backupStreetLayer)) map.removeLayer(layers.backupStreetLayer);
       if (!map.hasLayer(layers.satelliteLayer)) layers.satelliteLayer.addTo(map);
       if (!map.hasLayer(layers.satelliteRoads)) layers.satelliteRoads.addTo(map);
       if (!map.hasLayer(layers.satelliteLabels)) layers.satelliteLabels.addTo(map);
@@ -218,7 +277,7 @@ export function SafarGoMap({
       if (map.hasLayer(layers.satelliteLayer)) map.removeLayer(layers.satelliteLayer);
       if (map.hasLayer(layers.satelliteRoads)) map.removeLayer(layers.satelliteRoads);
       if (map.hasLayer(layers.satelliteLabels)) map.removeLayer(layers.satelliteLabels);
-      if (!map.hasLayer(layers.streetLayer)) layers.streetLayer.addTo(map);
+      if (!map.hasLayer(activeStreet)) activeStreet.addTo(map);
     }
   }, [mapStyle]);
 
@@ -389,11 +448,21 @@ export function SafarGoMap({
 
   const activeRiderImg = safePhotoUrl(activeCaptain?.rider_photo);
   const activeVehicleImg = safePhotoUrl(activeCaptain?.vehicle_photo);
+  const minHeightPx = resolveMinHeightPx(heightClass);
 
   return (
     <div className={hasSidebar ? 'flex flex-col md:flex-row gap-3 items-stretch' : ''}>
-      <div className={`relative ${hasSidebar ? 'flex-1 min-w-0' : 'w-full'} ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}>
-        <div ref={containerRef} className="w-full h-full" />
+      <div
+        className={`relative ${
+          hasSidebar ? 'w-full shrink-0 md:shrink md:flex-1 md:min-w-0' : 'w-full'
+        } ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}
+        style={{ minHeight: `${minHeightPx}px` }}
+      >
+        <div
+          ref={containerRef}
+          className="w-full h-full"
+          style={{ minHeight: `${minHeightPx}px` }}
+        />
 
         {/* Top-Right: Free Street / Satellite View Switcher */}
         <div className="absolute top-2.5 right-2.5 z-[400] inline-flex rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm p-0.5 text-[10px] font-extrabold">
@@ -422,7 +491,7 @@ export function SafarGoMap({
           href={googleMapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute bottom-2.5 left-2.5 z-[400] px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-[10px] font-extrabold text-slate-800 hover:border-[#009E4D] hover:text-[#008741] transition"
+          className="absolute bottom-6 left-2.5 z-[400] px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-[10px] font-extrabold text-slate-800 hover:border-[#009E4D] hover:text-[#008741] transition"
         >
           Open in Google Maps ↗
         </a>

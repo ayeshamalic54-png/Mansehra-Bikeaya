@@ -769,23 +769,41 @@ export function AdminDashboard({ onOpenDownloads }) {
                 />
               </div>
 
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900">
-                    Live GPS Operations Map (Customers + Bike &amp; Car Captains)
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-extrabold text-sm text-slate-900">
+                      Live GPS Operations Map (Customers + Bike &amp; Car Captains)
+                    </div>
+                    <div className="text-slate-500 mt-0.5">
+                      Tracking <strong>{liveMap.captains.filter((c) => c.is_online).length}</strong> online captains &amp;{' '}
+                      <strong>{liveMap.active_bookings.length}</strong> active customer rides live.
+                    </div>
                   </div>
-                  <div className="text-slate-500 mt-0.5">
-                    Tracking <strong>{liveMap.captains.filter((c) => c.is_online).length}</strong> online captains &amp;{' '}
-                    <strong>{liveMap.active_bookings.length}</strong> active customer rides live.
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={loadLiveMap}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"
+                    >
+                      Refresh GPS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubpage('livemap')}
+                      className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold inline-flex items-center gap-1.5"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Full Live Map →
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => setSubpage('livemap')}
-                  className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold inline-flex items-center gap-1.5"
-                >
-                  <MapPin className="w-4 h-4" />
-                  Open Live Fleet &amp; Customer Map →
-                </button>
+                <SafarGoMap
+                  captains={liveMap.captains}
+                  activeBookings={liveMap.active_bookings}
+                  heightClass="h-64 sm:h-72"
+                  fitSignature={`overview-${liveMap.captains.length}-${liveMap.active_bookings.length}`}
+                />
               </div>
 
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">

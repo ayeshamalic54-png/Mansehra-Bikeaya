@@ -230,23 +230,23 @@ def seed_initial_data(db: Session) -> None:
         )
 
     # 5. App Releases (Download Center entries)
-    apk_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.1.0/SafarGo.apk"
-    exe_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.1.0/SafarGoDesk.exe"
+    apk_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.2.0/SafarGo.apk"
+    exe_url = "https://github.com/ayeshamalic54-png/Mansehra-Bikeaya/releases/download/v1.2.0/SafarGoDesk.exe"
     if db.query(AppRelease).count() == 0:
         db.add_all(
             [
                 AppRelease(
                     platform="android_apk",
-                    version="1.1.0",
+                    version="1.2.0",
                     file_name="SafarGo.apk",
                     download_url=apk_url,
                     file_size_mb=4.9,
-                    release_notes="Official SafarGo Android app (.apk) for Customers, Bike & Car Captains connected live.",
+                    release_notes="Official SafarGo Android app (.apk v1.2.0) with Native GPS Bridge & Mobile Map Fix.",
                     is_latest=True,
                 ),
                 AppRelease(
                     platform="windows_exe",
-                    version="1.1.0",
+                    version="1.2.0",
                     file_name="SafarGoDesk.exe",
                     download_url=exe_url,
                     file_size_mb=16.0,
@@ -257,15 +257,15 @@ def seed_initial_data(db: Session) -> None:
         )
     else:
         for rel in db.query(AppRelease).all():
-            if rel.download_url.startswith("#") or rel.version != "1.1.0" or rel.file_name in ("MansehraBikeaya.apk", "MansehraBikeayaDesk.exe"):
+            if rel.download_url.startswith("#") or rel.version != "1.2.0" or rel.file_name in ("MansehraBikeaya.apk", "MansehraBikeayaDesk.exe"):
                 if rel.platform == "android_apk":
-                    rel.version = "1.1.0"
+                    rel.version = "1.2.0"
                     rel.file_name = "SafarGo.apk"
                     rel.download_url = apk_url
                     rel.file_size_mb = 4.9
-                    rel.release_notes = "Official SafarGo Android app (.apk) for Customers, Bike & Car Captains connected live."
+                    rel.release_notes = "Official SafarGo Android app (.apk v1.2.0) with Native GPS Bridge & Mobile Map Fix."
                 elif rel.platform == "windows_exe":
-                    rel.version = "1.1.0"
+                    rel.version = "1.2.0"
                     rel.file_name = "SafarGoDesk.exe"
                     rel.download_url = exe_url
                     rel.file_size_mb = 16.0

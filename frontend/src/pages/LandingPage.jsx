@@ -141,10 +141,11 @@ export function LandingPage({ onNavigate }) {
             </button>
             <button
               onClick={() => onNavigate('downloads')}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200/80 hover:bg-slate-200/70 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200/80 hover:bg-slate-200/70 transition"
             >
               <Download className="w-3.5 h-3.5 text-[#009E4D]" />
-              Get APK / EXE
+              <span className="sm:hidden">App</span>
+              <span className="hidden sm:inline">Install App / APK</span>
             </button>
             <button
               onClick={() => onNavigate('auth')}

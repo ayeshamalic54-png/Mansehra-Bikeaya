@@ -1,10 +1,13 @@
 {
-  "name": "SafarGo",
+  "id": "/",
+  "name": "SafarGo — Bikes, AC Cars & Express Parcels",
   "short_name": "SafarGo",
   "description": "SafarGo — Fast Bikes, AC Cars, Express Parcels & Intercity Rides",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["travel", "navigation"],
   "background_color": "#043A22",
   "theme_color": "#009E4D",
   "icons": [
@@ -12,13 +15,25 @@
       "src": "/icon-192.png?v=2",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon.svg?v=2",

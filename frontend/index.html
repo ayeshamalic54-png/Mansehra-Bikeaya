@@ -20,6 +20,20 @@
       rel="stylesheet"
     />
     <link rel="manifest" href="/manifest.json?v=2" />
+    <script>
+      window.__safargoDeferredPrompt = null;
+      window.__safargoPwaInstalled = false;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__safargoDeferredPrompt = e;
+        window.dispatchEvent(new Event('safargo-install-available'));
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__safargoDeferredPrompt = null;
+        window.__safargoPwaInstalled = true;
+        window.dispatchEvent(new Event('safargo-app-installed'));
+      });
+    </script>
   </head>
   <body class="text-slate-900 font-sans antialiased">
     <div id="root"></div>

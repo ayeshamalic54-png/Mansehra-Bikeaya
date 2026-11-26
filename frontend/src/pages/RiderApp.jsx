@@ -32,6 +32,7 @@ import {
   showBrowserRideNotification,
   unlockRideAlertAudio,
 } from '../utils/rideAlerts';
+import { getReliableDevicePosition, watchReliableDevicePosition } from '../utils/deviceGps';
 
 export function RiderApp({ onOpenDownloads }) {
   const { user, bootstrap, refreshMe, logout } = useAuth();
@@ -147,69 +148,57 @@ export function RiderApp({ onOpenDownloads }) {
       await refreshMe();
       setGpsState('live');
       const resolvedLabel = res?.zone_name || 'Live GPS';
-      setGpsBanner(
-        `${source === 'manual' ? 'Location set' : 'Live GPS synced'}: ${resolvedLabel} (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`
-      );
+      const srcTag =
+        source === 'manual'
+          ? 'Location set'
+          : source === 'cached_device'
+          ? 'Recent GPS'
+          : 'Live GPS synced';
+      setGpsBanner(`${srcTag}: ${resolvedLabel} (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`);
     } catch {
       // ignore background ping failures
     }
   };
 
-  const detectAndSyncLiveGps = (showErrorToast = false) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGpsState('error');
-      setGpsBanner('Browser GPS unavailable — choose your Chowk below or tap the Map.');
-      return;
-    }
+  const detectAndSyncLiveGps = async (showErrorToast = false) => {
     setGpsState('syncing');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        pushRiderLocation(pos.coords.latitude, pos.coords.longitude, 'live');
-      },
-      (geoErr) => {
-        // Fallback to network/Wi-Fi geolocation if high-accuracy GPS times out indoors/on laptop
-        navigator.geolocation.getCurrentPosition(
-          (pos2) => {
-            pushRiderLocation(pos2.coords.latitude, pos2.coords.longitude, 'live');
-          },
-          (geoErr2) => {
-            const denied = geoErr2?.code === 1 || geoErr?.code === 1;
-            setGpsState(denied ? 'denied' : 'error');
-            const notice = denied
-              ? 'Browser Location blocked! Browser address bar mein Allow Location karein ya neeche apna current Chowk (e.g. Baidra Chowk) choose karein.'
-              : 'Live GPS signal timeout — apna current Chowk neeche select karein ya map par tap karein.';
-            setGpsBanner(notice);
-            if (showErrorToast) setErr(notice);
-          },
-          { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
-        );
-      },
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 5000 }
-    );
+    try {
+      const pos = await getReliableDevicePosition({
+        timeoutMs: 14000,
+        onRefine: (betterPos) => {
+          pushRiderLocation(betterPos.lat, betterPos.lng, betterPos.source);
+        },
+      });
+      await pushRiderLocation(pos.lat, pos.lng, pos.source);
+    } catch (geoErr) {
+      const denied = geoErr?.code === 'PERMISSION_DENIED' || geoErr?.code === 1;
+      setGpsState(denied ? 'denied' : 'error');
+      const notice =
+        geoErr?.message ||
+        (denied
+          ? 'Location blocked! Browser / App settings mein Allow Location karein ya apna current Chowk choose karein.'
+          : 'Mobile ki Location ON karein ya neeche apna current Chowk choose / map par tap karein.');
+      setGpsBanner(notice);
+      if (showErrorToast) setErr(notice);
+    }
   };
 
-  // Sync device GPS immediately on portal open AND continuously watch movement when Online
+  // Sync device GPS immediately on portal open AND when permission is granted or Captain goes Online
   useEffect(() => {
     if (!user?.id) return;
     detectAndSyncLiveGps(false);
-    if (!rp?.is_online || !navigator.geolocation) return;
-    let lastSent = 0;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const now = Date.now();
-        if (now - lastSent < 8000) return;
-        lastSent = now;
-        pushRiderLocation(pos.coords.latitude, pos.coords.longitude, 'live');
-      },
-      () => {},
-      { enableHighAccuracy: false, maximumAge: 10000, timeout: 12000 }
-    );
-    const intervalId = setInterval(() => {
-      detectAndSyncLiveGps(false);
-    }, 20000);
+    const onNativePerm = () => detectAndSyncLiveGps(false);
+    window.addEventListener('safargo-location-ready', onNativePerm);
+
+    if (!rp?.is_online) {
+      return () => window.removeEventListener('safargo-location-ready', onNativePerm);
+    }
+    const stopWatch = watchReliableDevicePosition((pos) => {
+      pushRiderLocation(pos.lat, pos.lng, pos.source);
+    }, 15000);
     return () => {
-      navigator.geolocation.clearWatch(watchId);
-      clearInterval(intervalId);
+      window.removeEventListener('safargo-location-ready', onNativePerm);
+      stopWatch();
     };
   }, [user?.id, rp?.is_online]);
 
@@ -585,6 +574,17 @@ export function RiderApp({ onOpenDownloads }) {
                       <LocateFixed className="w-3.5 h-3.5" />
                       {gpsState === 'syncing' ? 'Detecting GPS...' : 'Detect My Live GPS'}
                     </button>
+                    {typeof window !== 'undefined' &&
+                      window.SafarGoNative?.openLocationSettings &&
+                      (gpsState === 'error' || gpsState === 'denied') && (
+                        <button
+                          type="button"
+                          onClick={() => window.SafarGoNative.openLocationSettings()}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold inline-flex items-center gap-1"
+                        >
+                          Turn On Phone GPS
+                        </button>
+                      )}
                     <select
                       value=""
                       onChange={(e) => {
@@ -606,32 +606,48 @@ export function RiderApp({ onOpenDownloads }) {
                     </select>
                   </div>
                 </div>
-                <SafarGoMap
-                  captains={
-                    rp?.current_lat != null
-                      ? [
-                          {
-                            id: user?.id,
-                            display_name: user?.full_name,
-                            vehicle_type: rp?.vehicle_type || 'bike',
-                            bike_model: rp?.bike_model,
-                            bike_plate: rp?.bike_plate,
-                            zone_name: rp?.zone_name,
-                            rider_photo: rp?.rider_photo,
-                            vehicle_photo: rp?.vehicle_photo,
-                            lat: rp.current_lat,
-                            lng: rp.current_lng,
-                            is_online: rp.is_online,
-                          },
-                        ]
-                      : []
-                  }
-                  interactive={true}
-                  activePinMode="pickup"
-                  onMapPick={(_which, lat, lng) => pushRiderLocation(lat, lng, 'manual')}
-                  heightClass="h-48"
-                  fitSignature={`${rp?.current_lat}-${rp?.current_lng}`}
-                />
+                {(() => {
+                  const zoneMatch = (bootstrap.zones || []).find((z) => z.name === rp?.zone_name);
+                  const fallbackLat = rp?.current_lat ?? zoneMatch?.lat ?? 34.3335;
+                  const fallbackLng = rp?.current_lng ?? zoneMatch?.lng ?? 73.1995;
+                  return (
+                    <SafarGoMap
+                      pickup={
+                        rp?.current_lat == null
+                          ? {
+                              lat: fallbackLat,
+                              lng: fallbackLng,
+                              label: `${rp?.zone_name || 'Mansehra'} (Syncing live GPS...)`,
+                            }
+                          : null
+                      }
+                      captains={
+                        rp?.current_lat != null
+                          ? [
+                              {
+                                id: user?.id,
+                                display_name: user?.full_name,
+                                vehicle_type: rp?.vehicle_type || 'bike',
+                                bike_model: rp?.bike_model,
+                                bike_plate: rp?.bike_plate,
+                                zone_name: rp?.zone_name,
+                                rider_photo: rp?.rider_photo,
+                                vehicle_photo: rp?.vehicle_photo,
+                                lat: rp.current_lat,
+                                lng: rp.current_lng,
+                                is_online: rp.is_online,
+                              },
+                            ]
+                          : []
+                      }
+                      interactive={true}
+                      activePinMode="pickup"
+                      onMapPick={(_which, lat, lng) => pushRiderLocation(lat, lng, 'manual')}
+                      heightClass="h-56 sm:h-64"
+                      fitSignature={`${fallbackLat}-${fallbackLng}`}
+                    />
+                  );
+                })()}
               </div>
             )}
 
@@ -701,6 +717,7 @@ export function RiderApp({ onOpenDownloads }) {
                           : []
                       }
                       heightClass="h-40"
+                      showCaptainSidebar={false}
                       fitSignature={`avail-${job.id}-${rp?.current_lat}`}
                     />
                   )}
@@ -872,6 +889,7 @@ export function RiderApp({ onOpenDownloads }) {
                           : []
                       }
                       heightClass="h-44"
+                      showCaptainSidebar={false}
                       fitSignature={`active-${job.id}-${job.status}-${rp?.current_lat}`}
                     />
                   )}

@@ -9,8 +9,12 @@ import { AdminDashboard } from './pages/AdminDashboard';
 
 function AppRouter() {
   const { user, loading } = useAuth();
-  const [guestRoute, setGuestRoute] = useState('landing'); // landing | auth | downloads
-  const [showDownloadsModal, setShowDownloadsModal] = useState(false);
+  const [guestRoute, setGuestRoute] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname === '/downloads' ? 'downloads' : 'landing'
+  ); // landing | auth | downloads
+  const [showDownloadsModal, setShowDownloadsModal] = useState(
+    () => typeof window !== 'undefined' && window.location.pathname === '/downloads'
+  );
 
   if (loading) {
     return (

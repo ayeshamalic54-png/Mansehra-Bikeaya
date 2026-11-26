@@ -527,7 +527,7 @@ export function CustomerApp({ onOpenDownloads }) {
                 dropText={dropAddress}
                 nearbyCaptains={nearbyCaptains}
                 heightClass="h-60 sm:h-72"
-                autoLocate={false}
+                autoLocate={!pickupAddress}
                 onSelectPoint={({ type, lat, lng, address, nearestZoneName }) => {
                   if (type === 'pickup') {
                     setPickupLat(lat);
