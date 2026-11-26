@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Bike, Car, CheckCircle2, FileCheck2, KeyRound, MapPin, Pencil, Printer, Trash2, X, XCircle } from 'lucide-react';
 import { apiRequest } from '../../api/client';
 import { StatusBadge } from '../StatusBadge';
 import { CaptainPhotoUploads } from '../CaptainPhotoUploads';
 import { FleetPrintRegister } from './FleetPrintRegister';
+import { CustomerPrintRegister } from './CustomerPrintRegister';
 
 export function AdminPeoplePanel({
   mode, // 'riders' | 'customers'
@@ -22,6 +23,12 @@ export function AdminPeoplePanel({
   const [docsRiderId, setDocsRiderId] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
   const [showPrintRegister, setShowPrintRegister] = useState(false);
+  const [showCustomerPrintRegister, setShowCustomerPrintRegister] = useState(false);
+
+  useEffect(() => {
+    setShowPrintRegister(false);
+    setShowCustomerPrintRegister(false);
+  }, [mode]);
 
   // Create Captain Form State
   const [riderForm, setRiderForm] = useState({
@@ -1170,7 +1177,8 @@ export function AdminPeoplePanel({
             </div>
           )}
 
-          <form onSubmit={handleSaveCustomer} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
+          {!showCustomerPrintRegister && (
+          <form onSubmit={handleSaveCustomer} className="no-print bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-sm text-slate-900">+ Add New Customer</span>
             </div>
@@ -1211,31 +1219,32 @@ export function AdminPeoplePanel({
               Create Customer
             </button>
           </form>
+          )}
 
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="no-print bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-extrabold text-sm text-slate-900">
-                SafarGo Registered Captains ({riders.length})
+                SafarGo Registered Customers ({customers.length})
               </div>
               <div className="text-[11px] text-slate-500">
-                Edit, verify, check per-trip km, ya office record ke liye full contrast sheet print karein.
+                Customer details, bookings, total spend, edit/block actions, ya office record sheet print karein.
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setShowPrintRegister(true)}
+              onClick={() => setShowCustomerPrintRegister((v) => !v)}
               className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold inline-flex items-center gap-2 shadow-xs"
             >
               <Printer className="w-4 h-4 text-emerald-400" />
-              Print Office Fleet List
+              {showCustomerPrintRegister ? 'Back to Customer Table' : 'Print Office Customer List'}
             </button>
           </div>
 
-          {showPrintRegister ? (
-            <FleetPrintRegister
-              riders={riders}
+          {showCustomerPrintRegister ? (
+            <CustomerPrintRegister
+              customers={customers}
               settings={settings}
-              onClose={() => setShowPrintRegister(false)}
+              onClose={() => setShowCustomerPrintRegister(false)}
             />
           ) : (
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-x-auto">
