@@ -60,22 +60,30 @@ def _port_open(host: str = "127.0.0.1", port: int = 5432) -> bool:
 def ensure_local_postgres_running() -> None:
     if _port_open("127.0.0.1", 5432):
         return
-    pg_ctl = PG_BIN / "pg_ctl.exe"
-    if not pg_ctl.exists() or not PG_DATA.exists():
+    postgres_exe = PG_BIN / "postgres.exe"
+    if not postgres_exe.exists() or not PG_DATA.exists():
         raise RuntimeError(f"Local PostgreSQL not initialized at {PG_DATA}")
     PG_LOG.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [str(pg_ctl), "-D", str(PG_DATA), "-l", str(PG_LOG), "-w", "start"],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    log_fh = PG_LOG.open("a", encoding="utf-8")
+    flags = (
+        getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        | getattr(subprocess, "DETACHED_PROCESS", 0)
     )
-    for _ in range(15):
+    subprocess.Popen(
+        [str(postgres_exe), "-D", str(PG_DATA)],
+        stdin=subprocess.DEVNULL,
+        stdout=log_fh,
+        stderr=log_fh,
+        close_fds=True,
+        creationflags=flags,
+    )
+    log_fh.close()
+    for _ in range(20):
         if _port_open("127.0.0.1", 5432):
             return
         time.sleep(0.5)
-    raise RuntimeError("Local PostgreSQL did not listen on 127.0.0.1:5432 after pg_ctl start")
+    raise RuntimeError("Local PostgreSQL did not listen on 127.0.0.1:5432 after postgres.exe start")
 
 
 def _compute_cloud_watermark(cloud_db) -> dict:
