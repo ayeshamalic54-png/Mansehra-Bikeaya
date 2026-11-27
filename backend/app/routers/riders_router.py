@@ -241,26 +241,21 @@ def get_available_jobs(
         topup_policy = get_topup_policy(db, rp.vehicle_type)
         on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
         rule = rules.get(job.service_type)
-        if on_prepaid:
-            data["fee_mode"] = "app_fee_topup"
-            data["prepaid_ride_fee"] = round(
-                float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"] or 10.0), 2
-            )
-            data["commission_amount"] = 0.0
-            data["rider_earning"] = job.final_fare
-        elif rule:
+        data["uses_topup_ride"] = on_prepaid
+        data["prepaid_ride_fee"] = (
+            round(float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"] or 10.0), 2)
+            if on_prepaid
+            else 0.0
+        )
+        if rule:
             _, _, comm, net = compute_commission(job.final_fare, rule, rp)
-            data["fee_mode"] = "commission"
-            data["prepaid_ride_fee"] = 0.0
+            data["fee_mode"] = "app_fee_plus_commission" if on_prepaid else "commission"
             data["commission_amount"] = comm
             data["rider_earning"] = net
         my_offer = next((o for o in job.offers if o.rider_id == current_user.id and o.status != "withdrawn"), None)
         if my_offer:
             serialized_offer = serialize_offer(my_offer)
-            if on_prepaid:
-                serialized_offer["commission_amount"] = 0.0
-                serialized_offer["rider_earning"] = my_offer.offered_fare
-            elif rule:
+            if rule:
                 _, _, o_comm, o_net = compute_commission(my_offer.offered_fare, rule, rp)
                 serialized_offer["commission_amount"] = o_comm
                 serialized_offer["rider_earning"] = o_net
@@ -335,13 +330,10 @@ def send_or_update_ride_offer(
     on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
     rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
     res = serialize_offer(offer)
-    if on_prepaid:
-        res["fee_mode"] = "app_fee_topup"
-        res["commission_amount"] = 0.0
-        res["rider_earning"] = offered
-    elif rule:
+    res["uses_topup_ride"] = on_prepaid
+    if rule:
         _, _, o_comm, o_net = compute_commission(offered, rule, rp)
-        res["fee_mode"] = "commission"
+        res["fee_mode"] = "app_fee_plus_commission" if on_prepaid else "commission"
         res["commission_amount"] = o_comm
         res["rider_earning"] = o_net
     return res
@@ -499,7 +491,45 @@ def get_my_rider_ledger(
         .limit(40)
         .all()
     )
+    completed_rides = (
+        db.query(Booking)
+        .filter(Booking.rider_id == current_user.id, Booking.status == "completed")
+        .order_by(Booking.completed_at.desc(), Booking.id.desc())
+        .limit(60)
+        .all()
+    )
     topup_policy = get_topup_policy(db, rp.vehicle_type)
+    serialized_entries = [
+        {
+            "id": e.id,
+            "booking_id": e.booking_id,
+            "entry_type": e.entry_type,
+            "amount": e.amount,
+            "signed_delta": e.signed_delta,
+            "balance_after": e.balance_after,
+            "payment_channel": e.payment_channel,
+            "reference_no": e.reference_no,
+            "note": e.note,
+            "created_at": e.created_at,
+        }
+        for e in entries
+    ]
+    app_fee_types = ("topup_approved", "topup_ride_deduction")
+    completed_ids = [b.id for b in completed_rides]
+    prepaid_booking_ids = (
+        {
+            row[0]
+            for row in db.query(LedgerEntry.booking_id)
+            .filter(
+                LedgerEntry.rider_id == current_user.id,
+                LedgerEntry.entry_type == "topup_ride_deduction",
+                LedgerEntry.booking_id.in_(completed_ids),
+            )
+            .all()
+        }
+        if completed_ids
+        else set()
+    )
     return {
         "summary": {
             "balance_due_to_admin": rp.balance_due_to_admin,
@@ -518,20 +548,30 @@ def get_my_rider_ledger(
             "total_settled_to_admin": rp.total_settled_to_admin,
             "rating_avg": rp.rating_avg,
         },
-        "entries": [
+        "entries": serialized_entries,
+        "commission_entries": [x for x in serialized_entries if x["entry_type"] not in app_fee_types],
+        "app_fee_entries": [x for x in serialized_entries if x["entry_type"] in app_fee_types],
+        "completed_rides": [
             {
-                "id": e.id,
-                "booking_id": e.booking_id,
-                "entry_type": e.entry_type,
-                "amount": e.amount,
-                "signed_delta": e.signed_delta,
-                "balance_after": e.balance_after,
-                "payment_channel": e.payment_channel,
-                "reference_no": e.reference_no,
-                "note": e.note,
-                "created_at": e.created_at,
+                "id": b.id,
+                "booking_code": b.booking_code,
+                "service_type": b.service_type,
+                "pickup_zone": b.pickup_zone,
+                "pickup_address": b.pickup_address,
+                "drop_zone": b.drop_zone,
+                "drop_address": b.drop_address,
+                "distance_km": b.distance_km,
+                "final_fare": b.final_fare,
+                "commission_amount": b.commission_amount,
+                "rider_earning": b.rider_earning,
+                "uses_topup_ride": b.id in prepaid_booking_ids,
+                "payment_method": b.payment_method,
+                "payment_collector": b.payment_collector,
+                "payment_status": b.payment_status,
+                "completed_at": b.completed_at,
+                "created_at": b.created_at,
             }
-            for e in entries
+            for b in completed_rides
         ],
         "settlement_requests": [
             {

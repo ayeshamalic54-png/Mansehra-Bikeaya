@@ -404,20 +404,11 @@ def complete_booking_and_post_ledger(
     policy = get_topup_policy(db, rider_profile.vehicle_type)
     use_prepaid_ride = bool(policy["required"]) and int(rider_profile.remaining_paid_rides or 0) > 0
 
-    if use_prepaid_ride:
-        unit_fee = round(min(final_fare, float(rider_profile.topup_per_ride_fee or policy["per_ride_fee"] or 10.0)), 2)
-        commission_amount = 0.0
-        rider_earning = round(final_fare, 2)
-        c_type = "app_fee_topup"
-        c_val = unit_fee
-        rider_profile.remaining_paid_rides = max(0, int(rider_profile.remaining_paid_rides or 0) - 1)
-        rider_profile.topup_wallet_balance = round(
-            max(0.0, float(rider_profile.topup_wallet_balance or 0.0) - unit_fee), 2
-        )
-    else:
-        c_type, c_val, commission_amount, rider_earning = compute_commission(
-            final_fare, rule, rider_profile
-        )
+    # Ride commission (e.g. Rs. 20/ride) ALWAYS applies per completed ride and stays
+    # strictly separate from Pre-Paid App Access Fee Top-Ups.
+    c_type, c_val, commission_amount, rider_earning = compute_commission(
+        final_fare, rule, rider_profile
+    )
 
     booking.final_fare = final_fare
     booking.commission_type_snapshot = c_type
@@ -431,53 +422,27 @@ def complete_booking_and_post_ledger(
     rider_profile.total_trips += 1
     rider_profile.total_gross_collected = round(rider_profile.total_gross_collected + final_fare, 2)
     rider_profile.total_net_earned = round(rider_profile.total_net_earned + rider_earning, 2)
-    if not use_prepaid_ride:
-        rider_profile.total_commission_generated = round(
-            rider_profile.total_commission_generated + commission_amount, 2
-        )
+    rider_profile.total_commission_generated = round(
+        rider_profile.total_commission_generated + commission_amount, 2
+    )
 
     if collector == "rider":
-        if use_prepaid_ride:
-            signed_delta = 0.0
-            entry_type = "topup_ride_deduction"
-            ledger_amount = unit_fee
-            booking.payment_status = "paid"
-            note = (
-                f"Ride {booking.booking_code}: Pre-Paid App Fee (-1 Ride / Rs.{unit_fee:.2f} from Top-Up, "
-                f"0 Commission · {rider_profile.remaining_paid_rides} rides left)"
-            )
-        else:
-            # Post-paid cash ride: rider owes admin the commission amount
-            signed_delta = commission_amount
-            entry_type = "commission_due"
-            ledger_amount = commission_amount
-            booking.payment_status = "paid"
-            note = f"Ride {booking.booking_code}: Cash collected Rs.{final_fare:.0f}, SafarGo commission Rs.{commission_amount:.2f}"
+        signed_delta = commission_amount
+        entry_type = "commission_due"
+        ledger_amount = commission_amount
+        booking.payment_status = "paid"
+        note = (
+            f"Ride {booking.booking_code}: Fare Rs.{final_fare:.0f}, "
+            f"SafarGo Commission Rs.{commission_amount:.2f}, Captain Net Rs.{rider_earning:.2f}"
+        )
     else:
-        # Digital payment to SafarGo -> admin owes rider their net earning
         signed_delta = -rider_earning
         entry_type = "digital_payout_credit"
         ledger_amount = rider_earning
-        if use_prepaid_ride:
-            note = (
-                f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, "
-                f"-1 Pre-Paid Ride (0 Commission), Captain credit Rs.{rider_earning:.2f}"
-            )
-        else:
-            note = f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, Captain credit Rs.{rider_earning:.2f}"
-
-    if policy["required"] and int(rider_profile.remaining_paid_rides or 0) <= 0:
-        other_active = (
-            db.query(Booking.id)
-            .filter(
-                Booking.rider_id == rider_profile.user_id,
-                Booking.id != booking.id,
-                Booking.status.in_(("assigned", "arrived", "in_progress")),
-            )
-            .first()
+        note = (
+            f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, "
+            f"Captain Net Rs.{rider_earning:.2f} (Commission Rs.{commission_amount:.2f})"
         )
-        if not other_active:
-            rider_profile.is_online = False
 
     new_balance = round(rider_profile.balance_due_to_admin + signed_delta, 2)
     rider_profile.balance_due_to_admin = new_balance
@@ -495,6 +460,44 @@ def complete_booking_and_post_ledger(
         recorded_by_id=actor.id,
     )
     db.add(ledger)
+
+    if use_prepaid_ride:
+        unit_fee = round(float(rider_profile.topup_per_ride_fee or policy["per_ride_fee"] or 10.0), 2)
+        rider_profile.remaining_paid_rides = max(0, int(rider_profile.remaining_paid_rides or 0) - 1)
+        rider_profile.topup_wallet_balance = round(
+            max(0.0, float(rider_profile.topup_wallet_balance or 0.0) - unit_fee), 2
+        )
+        db.add(
+            LedgerEntry(
+                rider_id=booking.rider_id,
+                booking_id=booking.id,
+                entry_type="topup_ride_deduction",
+                amount=unit_fee,
+                signed_delta=0.0,
+                balance_after=new_balance,
+                payment_channel="app_fee_topup",
+                reference_no=booking.booking_code,
+                note=(
+                    f"App Fee Pass Used — Ride {booking.booking_code} "
+                    f"(-1 Ride / Rs.{unit_fee:.2f} App Fee · {rider_profile.remaining_paid_rides} rides left)"
+                ),
+                recorded_by_id=actor.id,
+            )
+        )
+
+    if policy["required"] and int(rider_profile.remaining_paid_rides or 0) <= 0:
+        other_active = (
+            db.query(Booking.id)
+            .filter(
+                Booking.rider_id == rider_profile.user_id,
+                Booking.id != booking.id,
+                Booking.status.in_(("assigned", "arrived", "in_progress")),
+            )
+            .first()
+        )
+        if not other_active:
+            rider_profile.is_online = False
+
     db.commit()
     db.refresh(booking)
     return booking

@@ -56,7 +56,6 @@ export function RiderApp({ onOpenDownloads }) {
   });
   const [showOptionalProofInput, setShowOptionalProofInput] = useState(false);
   const [proofDrafts, setProofDrafts] = useState({});
-  const [showLegacySettlement, setShowLegacySettlement] = useState(false);
   const [submittingTopup, setSubmittingTopup] = useState(false);
   const [waitDrafts, setWaitDrafts] = useState({});
   const [offerDrafts, setOfferDrafts] = useState({}); // { [bookingId]: { fare, eta, note } }
@@ -451,10 +450,24 @@ export function RiderApp({ onOpenDownloads }) {
   };
 
   const activeJobs = myJobs.filter((j) => ['assigned', 'arrived', 'in_progress'].includes(j.status));
+  const completedJobs =
+    ledgerData.completed_rides && ledgerData.completed_rides.length > 0
+      ? ledgerData.completed_rides
+      : myJobs.filter((j) => j.status === 'completed');
   const summary = ledgerData.summary || {};
+  const commissionEntries =
+    ledgerData.commission_entries ||
+    (ledgerData.entries || []).filter(
+      (e) => !['topup_approved', 'topup_ride_deduction'].includes(e.entry_type)
+    );
+  const appFeeEntries =
+    ledgerData.app_fee_entries ||
+    (ledgerData.entries || []).filter((e) =>
+      ['topup_approved', 'topup_ride_deduction'].includes(e.entry_type)
+    );
 
   const renderTopupPackageCard = ({ compact = false } = {}) => {
-    if (!topupRequired && topupRequests.length === 0 && remainingPaidRides <= 0) {
+    if (!topupRequired && topupRequests.length === 0 && remainingPaidRides <= 0 && appFeeEntries.length === 0) {
       return null;
     }
     const reqAmount = Math.max(1, Number(topupForm.amount || topupPackageFee));
@@ -473,7 +486,7 @@ export function RiderApp({ onOpenDownloads }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-extrabold text-sm text-slate-900 inline-flex items-center gap-1.5">
                 <Wallet className={`w-4 h-4 ${needsTopup ? 'text-amber-600' : 'text-[#009E4D]'}`} />
-                {needsTopup ? 'App Fee / Top-Up Required to Start' : 'Pre-Paid App Fee & Top-Up Wallet'}
+                {needsTopup ? '1. App Access Fee / Top-Up Required to Start' : '1. Pre-Paid App Access Fee & Approvals'}
               </span>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold mono-num ${
@@ -488,16 +501,16 @@ export function RiderApp({ onOpenDownloads }) {
             <p className="text-slate-600 mt-1">
               {needsTopup ? (
                 <>
-                  This is a <strong className="text-slate-900">100% SafarGo App Access Fee</strong> (no ride commission included). Send{' '}
+                  This is a <strong className="text-slate-900">SafarGo App Access Fee</strong> (kept separate from per-ride commission). Send{' '}
                   <strong className="text-slate-900">
                     {topupRidesCount} Rides = Rs. {topupPackageFee}
                   </strong>{' '}
-                  to any SafarGo account below and submit your Top-Up request — proof/TID is only needed if Admin cannot confirm the payment.
+                  to SafarGo below and submit your Top-Up request — TID/proof is only needed if Admin cannot confirm the payment.
                 </>
               ) : (
                 <>
-                  Pre-paid App Fee active — <strong>1 Paid Ride (Rs. {topupPerRideFee} App Fee)</strong> is deducted per completed trip with{' '}
-                  <strong className="text-[#008741]">0% Ride Commission</strong>. You keep 100% of the fare.
+                  App Access Pass Active — <strong>1 Paid Ride (Rs. {topupPerRideFee} App Fee)</strong> is deducted per completed ride.{' '}
+                  Per-ride commission &amp; ride earnings are tracked completely separately below.
                 </>
               )}
             </p>
@@ -643,26 +656,62 @@ export function RiderApp({ onOpenDownloads }) {
           )}
         </form>
 
-        {topupRequests.length > 0 && (
-          <div className="pt-2 border-t border-slate-100 space-y-1.5">
-            <div className="font-bold text-slate-700">Top-Up Requests History</div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {topupRequests.map((tr) => (
-                <div
-                  key={tr.id}
-                  className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900 mono-num">
-                      Rs. {tr.amount} · {tr.rides_requested} Rides · {formatPaymentMethodLabel(tr.payment_channel)}
-                      {tr.reference_no ? ` · TID: ${tr.reference_no}` : ' · Direct Request'}
+        {(topupRequests.length > 0 || appFeeEntries.length > 0) && (
+          <div className="pt-2 border-t border-slate-200/80 space-y-2.5">
+            {topupRequests.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="font-bold text-slate-800">App Fee Approval Requests &amp; Status</div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {topupRequests.map((tr) => (
+                    <div
+                      key={tr.id}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900 mono-num">
+                          Rs. {tr.amount} · {tr.rides_requested} Rides · {formatPaymentMethodLabel(tr.payment_channel)} →{' '}
+                          {tr.account_title || 'SafarGo'}
+                          {tr.reference_no ? ` · TID: ${tr.reference_no}` : ' · Direct Request'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mono-num">
+                          {new Date(tr.created_at).toLocaleString()}
+                        </div>
+                        {tr.admin_note && <div className="text-[11px] text-amber-800 font-semibold">Admin: {tr.admin_note}</div>}
+                      </div>
+                      <StatusBadge value={tr.status === 'approved' ? 'paid' : tr.status === 'pending' ? 'pending_approval' : tr.status} />
                     </div>
-                    {tr.admin_note && <div className="text-[11px] text-amber-800 font-semibold">Admin: {tr.admin_note}</div>}
-                  </div>
-                  <StatusBadge value={tr.status === 'approved' ? 'paid' : tr.status} />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {!compact && appFeeEntries.length > 0 && (
+              <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                <div className="font-bold text-slate-800">App Fee Pass History (Separate from Ride Earnings)</div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {appFeeEntries.map((ae) => (
+                    <div
+                      key={ae.id}
+                      className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <div className="font-semibold text-slate-800">{ae.note}</div>
+                        <div className="text-[10px] text-slate-500 mono-num">
+                          {new Date(ae.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <span
+                        className={`mono-num font-extrabold shrink-0 ${
+                          ae.entry_type === 'topup_approved' ? 'text-[#008741]' : 'text-amber-700'
+                        }`}
+                      >
+                        {ae.entry_type === 'topup_approved' ? `+Rs. ${ae.amount}` : `-Rs. ${ae.amount}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -707,25 +756,27 @@ export function RiderApp({ onOpenDownloads }) {
         </div>
       </div>
 
-      <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-3 gap-2 mono-num">
-        <div>
-          <div className="text-[11px] text-slate-500">Customer Offer</div>
-          <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[11px] text-slate-500">
-            {job.fee_mode === 'app_fee_topup' ? 'Top-Up Package' : 'Less Commission'}
+      <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-1.5 mono-num">
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <div className="text-[11px] text-slate-500">Customer Offer</div>
+            <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
           </div>
-          <div className="text-sm font-bold text-[#008741]">
-            {job.fee_mode === 'app_fee_topup'
-              ? '-1 Ride (0 Comm.)'
-              : `-Rs. ${job.commission_amount}`}
+          <div className="text-center">
+            <div className="text-[11px] text-slate-500">Less Commission</div>
+            <div className="text-sm font-bold text-amber-700">-Rs. {job.commission_amount}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] text-slate-500">Your Ride Net</div>
+            <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-[11px] text-slate-500">Your Actual Net</div>
-          <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
-        </div>
+        {job.uses_topup_ride && (
+          <div className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 rounded-lg px-2.5 py-1 flex items-center justify-between">
+            <span>App Access Pass</span>
+            <span>-1 Paid Ride (Rs. {job.prepaid_ride_fee} App Fee · Separate)</span>
+          </div>
+        )}
       </div>
 
       {/* Dual Action: 1-Tap Accept OR Custom Counter-Offer to Customer */}
@@ -1332,7 +1383,7 @@ export function RiderApp({ onOpenDownloads }) {
           </div>
         )}
 
-        {/* TAB 2: ACTIVE JOBS */}
+        {/* TAB 3: HISAB / LEDGER */}
         {tab === 'active' && (
           <div className="space-y-4">
             <h2 className="text-sm font-extrabold text-slate-900">Active Assigned Trips ({activeJobs.length})</h2>
@@ -1506,6 +1557,50 @@ export function RiderApp({ onOpenDownloads }) {
                 </div>
               ))
             )}
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
+              <div className="p-4 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-extrabold text-sm text-slate-900">
+                  Completed Rides History ({completedJobs.length})
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Every completed ride &amp; per-ride commission breakdown
+                </span>
+              </div>
+              {completedJobs.length === 0 ? (
+                <div className="p-6 text-center text-slate-500">
+                  No completed rides recorded yet. Completed trips appear here automatically.
+                </div>
+              ) : (
+                completedJobs.map((rj) => (
+                  <div key={`done-${rj.id}`} className="p-3.5 space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="mono-num font-extrabold text-slate-900">{rj.booking_code}</span>
+                        <StatusBadge value={rj.service_type} />
+                        <StatusBadge value="completed" />
+                        {rj.uses_topup_ride && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-bold">
+                            -1 App Pass
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500 mono-num">
+                        {new Date(rj.completed_at || rj.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-slate-700">
+                      {(rj.pickup_zone || rj.pickup_address || 'Pickup')} → {(rj.drop_zone || rj.drop_address || 'Dropoff')}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 mono-num text-[11px] font-bold">
+                      <span className="text-slate-800">Fare: Rs. {rj.final_fare}</span>
+                      <span className="text-center text-amber-700">Comm.: -Rs. {rj.commission_amount}</span>
+                      <span className="text-right text-[#008741]">Your Net: Rs. {rj.rider_earning}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -1514,92 +1609,104 @@ export function RiderApp({ onOpenDownloads }) {
           <div className="space-y-4">
             {renderTopupPackageCard({ compact: false })}
 
-            {topupRequired ? (
-              <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-300 font-bold">
-                    Trip Earnings &amp; App Fee Summary (0% Commission on Pre-Paid Rides)
-                  </span>
+            {/* SECTION 2: PER-RIDE COMMISSION & EARNINGS WALLET (SEPARATE FROM APP FEE) */}
+            <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-slate-300 font-bold">
+                  2. Ride Earnings &amp; Per-Ride Commission Wallet (Separate from App Fee)
+                </span>
+                {Number(summary.balance_due_to_admin || 0) <= 0 ? (
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
-                    Pre-Paid Mode Active ✓
+                    Commission Settled ✓
                   </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs mono-num">
-                  <div>
-                    <div className="text-slate-400">Completed Trips</div>
-                    <div className="text-base font-extrabold">{summary.total_trips || 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">Gross Fare</div>
-                    <div className="text-base font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">Your Take-Home</div>
-                    <div className="text-base font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">App Fee Paid</div>
-                    <div className="text-base font-bold text-amber-300">Rs. {Number(summary.total_topups_paid || rp?.total_topups_paid || 0).toFixed(0)}</div>
-                  </div>
-                </div>
-
-                {Number(summary.balance_due_to_admin || 0) !== 0 && (
-                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-amber-300 font-bold mono-num">
-                      {Number(summary.balance_due_to_admin || 0) > 0
-                        ? `Previous Settlement Due: Rs. ${Number(summary.balance_due_to_admin).toFixed(0)}`
-                        : `SafarGo Digital Payout Credit: Rs. ${Math.abs(Number(summary.balance_due_to_admin)).toFixed(0)}`}
-                    </span>
-                    {Number(summary.balance_due_to_admin || 0) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowLegacySettlement((v) => !v)}
-                        className="px-3 py-1 rounded-lg bg-amber-400 text-slate-950 font-extrabold"
-                      >
-                        {showLegacySettlement ? 'Hide Old Due Form' : 'Clear Past Due'}
-                      </button>
-                    )}
-                  </div>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-extrabold mono-num">
+                    Rs. {Number(summary.balance_due_to_admin || 0).toFixed(0)} Comm. Due
+                  </span>
                 )}
               </div>
-            ) : (
-              <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">Post-Paid Ride Commission Balance (Top-Up OFF)</span>
-                  {Number(summary.balance_due_to_admin || 0) <= 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
-                      All Paid ✓
-                    </span>
-                  )}
+
+              <div className="text-3xl font-extrabold mono-num text-amber-400">
+                {Number(summary.balance_due_to_admin || 0) >= 0
+                  ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Commission Payable to SafarGo`
+                  : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} SafarGo Owes You`}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
+                <div>
+                  <div className="text-slate-400">Completed Rides</div>
+                  <div className="font-extrabold">{summary.total_trips || completedJobs.length || 0}</div>
                 </div>
-                <div className="text-3xl font-extrabold mono-num text-amber-400">
-                  {Number(summary.balance_due_to_admin || 0) >= 0
-                    ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Payable to SafarGo`
-                    : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} SafarGo Owes You`}
+                <div>
+                  <div className="text-slate-400">Gross Fares</div>
+                  <div className="font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
-                  <div>
-                    <div className="text-slate-400">Gross Fare</div>
-                    <div className="font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">Ride Commission</div>
-                    <div className="font-bold text-amber-300">-Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">Your Actual Net</div>
-                    <div className="font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400">Settled / Paid</div>
-                    <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
-                  </div>
+                <div>
+                  <div className="text-slate-400">SafarGo Commission</div>
+                  <div className="font-bold text-amber-300">-Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
                 </div>
+                <div>
+                  <div className="text-slate-400">Your Ride Net</div>
+                  <div className="font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400">Settled / Paid</div>
+                  <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Pre-Paid App Access Fee passes only unlock duty access. Every completed ride separately calculates
+                per-ride SafarGo commission and credits your Captain Ride Net above.
+              </p>
+            </div>
+
+            {completedJobs.length > 0 && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
+                <div className="p-4 flex items-center justify-between gap-2">
+                  <span className="font-extrabold text-slate-900">
+                    Completed Rides &amp; Commission Breakdown ({completedJobs.length})
+                  </span>
+                  <span className="text-[11px] text-slate-500">Per-Ride Gross, Comm. &amp; Net</span>
+                </div>
+                {completedJobs.map((j) => (
+                  <div key={j.id} className="p-3.5 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
+                        <span className="mono-num">{j.booking_code}</span>
+                        <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                          {j.service_type?.replace('_', ' ')} · {j.payment_method}
+                        </span>
+                        {j.uses_topup_ride && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-bold">
+                            -1 App Pass
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        {(j.pickup_zone || j.pickup_address || 'Pickup')} → {(j.drop_zone || j.drop_address || 'Dropoff')}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mono-num">
+                        {new Date(j.completed_at || j.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right mono-num shrink-0 space-y-0.5">
+                      <div className="font-bold text-slate-900">
+                        Fare: Rs. {Number(j.final_fare || 0).toFixed(0)}
+                      </div>
+                      <div className="text-[11px] text-amber-700 font-bold">
+                        Comm: -Rs. {Number(j.commission_amount || 0).toFixed(0)}
+                      </div>
+                      <div className="font-extrabold text-[#009E4D]">
+                        Net: Rs. {Number(j.rider_earning || 0).toFixed(0)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Settlement form ONLY shown when Top-Up Mode is OFF OR Captain explicitly expands past-due settlement */}
-            {(!topupRequired || (showLegacySettlement && Number(summary.balance_due_to_admin || 0) > 0)) && (
+            {(Number(summary.balance_due_to_admin || 0) > 0 || !topupRequired || Number(summary.total_commission_generated || 0) > 0) && (
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -1616,8 +1723,7 @@ export function RiderApp({ onOpenDownloads }) {
                       },
                     });
                     setCommPayForm({ amount: '', payment_channel: commPayForm.payment_channel, reference_no: '', note: '' });
-                    setShowLegacySettlement(false);
-                    setMsg('Payment settlement sent to SafarGo! It will mark Paid once confirmed.');
+                    setMsg('Ride commission settlement sent to SafarGo! It will mark Paid once confirmed.');
                     await loadAll();
                   } catch (e2) {
                     setErr(e2.message);
@@ -1626,7 +1732,7 @@ export function RiderApp({ onOpenDownloads }) {
                 className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs"
               >
                 <div className="font-extrabold text-sm text-slate-900">
-                  {topupRequired ? 'Clear Past Ride Settlement Balance' : 'Send Ride Commission Payment to SafarGo'}
+                  Send Ride Commission Settlement to SafarGo
                 </div>
                 <SafarGoPayBox
                   settings={bootstrap.settings}
@@ -1668,7 +1774,7 @@ export function RiderApp({ onOpenDownloads }) {
                   type="submit"
                   className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
                 >
-                  Send Settlement Payment
+                  Send Commission Settlement
                 </button>
               </form>
             )}
@@ -1686,18 +1792,23 @@ export function RiderApp({ onOpenDownloads }) {
                         {new Date(r.created_at).toLocaleString()} {r.reference_no ? `· Ref: ${r.reference_no}` : ''}
                       </div>
                     </div>
-                    <StatusBadge value={r.status} />
+                    <StatusBadge value={r.status === 'pending' ? 'pending_approval' : r.status} />
                   </div>
                 ))}
               </div>
             )}
 
             <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
-              <div className="p-4 font-extrabold text-slate-900">Wallet Transaction History</div>
-              {(ledgerData.entries || []).length === 0 ? (
-                <div className="p-6 text-center text-slate-500">No ledger entries yet.</div>
+              <div className="p-4 flex items-center justify-between gap-2">
+                <span className="font-extrabold text-slate-900">
+                  Ride Commission Ledger ({commissionEntries.length})
+                </span>
+                <span className="text-[11px] text-slate-500">App Fee entries tracked separately above</span>
+              </div>
+              {commissionEntries.length === 0 ? (
+                <div className="p-6 text-center text-slate-500">No ride commission entries yet.</div>
               ) : (
-                ledgerData.entries.map((e) => (
+                commissionEntries.map((e) => (
                   <div key={e.id} className="p-4 flex items-center justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2 font-bold text-slate-800">
@@ -1714,7 +1825,7 @@ export function RiderApp({ onOpenDownloads }) {
                       <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#009E4D]'}`}>
                         {e.signed_delta > 0 ? `+Rs.${e.signed_delta}` : `-Rs.${Math.abs(e.signed_delta)}`}
                       </div>
-                      <div className="text-[11px] text-slate-500">Bal: Rs.{e.balance_after}</div>
+                      <div className="text-[11px] text-slate-500">Due Bal: Rs.{e.balance_after}</div>
                     </div>
                   </div>
                 ))

@@ -1767,7 +1767,17 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     assert app_bike.json()["topup_wallet_balance"] == 100.0
     assert app_bike.json()["topup_per_ride_fee"] == 10.0
 
-    # Now Bike Captain goes online, appears on Customer map, sees job with 0 Commission (App Fee prepaid!), accepts & completes cash ride!
+    # Set Bike Ride per-ride commission rule to fixed Rs. 20 so we verify strict separation from App Fee
+    assert (
+        client.patch(
+            "/api/admin/pricing/bike_ride",
+            headers=_auth_header(admin_token),
+            json={"commission_type": "fixed", "commission_value": 20.0},
+        ).status_code
+        == 200
+    )
+
+    # Now Bike Captain goes online, appears on Customer map, sees job with Rs. 20 per-ride commission + 1 prepaid pass deduction
     assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).json()["is_online"] is True
     assert any(
         c["rider_id"] == bike_user["id"]
@@ -1775,9 +1785,10 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     )
     avail_jobs = client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
     job_match = next(j for j in avail_jobs if j["id"] == bk["id"])
-    assert job_match["fee_mode"] == "app_fee_topup"
-    assert job_match["commission_amount"] == 0.0
-    assert job_match["rider_earning"] == bk["final_fare"]
+    assert job_match["uses_topup_ride"] is True
+    assert job_match["fee_mode"] == "app_fee_plus_commission"
+    assert job_match["commission_amount"] == 20.0
+    assert job_match["rider_earning"] == bk["final_fare"] - 20.0
 
     assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(bike_token)).status_code == 200
     done = client.post(
@@ -1786,23 +1797,32 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
         json={"status": "completed"},
     )
     assert done.status_code == 200
-    assert done.json()["commission_type_snapshot"] == "app_fee_topup"
-    assert done.json()["commission_amount"] == 0.0
-    assert done.json()["rider_earning"] == bk["final_fare"]
+    assert done.json()["commission_type_snapshot"] == "fixed"
+    assert done.json()["commission_amount"] == 20.0
+    assert done.json()["rider_earning"] == bk["final_fare"] - 20.0
 
-    # Prepaid App Fee ride decrements rides 10 -> 9, topup balance 100 -> 90, adds ZERO ride commission & ZERO udhaar!
+    # App Fee ledger tracks pass deduction separately; Ride Commission ledger tracks Rs. 20 commission & completed ride history separately!
     bike_led = client.get("/api/riders/ledger", headers=_auth_header(bike_token)).json()
     assert bike_led["summary"]["remaining_paid_rides"] == 9
     assert bike_led["summary"]["topup_wallet_balance"] == 90.0
-    assert bike_led["summary"]["balance_due_to_admin"] == 0.0
-    assert bike_led["summary"]["total_commission_generated"] == 0.0
     assert bike_led["summary"]["total_topups_paid"] == 100.0
+    assert bike_led["summary"]["balance_due_to_admin"] == 20.0
+    assert bike_led["summary"]["total_commission_generated"] == 20.0
+    assert bike_led["summary"]["total_net_earned"] == bk["final_fare"] - 20.0
+    assert len(bike_led["completed_rides"]) == 1
+    assert bike_led["completed_rides"][0]["id"] == bk["id"]
+    assert bike_led["completed_rides"][0]["uses_topup_ride"] is True
+    assert all(e["entry_type"] in ("topup_approved", "topup_ride_deduction") for e in bike_led["app_fee_entries"])
+    assert all(e["signed_delta"] == 0.0 for e in bike_led["app_fee_entries"])
+    assert any(e["entry_type"] == "commission_due" and e["signed_delta"] == 20.0 for e in bike_led["commission_entries"])
+    assert not any(e["entry_type"] in ("topup_approved", "topup_ride_deduction") for e in bike_led["commission_entries"])
 
     pnl = client.get("/api/reports/pnl", headers=_auth_header(admin_token)).json()
     assert pnl["summary"]["topup_collected"] >= 200.0
+    assert pnl["summary"]["admin_commission_earned"] >= 20.0
     assert pnl["summary"]["net_business_profit"] >= pnl["summary"]["topup_collected"] - pnl["summary"]["total_expenses"]
 
-    # 3b. Prepaid App Fee Captain Counter-Offer -> Customer Accept keeps 0 Commission & full counter-offer earning
+    # 3b. Counter-offer at Rs. 120 keeps Rs. 20 per-ride commission & Rs. 100 Captain Net in Completed Rides History
     bk_counter = client.post(
         "/api/bookings",
         headers=_auth_header(cust_token),
@@ -1822,19 +1842,19 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     offer_res = client.post(
         f"/api/riders/jobs/{bk_counter['id']}/offer",
         headers=_auth_header(bike_token),
-        json={"offered_fare": 200, "eta_minutes": 4, "note": "Near College Chowk"},
+        json={"offered_fare": 120, "eta_minutes": 4, "note": "Near College Chowk"},
     )
     assert offer_res.status_code == 200, offer_res.text
     offer_data = offer_res.json()
-    assert offer_data["offered_fare"] == 200.0
-    assert offer_data["fee_mode"] == "app_fee_topup"
-    assert offer_data["commission_amount"] == 0.0
-    assert offer_data["rider_earning"] == 200.0
+    assert offer_data["offered_fare"] == 120.0
+    assert offer_data["fee_mode"] == "app_fee_plus_commission"
+    assert offer_data["commission_amount"] == 20.0
+    assert offer_data["rider_earning"] == 100.0
 
     my_bookings_after = client.get("/api/bookings/my", headers=_auth_header(cust_token)).json()
     cust_bk = next(b for b in my_bookings_after if b["id"] == bk_counter["id"])
     assert len(cust_bk["offers"]) == 1
-    assert cust_bk["offers"][0]["offered_fare"] == 200.0
+    assert cust_bk["offers"][0]["offered_fare"] == 120.0
 
     acc_offer = client.post(
         f"/api/bookings/{bk_counter['id']}/offers/{offer_data['id']}/accept",
@@ -1842,10 +1862,10 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     )
     assert acc_offer.status_code == 200, acc_offer.text
     acc_data = acc_offer.json()
-    assert acc_data["final_fare"] == 200.0
-    assert acc_data["commission_type_snapshot"] == "app_fee_topup"
-    assert acc_data["commission_amount"] == 0.0
-    assert acc_data["rider_earning"] == 200.0
+    assert acc_data["final_fare"] == 120.0
+    assert acc_data["commission_type_snapshot"] == "fixed"
+    assert acc_data["commission_amount"] == 20.0
+    assert acc_data["rider_earning"] == 100.0
 
     done_counter = client.post(
         f"/api/riders/jobs/{bk_counter['id']}/status",
@@ -1853,9 +1873,35 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
         json={"status": "completed"},
     )
     assert done_counter.status_code == 200, done_counter.text
-    assert done_counter.json()["commission_type_snapshot"] == "app_fee_topup"
-    assert done_counter.json()["commission_amount"] == 0.0
-    assert done_counter.json()["rider_earning"] == 200.0
+    assert done_counter.json()["commission_type_snapshot"] == "fixed"
+    assert done_counter.json()["commission_amount"] == 20.0
+    assert done_counter.json()["rider_earning"] == 100.0
+
+    bike_led_after = client.get("/api/riders/ledger", headers=_auth_header(bike_token)).json()
+    assert bike_led_after["summary"]["remaining_paid_rides"] == 8
+    assert bike_led_after["summary"]["total_topups_paid"] == 100.0
+    assert bike_led_after["summary"]["total_commission_generated"] == 40.0
+    assert bike_led_after["summary"]["balance_due_to_admin"] == 40.0
+    assert len(bike_led_after["completed_rides"]) == 2
+    assert any(r["id"] == bk_counter["id"] and r["final_fare"] == 120.0 and r["commission_amount"] == 20.0 and r["rider_earning"] == 100.0 for r in bike_led_after["completed_rides"])
+
+    # Verify Captain can submit a Ride Commission settlement independently of App Fee pass balance
+    sett_req = client.post(
+        "/api/riders/settlement-requests",
+        headers=_auth_header(bike_token),
+        json={"amount": 20.0, "payment_channel": "easypaisa", "reference_no": "COMM-20"},
+    )
+    assert sett_req.status_code == 201
+    sett_app = client.post(
+        f"/api/finance/settlement-requests/{sett_req.json()['id']}/mark-paid",
+        headers=_auth_header(admin_token),
+    )
+    assert sett_app.status_code == 200
+    bike_led_settled = client.get("/api/riders/ledger", headers=_auth_header(bike_token)).json()
+    assert bike_led_settled["summary"]["balance_due_to_admin"] == 20.0
+    assert bike_led_settled["summary"]["total_settled_to_admin"] == 20.0
+    assert bike_led_settled["summary"]["remaining_paid_rides"] == 8
+    assert bike_led_settled["summary"]["total_topups_paid"] == 100.0
 
     # 4. Admin dynamically changes package to 5 Rides = Rs. 150 (Car Rs. 250) & exhaustion auto-offline test
     for k, v in [

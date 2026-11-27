@@ -69,7 +69,7 @@ const NAV_GROUPS = [
     ],
   },
   {
-    group: 'Finance & Lain-Dain',
+    group: 'Finance & Accounts',
     items: [
       { id: 'settlements', label: 'Rider Dues & Settlements', icon: Wallet, badgeCls: 'bg-amber-500/15 text-amber-400' },
       { id: 'pricing', label: 'Fare & Commission %', icon: Coins, badgeCls: 'bg-cyan-500/15 text-cyan-400' },

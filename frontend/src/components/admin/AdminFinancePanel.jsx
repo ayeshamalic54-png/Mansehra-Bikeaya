@@ -669,16 +669,16 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         </button>
       </form>
 
-      {/* Captain Pre-Paid Top-Up Policy & ON/OFF Toggle */}
+      {/* 1. Captain Pre-Paid App Access Fee Package & Toggle (Strictly Separate from Ride Commission) */}
       <form onSubmit={handleSaveTopupPolicy} className="bg-white border-2 border-emerald-200 rounded-2xl p-5 space-y-3 text-xs">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="font-extrabold text-sm text-slate-900">
-              Captain Pre-Paid Top-Up Package &amp; Mode Toggle (Bike + Car)
+              1. Captain Pre-Paid App Access Fee &amp; Toggle (Bike + Car)
             </div>
             <p className="text-slate-500 mt-0.5">
-              When <strong>ON</strong>, unpaid / 0-ride captains stay offline and hidden from the customer map and ride requests until Top-Up is approved.{' '}
-              When <strong>OFF</strong>, verified captains can work without paying upfront Top-Up.
+              When <strong>ON</strong>, captains must pay the App Access Fee package before going online or appearing on the customer map.{' '}
+              App Fee approvals stay 100% separate from Per-Ride Commission settlements. When <strong>OFF</strong>, verified captains work with Per-Ride Commission only.
             </p>
           </div>
           <span
@@ -688,7 +688,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                 : 'bg-[#009E4D] text-white'
             }`}
           >
-            {topupPolicy.rider_topup_required === 'false' ? 'TOP-UP OFF (FREE MODE)' : 'TOP-UP ON (LOCKED)'}
+            {topupPolicy.rider_topup_required === 'false' ? 'APP FEE OFF' : 'APP FEE ON (REQUIRED)'}
           </span>
         </div>
 
@@ -752,14 +752,14 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         </button>
       </form>
 
-      {/* Captain Pre-Paid Top-Up Approvals Queue */}
+      {/* 1b. Captain Pre-Paid App Access Fee Approvals Queue (Separate from Commission) */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-extrabold text-sm text-slate-900">
-            Captain Pre-Paid Top-Up Approvals ({topupRequests.filter((r) => r.status === 'pending').length} pending)
+            1b. App Access Fee Approvals ({topupRequests.filter((r) => r.status === 'pending').length} pending)
           </span>
           <span className="text-[11px] text-slate-500">
-            Approving immediately adds paid rides and App Fee balance to the captain&apos;s wallet.
+            Approving adds App Access paid rides only (never mixes with Ride Commission due).
           </span>
         </div>
         {topupRequests.length === 0 ? (
@@ -883,12 +883,15 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         )}
       </div>
 
-      {/* Captain Submitted Payment Proofs */}
+      {/* 2a. Ride Commission Settlement Approvals (Separate from App Fee) */}
       {settlementRequests.length > 0 && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-2.5 text-xs">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-extrabold text-sm text-slate-900">
-              Captain Payments Sent to SafarGo ({settlementRequests.filter((r) => r.status === 'pending').length} pending)
+              2a. Ride Commission Settlements Sent to SafarGo ({settlementRequests.filter((r) => r.status === 'pending').length} pending)
+            </span>
+            <span className="text-[11px] text-slate-500">
+              Clears per-ride commission due only (never mixes with App Access Fee)
             </span>
           </div>
           <div className="divide-y divide-slate-100">
@@ -903,7 +906,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusBadge value={req.status} />
+                  <StatusBadge value={req.status === 'pending' ? 'pending_approval' : req.status} />
                   {req.status === 'pending' && (
                     <>
                       <button
@@ -931,9 +934,12 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       )}
 
       <form onSubmit={handleSettlement} className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
-        <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
-          <Receipt className="w-4 h-4 text-[#009E4D]" />
-          Record Captain Payment / Settlement (Lain-Dain → Paid)
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900">
+            <Receipt className="w-4 h-4 text-[#009E4D]" />
+            2b. Record Direct Ride Commission Settlement / Payout
+          </div>
+          <span className="text-[11px] text-slate-500">Per-Ride Commission Ledger only</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <select
@@ -1000,8 +1006,13 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       </form>
 
       <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
-        <div className="p-4 border-b border-slate-200/80 font-extrabold text-sm text-slate-900">
-          Captain Ledger &amp; Top-Up Summary
+        <div className="p-4 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-extrabold text-sm text-slate-900">
+            Captain Ledger &amp; App Fee Summary
+          </span>
+          <span className="text-[11px] text-slate-500">
+            App Access Fee passes and Per-Ride Commission Balance are tracked independently
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -1087,70 +1098,84 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           Complete Ledger Audit Log (Edit Note / Void Manual Entry)
         </div>
         <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-          {ledger.map((e) => (
-            <div key={e.id} className="p-3.5 flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5 font-bold text-slate-900">
-                  <span>{e.rider_name}</span>
-                  {(e.entry_type === 'settlement_to_admin' || e.entry_type === 'payout_to_rider') && (
-                    <StatusBadge value="paid" />
-                  )}
-                  <span>·</span>{' '}
-                  {editingLedgerId === e.id ? (
-                    <span className="inline-flex gap-1.5 items-center mt-1">
-                      <input
-                        type="text"
-                        value={ledgerNoteDraft}
-                        onChange={(ev) => setLedgerNoteDraft(ev.target.value)}
-                        className="px-2 py-1 rounded border border-slate-200/80 bg-slate-50/80 font-normal"
-                      />
-                      <button
-                        onClick={() => handleSaveLedgerNote(e.id)}
-                        className="px-2 py-1 rounded bg-[#009E4D] text-white"
-                      >
-                        Save
-                      </button>
-                      <button onClick={() => setEditingLedgerId(null)} className="px-2 py-1 rounded border">
-                        Cancel
-                      </button>
-                    </span>
-                  ) : (
-                    <span className="text-slate-500 font-normal">{e.note}</span>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-500 mono-num">
-                  {new Date(e.created_at).toLocaleString()} · Channel: {e.payment_channel} · Processed by: SafarGo
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="text-right mono-num">
-                  <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#009E4D]'}`}>
-                    {e.signed_delta > 0 ? `+Rs. ${e.signed_delta}` : `-Rs. ${Math.abs(e.signed_delta)}`}
+          {ledger.map((e) => {
+            const isAppFee = e.entry_type === 'topup_approved' || e.entry_type === 'topup_ride_deduction';
+            return (
+              <div key={e.id} className="p-3.5 flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 font-bold text-slate-900">
+                    <span>{e.rider_name}</span>
+                    {isAppFee && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#008741] border border-emerald-200 text-[10px] font-extrabold">
+                        App Fee (Separate)
+                      </span>
+                    )}
+                    {(e.entry_type === 'settlement_to_admin' || e.entry_type === 'payout_to_rider') && (
+                      <StatusBadge value="paid" />
+                    )}
+                    <span>·</span>{' '}
+                    {editingLedgerId === e.id ? (
+                      <span className="inline-flex gap-1.5 items-center mt-1">
+                        <input
+                          type="text"
+                          value={ledgerNoteDraft}
+                          onChange={(ev) => setLedgerNoteDraft(ev.target.value)}
+                          className="px-2 py-1 rounded border border-slate-200/80 bg-slate-50/80 font-normal"
+                        />
+                        <button
+                          onClick={() => handleSaveLedgerNote(e.id)}
+                          className="px-2 py-1 rounded bg-[#009E4D] text-white"
+                        >
+                          Save
+                        </button>
+                        <button onClick={() => setEditingLedgerId(null)} className="px-2 py-1 rounded border">
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 font-normal">{e.note}</span>
+                    )}
                   </div>
-                  <div className="text-[11px] text-slate-500">Bal: Rs. {e.balance_after}</div>
+                  <div className="text-[11px] text-slate-500 mono-num">
+                    {new Date(e.created_at).toLocaleString()} · Channel: {e.payment_channel} · Account: {getSafarGoAccountTitle(bootstrap?.settings)}
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setEditingLedgerId(e.id);
-                    setLedgerNoteDraft(e.note || '');
-                  }}
-                  className="text-slate-500 hover:text-slate-900 p-1"
-                  title="Edit Note"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                {!e.booking_id && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right mono-num">
+                    {isAppFee ? (
+                      <div className={`font-extrabold ${e.entry_type === 'topup_approved' ? 'text-[#009E4D]' : 'text-slate-700'}`}>
+                        {e.entry_type === 'topup_approved' ? `+Rs. ${e.amount}` : `-Rs. ${e.amount}`} (App Fee)
+                      </div>
+                    ) : (
+                      <div className={`font-extrabold ${e.signed_delta > 0 ? 'text-amber-600' : 'text-[#009E4D]'}`}>
+                        {e.signed_delta > 0 ? `+Rs. ${e.signed_delta}` : `-Rs. ${Math.abs(e.signed_delta)}`}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-slate-500">Comm. Due Bal: Rs. {e.balance_after}</div>
+                  </div>
                   <button
-                    onClick={() => handleDeleteLedgerEntry(e.id)}
-                    className="text-rose-500 hover:text-rose-700 p-1"
-                    title="Delete Manual Entry"
+                    onClick={() => {
+                      setEditingLedgerId(e.id);
+                      setLedgerNoteDraft(e.note || '');
+                    }}
+                    className="text-slate-500 hover:text-slate-900 p-1"
+                    title="Edit Note"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </button>
-                )}
+                  {!e.booking_id && (
+                    <button
+                      onClick={() => handleDeleteLedgerEntry(e.id)}
+                      className="text-rose-500 hover:text-rose-700 p-1"
+                      title="Delete Manual Entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
