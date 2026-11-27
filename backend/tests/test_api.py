@@ -1432,10 +1432,53 @@ def test_emergency_sos_and_1122_helplines(client):
     assert any(s["id"] == b_sos_data["id"] and s["status"] == "resolved" for s in my_sos)
 
 
+def test_health_head_and_db_quota_resilience(client):
+    from sqlalchemy.exc import OperationalError
+    import app.main as main_mod
+    from app.database import DatabaseUnavailableError, get_db
 
+    head_res = client.head("/api/health")
+    assert head_res.status_code == 200
 
+    health_res = client.get("/api/health")
+    assert health_res.status_code == 200
+    h_data = health_res.json()
+    assert h_data["status"] == "ok"
+    assert h_data["database"] == "connected"
 
+    err_kind, err_msg = main_mod._classify_db_error(
+        Exception("ERROR: Your account or project has exceeded the quota. Upgrade your plan to increase limits.")
+    )
+    assert err_kind == "quota_exceeded"
+    assert "quota" in err_msg.lower()
 
+    def _broken_db_dep():
+        raise DatabaseUnavailableError("quota_exceeded", err_msg)
+        yield  # pragma: no cover
 
+    app.dependency_overrides[get_db] = _broken_db_dep
+    try:
+        fail_boot = client.get("/api/public/bootstrap")
+        assert fail_boot.status_code == 503
+        assert fail_boot.json()["code"] == "db_quota_exceeded"
+        assert fail_boot.json()["database"] == "quota_exceeded"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
+    def _op_err_dep():
+        raise OperationalError("SELECT 1", {}, Exception("Your account or project has exceeded the quota"))
+        yield  # pragma: no cover
+
+    app.dependency_overrides[get_db] = _op_err_dep
+    try:
+        op_boot = client.get("/api/public/bootstrap")
+        assert op_boot.status_code == 503
+        assert op_boot.json()["code"] == "db_quota_exceeded"
+        # Health stays 200 OK for Render edge so instance does not get stuck in hibernate loop
+        degraded_health = client.get("/api/health")
+        assert degraded_health.status_code == 200
+        assert degraded_health.json()["database"] == "quota_exceeded"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        assert main_mod.initialize_database_once(force=True) is True
 

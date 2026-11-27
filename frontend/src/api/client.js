@@ -32,15 +32,22 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let code = null;
     try {
       const errData = await res.json();
+      if (errData?.code) {
+        code = errData.code;
+      }
       if (errData?.detail) {
         message = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
       }
     } catch {
       // ignore non-json
     }
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = res.status;
+    err.code = code;
+    throw err;
   }
 
   const contentType = res.headers.get('content-type') || '';

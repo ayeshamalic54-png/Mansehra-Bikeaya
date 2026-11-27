@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
   const [serverWaking, setServerWaking] = useState(false);
+  const [dbError, setDbError] = useState(null);
 
   const refreshBootstrap = async ({ retryOnWake = false } = {}) => {
     const maxAttempts = retryOnWake ? 6 : 1;
@@ -21,8 +22,17 @@ export function AuthProvider({ children }) {
         const data = await apiRequest('/api/public/bootstrap', { auth: false });
         setBootstrap(data);
         setServerWaking(false);
+        setDbError(null);
         return true;
       } catch (err) {
+        if (err?.code === 'db_quota_exceeded' || err?.code === 'db_unavailable') {
+          setServerWaking(false);
+          setDbError({
+            code: err.code,
+            message: err.message,
+          });
+          return false;
+        }
         if (attempt < maxAttempts) {
           setServerWaking(true);
           await new Promise((r) => setTimeout(r, 4000));
@@ -95,6 +105,7 @@ export function AuthProvider({ children }) {
         bootstrap,
         loading,
         serverWaking,
+        dbError,
         login,
         register,
         logout,

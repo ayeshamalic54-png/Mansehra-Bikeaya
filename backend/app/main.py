@@ -1,13 +1,18 @@
 import asyncio
+import logging
 import os
+import threading
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError
 from app.config import CORS_ORIGINS, FRONTEND_DIST_DIR
-from app.database import Base, SessionLocal, engine
+from app.database import Base, DatabaseUnavailableError, SessionLocal, engine, register_db_init_hook
 from app.routers import (
     admin_router,
     auth_router,
@@ -25,6 +30,90 @@ from app.services.backup import (
     has_todays_scheduled_pkt_backup,
     pkt_now,
 )
+
+logger = logging.getLogger("safargo")
+
+_db_init_lock = threading.Lock()
+_db_state: dict = {
+    "ready": False,
+    "status": "initializing",
+    "error": None,
+    "last_attempt_ts": 0.0,
+}
+_LAST_SCHEDULED_BACKUP_DATE_PKT: Optional[str] = None
+_DB_RETRY_COOLDOWN_SEC = 15.0
+
+
+def _classify_db_error(exc: Exception) -> tuple[str, str]:
+    msg = str(exc).strip()
+    lower = msg.lower()
+    if "quota" in lower or "exceeded" in lower:
+        return (
+            "quota_exceeded",
+            "Live PostgreSQL database (Neon) quota exceeded. Upgrade Neon plan or update DATABASE_URL in Render Environment & restore the saved backup.",
+        )
+    return (
+        "unavailable",
+        f"Database temporarily unavailable: {msg[:180]}",
+    )
+
+
+def reset_db_runtime_state() -> None:
+    """Allow test harnesses or recovery handlers to force re-verification of DB state."""
+    _db_state["ready"] = False
+    _db_state["status"] = "initializing"
+    _db_state["error"] = None
+    _db_state["last_attempt_ts"] = 0.0
+
+
+def initialize_database_once(force: bool = False) -> bool:
+    """Idempotently create tables, migrate columns, and seed initial data without crashing HTTP boot."""
+    if _db_state["ready"] and not force:
+        return True
+    now = time.monotonic()
+    if not force and _db_state["last_attempt_ts"] > 0 and (now - _db_state["last_attempt_ts"]) < _DB_RETRY_COOLDOWN_SEC:
+        return False
+    with _db_init_lock:
+        if _db_state["ready"] and not force:
+            return True
+        now_locked = time.monotonic()
+        if (
+            not force
+            and _db_state["last_attempt_ts"] > 0
+            and (now_locked - _db_state["last_attempt_ts"]) < _DB_RETRY_COOLDOWN_SEC
+        ):
+            return False
+        _db_state["last_attempt_ts"] = now_locked
+        try:
+            Base.metadata.create_all(bind=engine)
+            ensure_schema_migrations()
+            db = SessionLocal()
+            try:
+                seed_initial_data(db)
+            finally:
+                db.close()
+            _db_state["ready"] = True
+            _db_state["status"] = "connected"
+            _db_state["error"] = None
+            return True
+        except Exception as exc:
+            status_code, clean_msg = _classify_db_error(exc)
+            _db_state["ready"] = False
+            _db_state["status"] = status_code
+            _db_state["error"] = clean_msg
+            logger.warning("Database initialization deferred (%s): %s", status_code, clean_msg)
+            return False
+
+
+def _ensure_db_ready_or_raise() -> None:
+    if not initialize_database_once(force=False):
+        raise DatabaseUnavailableError(
+            status=str(_db_state.get("status") or "unavailable"),
+            detail=str(_db_state.get("error") or "Database temporarily unavailable."),
+        )
+
+
+register_db_init_hook(_ensure_db_ready_or_raise)
 
 
 def ensure_schema_migrations() -> None:
@@ -100,36 +189,38 @@ def ensure_schema_migrations() -> None:
 
 
 def _run_scheduled_pkt_backup_if_due() -> None:
+    global _LAST_SCHEDULED_BACKUP_DATE_PKT
+    if not _db_state["ready"]:
+        return
     now_p = pkt_now()
-    if now_p.hour < BACKUP_HOUR_PKT:
+    today_pkt = now_p.strftime("%Y-%m-%d")
+    if now_p.hour < BACKUP_HOUR_PKT or _LAST_SCHEDULED_BACKUP_DATE_PKT == today_pkt:
         return
     db = SessionLocal()
     try:
-        if not has_todays_scheduled_pkt_backup(db, now_p):
-            create_full_database_backup(db, trigger_type="scheduled_pkt", write_local_file=True, send_email=True)
+        if has_todays_scheduled_pkt_backup(db, now_p):
+            _LAST_SCHEDULED_BACKUP_DATE_PKT = today_pkt
+            return
+        create_full_database_backup(db, trigger_type="scheduled_pkt", write_local_file=True, send_email=True)
+        _LAST_SCHEDULED_BACKUP_DATE_PKT = today_pkt
     except Exception:
-        # Background backup errors must never crash web requests.
+        # Background backup errors must never crash web requests or keep Neon awake.
         pass
     finally:
         db.close()
 
 
 async def _daily_pkt_backup_loop() -> None:
-    await asyncio.sleep(5)
+    await asyncio.sleep(15)
     while True:
         await asyncio.to_thread(_run_scheduled_pkt_backup_if_due)
-        await asyncio.sleep(60)
+        # Sleep 15 minutes and avoid waking serverless Postgres after today's backup is done.
+        await asyncio.sleep(900)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    ensure_schema_migrations()
-    db = SessionLocal()
-    try:
-        seed_initial_data(db)
-    finally:
-        db.close()
+    initialize_database_once(force=True)
 
     backup_task = None
     if not os.getenv("PYTEST_CURRENT_TEST"):
@@ -152,6 +243,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(DatabaseUnavailableError)
+async def handle_db_unavailable_error(_request, exc: DatabaseUnavailableError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": exc.detail,
+            "code": f"db_{exc.status}",
+            "database": exc.status,
+        },
+    )
+
+
+@app.exception_handler(OperationalError)
+async def handle_db_operational_error(_request, exc: OperationalError):
+    status_code, clean_msg = _classify_db_error(exc)
+    _db_state["ready"] = False
+    _db_state["status"] = status_code
+    _db_state["error"] = clean_msg
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": clean_msg,
+            "code": f"db_{status_code}",
+            "database": status_code,
+        },
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -171,8 +291,17 @@ app.include_router(sos_router.router)
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
-def health_check():
-    return {"status": "ok", "service": "safargo"}
+def health_check(verify_db: bool = Query(default=False)):
+    if verify_db or not _db_state["ready"]:
+        if verify_db:
+            initialize_database_once(force=True)
+    return {
+        "status": "ok",
+        "service": "safargo",
+        "database": _db_state["status"],
+        "database_ready": bool(_db_state["ready"]),
+        "database_error": _db_state["error"],
+    }
 
 
 # Serve built React SPA when frontend/dist exists (used in local prod preview & Render)
