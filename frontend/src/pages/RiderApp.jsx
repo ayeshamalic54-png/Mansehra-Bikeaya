@@ -12,12 +12,14 @@ import {
   Phone,
   Power,
   ShieldCheck,
+  Siren,
   User,
   Wallet,
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { CaptainPhotoUploads } from '../components/CaptainPhotoUploads';
+import { EmergencySosModal } from '../components/EmergencySosModal';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
@@ -71,8 +73,13 @@ export function RiderApp({ onOpenDownloads }) {
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
   const seenJobIdsRef = useRef(null);
+  const [sosModalOpen, setSosModalOpen] = useState(false);
+  const [mySosHistory, setMySosHistory] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+
+  const policeNumber = bootstrap?.settings?.emergency_police_number || '15';
+  const rescueNumber = bootstrap?.settings?.emergency_rescue_number || '1122';
 
   const rp = user?.rider_profile;
   const isCarCaptain = (rp?.vehicle_type || 'bike') === 'car';
@@ -96,15 +103,17 @@ export function RiderApp({ onOpenDownloads }) {
 
   const loadAll = async (overrideOther = includeOtherVehicles) => {
     try {
-      const [avail, mine, ledger] = await Promise.all([
+      const [avail, mine, ledger, sosRows] = await Promise.all([
         apiRequest(`/api/riders/available-jobs?include_other_vehicles=${overrideOther ? 'true' : 'false'}`),
         apiRequest('/api/bookings/my'),
         apiRequest('/api/riders/ledger'),
+        apiRequest('/api/sos/my').catch(() => []),
       ]);
       const list = avail || [];
       setAvailableJobs(list);
       setMyJobs(mine);
       setLedgerData(ledger);
+      setMySosHistory(sosRows || []);
 
       if (seenJobIdsRef.current === null) {
         seenJobIdsRef.current = new Set(list.map((j) => j.id));
@@ -357,6 +366,18 @@ export function RiderApp({ onOpenDownloads }) {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
+              onClick={() => {
+                unlockRideAlertAudio();
+                setSosModalOpen(true);
+              }}
+              className="px-2.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold inline-flex items-center gap-1 shadow-sm animate-pulse-once"
+              title={`Emergency SOS · Police ${policeNumber} · Rescue ${rescueNumber}`}
+            >
+              <Siren className="w-3.5 h-3.5" />
+              <span>SOS</span>
+            </button>
+            <button
+              type="button"
               onClick={async () => {
                 const perm = await requestRideNotificationsPermission();
                 setAlertsEnabled(perm === 'granted');
@@ -517,6 +538,37 @@ export function RiderApp({ onOpenDownloads }) {
                 <div className={`text-base font-extrabold mono-num ${Number(summary.balance_due_to_admin || 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                   Rs. {Number(summary.balance_due_to_admin || 0).toFixed(0)}
                 </div>
+              </div>
+            </div>
+
+            {/* Emergency Police 15 · Rescue 1122 · Quick SOS Bar */}
+            <div className="rounded-2xl bg-rose-50/80 border border-rose-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 font-extrabold text-rose-900">
+                <Siren className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Emergency Helpline · Police {policeNumber} · Rescue {rescueNumber}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <a
+                  href={`tel:${policeNumber}`}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold inline-flex items-center gap-1"
+                >
+                  <Phone className="w-3 h-3" />
+                  Police {policeNumber}
+                </a>
+                <a
+                  href={`tel:${rescueNumber}`}
+                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold inline-flex items-center gap-1"
+                >
+                  <Phone className="w-3 h-3" />
+                  Rescue {rescueNumber}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSosModalOpen(true)}
+                  className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold"
+                >
+                  Send SOS
+                </button>
               </div>
             </div>
 
@@ -992,6 +1044,28 @@ export function RiderApp({ onOpenDownloads }) {
                       Complete Trip
                     </button>
                   </div>
+
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <span className="font-extrabold text-rose-900 inline-flex items-center gap-1">
+                      <Siren className="w-3.5 h-3.5 text-rose-600" />
+                      Emergency Ride Safety: Police {policeNumber} · Rescue {rescueNumber}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <a href={`tel:${policeNumber}`} className="px-2 py-1 rounded-lg bg-rose-600 text-white font-bold">
+                        Call {policeNumber}
+                      </a>
+                      <a href={`tel:${rescueNumber}`} className="px-2 py-1 rounded-lg bg-amber-600 text-white font-bold">
+                        Call {rescueNumber}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setSosModalOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-bold"
+                      >
+                        SOS Alert
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))
             )}
@@ -1350,6 +1424,21 @@ export function RiderApp({ onOpenDownloads }) {
           </form>
         )}
       </main>
+
+      <EmergencySosModal
+        isOpen={sosModalOpen}
+        onClose={() => setSosModalOpen(false)}
+        role="rider"
+        settings={bootstrap?.settings || {}}
+        activeBooking={activeJobs[0] || null}
+        fallbackCoords={
+          rp?.current_lat != null
+            ? { lat: rp.current_lat, lng: rp.current_lng, zone_name: rp.zone_name }
+            : null
+        }
+        mySosHistory={mySosHistory}
+        onTriggered={() => loadAll()}
+      />
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80">
         <div className="max-w-3xl mx-auto grid grid-cols-4">

@@ -10,6 +10,7 @@ from app.models import (
     AppRelease,
     Booking,
     DatabaseBackup,
+    EmergencySosAlert,
     LedgerEntry,
     MansehraZone,
     PricingRule,
@@ -20,6 +21,7 @@ from app.models import (
     User,
 )
 from app.routers.bookings_router import booking_query_with_relations, generate_booking_code, serialize_booking
+from app.routers.sos_router import serialize_sos_alert
 from app.schemas import (
     AdminBookingUpdate,
     AdminCreateRider,
@@ -137,6 +139,17 @@ def admin_overview(
             row["nearest_captains"] = []
         recent_serialized.append(row)
 
+    active_sos_rows = (
+        db.query(EmergencySosAlert)
+        .options(
+            joinedload(EmergencySosAlert.user).joinedload(User.rider_profile),
+            joinedload(EmergencySosAlert.booking).joinedload(Booking.customer),
+        )
+        .filter(EmergencySosAlert.status.in_(["active", "acknowledged"]))
+        .order_by(EmergencySosAlert.created_at.desc())
+        .all()
+    )
+
     return {
         "kpis": {
             "today_total_rides": len(today_bookings),
@@ -155,9 +168,11 @@ def admin_overview(
             "pending_verification_count": pending_verification,
             "receivable_from_riders": receivable_from_riders,
             "payable_to_riders": payable_to_riders,
+            "active_sos_count": len(active_sos_rows),
         },
         "over_limit_riders": over_limit_riders,
         "recent_bookings": recent_serialized,
+        "active_sos_alerts": [serialize_sos_alert(a) for a in active_sos_rows],
     }
 
 
@@ -458,6 +473,7 @@ def admin_delete_booking(
         raise HTTPException(status_code=404, detail="Booking not found")
     affected_rider_id = booking.rider_id
     db.query(SupportTicket).filter(SupportTicket.booking_id == booking.id).update({"booking_id": None})
+    db.query(EmergencySosAlert).filter(EmergencySosAlert.booking_id == booking.id).update({"booking_id": None})
     db.query(LedgerEntry).filter(LedgerEntry.booking_id == booking.id).delete()
     db.delete(booking)
     db.commit()
@@ -777,6 +793,8 @@ def delete_rider(
     db.query(LedgerEntry).filter(LedgerEntry.rider_id == rider_user_id).delete()
     db.query(LedgerEntry).filter(LedgerEntry.recorded_by_id == rider_user_id).update({"recorded_by_id": current_user.id})
     db.query(SupportTicket).filter(SupportTicket.user_id == rider_user_id).delete()
+    db.query(EmergencySosAlert).filter(EmergencySosAlert.user_id == rider_user_id).delete()
+    db.query(EmergencySosAlert).filter(EmergencySosAlert.resolved_by_id == rider_user_id).update({"resolved_by_id": None})
     db.delete(user)
     db.commit()
     return {"deleted": rider_user_id}
@@ -887,9 +905,12 @@ def admin_delete_customer(
     booking_ids = [b.id for b in cust_bookings]
     if booking_ids:
         db.query(SupportTicket).filter(SupportTicket.booking_id.in_(booking_ids)).update({"booking_id": None})
+        db.query(EmergencySosAlert).filter(EmergencySosAlert.booking_id.in_(booking_ids)).update({"booking_id": None})
         db.query(LedgerEntry).filter(LedgerEntry.booking_id.in_(booking_ids)).delete()
         db.query(Booking).filter(Booking.id.in_(booking_ids)).delete()
     db.query(SupportTicket).filter(SupportTicket.user_id == user_id).delete()
+    db.query(EmergencySosAlert).filter(EmergencySosAlert.user_id == user_id).delete()
+    db.query(EmergencySosAlert).filter(EmergencySosAlert.resolved_by_id == user_id).update({"resolved_by_id": None})
     db.delete(user)
     db.commit()
     for r_id in affected_riders:

@@ -343,3 +343,17 @@ class ReleaseUpdate(BaseModel):
 
 class SystemSettingUpdate(BaseModel):
     value: str = Field("", max_length=255)
+
+
+class EmergencySosCreate(BaseModel):
+    emergency_type: str = Field("police_1122", max_length=40)
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    booking_id: Optional[int] = None
+    note: Optional[str] = Field(None, max_length=500)
+    called_number: Optional[str] = Field("1122", max_length=32)
+
+
+class EmergencySosStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(active|acknowledged|resolved)$")
+    resolution_note: Optional[str] = Field(None, max_length=255)

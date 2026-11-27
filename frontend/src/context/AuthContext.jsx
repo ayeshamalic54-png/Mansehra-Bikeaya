@@ -12,14 +12,27 @@ export function AuthProvider({ children }) {
     releases: [],
   });
   const [loading, setLoading] = useState(true);
+  const [serverWaking, setServerWaking] = useState(false);
 
-  const refreshBootstrap = async () => {
-    try {
-      const data = await apiRequest('/api/public/bootstrap', { auth: false });
-      setBootstrap(data);
-    } catch (err) {
-      console.error('Bootstrap error:', err);
+  const refreshBootstrap = async ({ retryOnWake = false } = {}) => {
+    const maxAttempts = retryOnWake ? 6 : 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const data = await apiRequest('/api/public/bootstrap', { auth: false });
+        setBootstrap(data);
+        setServerWaking(false);
+        return true;
+      } catch (err) {
+        if (attempt < maxAttempts) {
+          setServerWaking(true);
+          await new Promise((r) => setTimeout(r, 4000));
+        } else {
+          console.error('Bootstrap error:', err);
+        }
+      }
     }
+    setServerWaking(false);
+    return false;
   };
 
   const refreshMe = async () => {
@@ -41,7 +54,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([refreshBootstrap(), refreshMe()]);
+      await refreshBootstrap({ retryOnWake: true });
+      await refreshMe();
       setLoading(false);
     })();
   }, []);
@@ -80,6 +94,7 @@ export function AuthProvider({ children }) {
         setUser,
         bootstrap,
         loading,
+        serverWaking,
         login,
         register,
         logout,

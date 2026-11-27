@@ -8,7 +8,7 @@ import { RiderApp } from './pages/RiderApp';
 import { AdminDashboard } from './pages/AdminDashboard';
 
 function AppRouter() {
-  const { user, loading } = useAuth();
+  const { user, loading, serverWaking } = useAuth();
   const [guestRoute, setGuestRoute] = useState(() =>
     typeof window !== 'undefined' && window.location.pathname === '/downloads' ? 'downloads' : 'landing'
   ); // landing | auth | downloads
@@ -18,10 +18,19 @@ function AppRouter() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="w-10 h-10 rounded-2xl bg-[#009E4D] mx-auto animate-pulse" />
-          <div className="text-sm font-bold text-slate-700">Loading SafarGo...</div>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-2.5 max-w-xs">
+          <div className="w-12 h-12 rounded-2xl bg-[#009E4D] mx-auto animate-pulse flex items-center justify-center text-white font-extrabold text-lg">
+            S
+          </div>
+          <div className="text-sm font-extrabold text-slate-900">
+            {serverWaking ? 'Waking SafarGo Live Server...' : 'Loading SafarGo...'}
+          </div>
+          {serverWaking && (
+            <div className="text-xs text-slate-500">
+              Server sleep se start ho raha hai — auto-connect ho raha hai (10–30s)...
+            </div>
+          )}
         </div>
       </div>
     );

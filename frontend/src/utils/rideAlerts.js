@@ -39,14 +39,22 @@ export async function requestRideNotificationsPermission() {
 export function playRideAlertChime(variant = 'captain') {
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(variant === 'closest' ? [260, 90, 260, 90, 260] : [200, 90, 200]);
+      navigator.vibrate(
+        variant === 'sos'
+          ? [350, 90, 350, 90, 500]
+          : variant === 'closest'
+          ? [260, 90, 260, 90, 260]
+          : [200, 90, 200]
+      );
     }
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
     const notes =
-      variant === 'closest'
+      variant === 'sos'
+        ? [987.77, 1318.51, 987.77, 1318.51]
+        : variant === 'closest'
         ? [880, 1174.66, 1396.91]
         : variant === 'admin'
         ? [659.25, 880]
@@ -55,10 +63,10 @@ export function playRideAlertChime(variant = 'captain') {
     notes.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
+      osc.type = variant === 'sos' ? 'triangle' : 'sine';
       osc.frequency.setValueAtTime(freq, now + idx * 0.14);
       gain.gain.setValueAtTime(0.001, now + idx * 0.14);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + idx * 0.14 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(variant === 'sos' ? 0.26 : 0.18, now + idx * 0.14 + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.28);
       osc.connect(gain);
       gain.connect(ctx.destination);

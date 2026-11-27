@@ -325,12 +325,25 @@ public class MainActivity extends AppCompatActivity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme() != null ? uri.getScheme() : "";
                 String host = uri.getHost() != null ? uri.getHost() : "";
-                if ("tel".equals(scheme) || "mailto".equals(scheme) || "whatsapp".equals(scheme)) {
-                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                if ("tel".equals(scheme)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_DIAL, uri));
+                    } catch (Exception ignored) {
+                    }
+                    return true;
+                }
+                if ("mailto".equals(scheme) || "whatsapp".equals(scheme)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (Exception ignored) {
+                    }
                     return true;
                 }
                 if (!host.contains("mansehra-bikeaya.onrender.com") && ("http".equals(scheme) || "https".equals(scheme))) {
-                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (Exception ignored) {
+                    }
                     return true;
                 }
                 return false;
@@ -342,13 +355,25 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                progressBar.setVisibility(View.GONE);
+                // If Render free tier shows its cold-start interstitial, auto-poll softly so APK lands on SafarGo automatically
+                view.evaluateJavascript(
+                        "(function(){try{var t=(document.body&&document.body.innerText)||'';if(t.indexOf('Service waking up')!==-1||t.indexOf('Application loading')!==-1){setTimeout(function(){window.location.href='" + APP_URL + "';},6000);}}catch(e){}})();",
+                        null
+                );
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     String offlineHtml = "<html><body style='font-family:sans-serif;text-align:center;padding:48px 20px;background:#F4F6FB;color:#0F172A;'>"
-                            + "<h2 style='color:#009E4D;'>SafarGo</h2>"
-                            + "<p>Bikes, AC Cars &amp; Express Parcels · Reconnecting to live network...</p>"
+                            + "<h2 style='color:#009E4D;'>SafarGo · Live Dispatch</h2>"
+                            + "<p>Waking up SafarGo server... Reconnecting automatically in a few seconds.</p>"
                             + "<button onclick=\"window.location.href='" + APP_URL + "'\" "
                             + "style='background:#009E4D;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;font-size:15px;'>Retry Now</button>"
+                            + "<script>setTimeout(function(){window.location.href='" + APP_URL + "';},4500);</script>"
                             + "</body></html>";
                     view.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null);
                 }

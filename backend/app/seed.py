@@ -203,6 +203,8 @@ def seed_initial_data(db: Session) -> None:
         "default_credit_limit": "1500",
         "support_phone": "+92 300 1111111",
         "support_whatsapp": "+92 300 1111111",
+        "emergency_rescue_number": "1122",
+        "emergency_police_number": "15",
         "payment_account_title": "SafarGo",
         "payment_easypaisa": "",
         "payment_upaisa": "",
@@ -212,9 +214,10 @@ def seed_initial_data(db: Session) -> None:
         "backup_email": "gosafar4@gmail.com",
         "backup_schedule_pkt": "04:00 AM PKT",
     }
-    for k, v in default_settings.items():
-        if not db.query(SystemSetting).filter(SystemSetting.key == k).first():
-            db.add(SystemSetting(key=k, value=v))
+    existing_settings = {row[0] for row in db.query(SystemSetting.key).all()}
+    new_settings = [SystemSetting(key=k, value=v) for k, v in default_settings.items() if k not in existing_settings]
+    if new_settings:
+        db.add_all(new_settings)
 
     # 4. Promo Codes
     if db.query(PromoCode).count() == 0:

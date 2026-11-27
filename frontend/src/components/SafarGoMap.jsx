@@ -128,6 +128,7 @@ export function SafarGoMap({
   routeSource = 'estimate',
   captains = [],
   activeBookings = [],
+  sosAlerts = [],
   interactive = false,
   activePinMode = 'pickup',
   onMapPick = null,
@@ -414,6 +415,28 @@ export function SafarGoMap({
       }
     });
 
+    // 6. Active Emergency SOS Pins (Admin Radar)
+    for (const s of sosAlerts || []) {
+      if (s.lat != null && s.lng != null) {
+        const sMarker = L.marker([s.lat, s.lng], {
+          icon: makePinIcon('#DC2626', 'SOS', s.user_name),
+          zIndexOffset: 1500,
+        }).addTo(layer);
+        sMarker.bindPopup(
+          `<div style="font-size:12px;line-height:1.4;">
+            <strong style="color:#DC2626;">EMERGENCY SOS (${esc(s.status?.toUpperCase())})</strong><br/>
+            <strong>${esc(s.user_name)}</strong> (${esc(s.user_phone)})<br/>
+            Type: ${esc(s.emergency_type)} · ${esc(s.zone_name || '')}<br/>
+            ${s.note ? `Note: ${esc(s.note)}<br/>` : ''}
+            <a href="tel:${esc(s.user_phone)}" style="color:#DC2626;font-weight:700;">Call Reporter</a> ·
+            <a href="tel:15" style="color:#DC2626;font-weight:700;">Police 15</a> ·
+            <a href="tel:1122" style="color:#B45309;font-weight:700;">Rescue 1122</a>
+          </div>`
+        );
+        bounds.push([s.lat, s.lng]);
+      }
+    }
+
     if (bounds.length >= 2) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [36, 36], maxZoom: 15 });
     } else if (bounds.length === 1) {
@@ -432,6 +455,7 @@ export function SafarGoMap({
     routeSource,
     captains,
     activeBookings,
+    sosAlerts,
     interactive,
     fitSignature,
     activeCaptainKey,

@@ -16,6 +16,7 @@ from app.routers import (
     public_router,
     reports_router,
     riders_router,
+    sos_router,
 )
 from app.seed import seed_initial_data
 from app.services.backup import (
@@ -166,9 +167,10 @@ app.include_router(riders_router.router)
 app.include_router(admin_router.router)
 app.include_router(finance_router.router)
 app.include_router(reports_router.router)
+app.include_router(sos_router.router)
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok", "service": "safargo"}
 

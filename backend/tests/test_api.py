@@ -1314,6 +1314,125 @@ def test_full_db_backup_download_and_restore(client):
                 pass
 
 
+def test_emergency_sos_and_1122_helplines(client):
+    boot_settings = client.get("/api/public/bootstrap").json()["settings"]
+    assert boot_settings["emergency_rescue_number"] == "1122"
+    assert boot_settings["emergency_police_number"] == "15"
+
+    # Log in as Admin, Bike Captain, AC Car Captain, and Customer
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    bike_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03112222222", "password": "rider123"},
+    ).json()["access_token"]
+    car_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03145555555", "password": "rider123"},
+    ).json()["access_token"]
+    cust_res = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "SOS Test Passenger",
+            "phone": "03338881122",
+            "password": "user123",
+            "role": "customer",
+        },
+    )
+    assert cust_res.status_code == 201
+    cust_token = cust_res.json()["access_token"]
+
+    # Customer creates a Car Ride booking & triggers SOS
+    bk_res = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "car_ride",
+            "pickup_zone": "Mansehra — Baidra Chowk",
+            "pickup_address": "Baidra Chowk Stand",
+            "pickup_lat": 34.334342,
+            "pickup_lng": 73.187789,
+            "drop_zone": "Mansehra — Punjab Chowk",
+            "drop_address": "Punjab Chowk",
+            "drop_lat": 34.328548,
+            "drop_lng": 73.188513,
+            "distance_km": 2.0,
+            "payment_method": "cash",
+        },
+    )
+    assert bk_res.status_code == 201
+    car_booking = bk_res.json()
+
+    # 1. Bike Captain triggers SOS near Baidra Chowk (Rescue 1122)
+    bike_sos = client.post(
+        "/api/sos/trigger",
+        headers=_auth_header(bike_token),
+        json={
+            "emergency_type": "rescue_1122",
+            "lat": 34.334342,
+            "lng": 73.187789,
+            "note": "Need ambulance 1122 near Baidra Chowk",
+            "called_number": "1122",
+        },
+    )
+    assert bike_sos.status_code == 201
+    b_sos_data = bike_sos.json()
+    assert b_sos_data["emergency_rescue_number"] == "1122"
+    assert b_sos_data["emergency_police_number"] == "15"
+    assert "Baidra Chowk" in b_sos_data["zone_name"]
+    assert b_sos_data["status"] == "active"
+
+    # 2. AC Car Captain triggers SOS (Police 15)
+    car_sos = client.post(
+        "/api/sos/trigger",
+        headers=_auth_header(car_token),
+        json={"emergency_type": "police_15", "note": "Car emergency", "called_number": "15"},
+    )
+    assert car_sos.status_code == 201
+    assert car_sos.json()["vehicle_type"] == "car"
+
+    # 3. Customer on Car Ride triggers SOS -> auto-links active Car booking
+    cust_sos = client.post(
+        "/api/sos/trigger",
+        headers=_auth_header(cust_token),
+        json={"emergency_type": "police_15", "note": "Need police 15 urgently", "called_number": "15"},
+    )
+    assert cust_sos.status_code == 201
+    c_sos_data = cust_sos.json()
+    assert c_sos_data["booking_code"] == car_booking["booking_code"]
+    assert c_sos_data["service_type"] == "car_ride"
+
+    # 4. Admin sees live active SOS alerts immediately in /overview & /admin/sos, can Acknowledge & Resolve
+    ov = client.get("/api/admin/overview", headers=_auth_header(admin_token)).json()
+    assert ov["kpis"]["active_sos_count"] >= 3
+    sos_ids = {s["id"] for s in ov["active_sos_alerts"]}
+    assert b_sos_data["id"] in sos_ids and c_sos_data["id"] in sos_ids
+
+    ack = client.post(
+        f"/api/admin/sos/{b_sos_data['id']}/status",
+        headers=_auth_header(admin_token),
+        json={"status": "acknowledged", "resolution_note": "Called 1122 Rescue"},
+    )
+    assert ack.status_code == 200
+    assert ack.json()["status"] == "acknowledged"
+
+    res = client.post(
+        f"/api/admin/sos/{b_sos_data['id']}/status",
+        headers=_auth_header(admin_token),
+        json={"status": "resolved", "resolution_note": "Captain safe"},
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "resolved"
+
+    # Resolve remaining SOS alerts & verify /api/sos/my reflects resolved state
+    client.post(f"/api/admin/sos/{c_sos_data['id']}/status", headers=_auth_header(admin_token), json={"status": "resolved"})
+    my_sos = client.get("/api/sos/my", headers=_auth_header(bike_token)).json()
+    assert any(s["id"] == b_sos_data["id"] and s["status"] == "resolved" for s in my_sos)
+
+
+
 
 
 

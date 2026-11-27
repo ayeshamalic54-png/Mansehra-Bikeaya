@@ -311,3 +311,27 @@ class DatabaseBackup(Base):
     email_error = Column(String(255), nullable=True)
     payload_gz_b64 = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class EmergencySosAlert(Base):
+    __tablename__ = "sos_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_role = Column(String(20), nullable=False, default="rider")  # rider | admin | customer
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=True)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
+    zone_name = Column(String(120), nullable=True)
+    emergency_type = Column(String(40), nullable=False, default="police_1122")
+    note = Column(Text, nullable=True)
+    called_number = Column(String(32), nullable=True, default="1122")
+    status = Column(String(24), nullable=False, default="active", index=True)  # active | acknowledged | resolved
+    resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolution_note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+    booking = relationship("Booking")

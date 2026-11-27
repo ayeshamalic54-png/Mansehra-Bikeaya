@@ -16,9 +16,11 @@ import {
   Menu,
   PackagePlus,
   Pencil,
+  Phone,
   PhoneCall,
   Settings,
   ShieldCheck,
+  Siren,
   Trash2,
   Users,
   Wallet,
@@ -27,6 +29,7 @@ import {
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { EmergencySosModal } from '../components/EmergencySosModal';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { StatCard } from '../components/StatCard';
@@ -83,6 +86,7 @@ const NAV_GROUPS = [
   {
     group: 'Operations & Security',
     items: [
+      { id: 'sos', label: 'Emergency SOS (15 / 1122)', icon: Siren, badgeCls: 'bg-rose-500/20 text-rose-400' },
       { id: 'tickets', label: 'Complaints & Support', icon: HelpCircle, badgeCls: 'bg-orange-500/15 text-orange-400' },
       { id: 'zones', label: 'Cities, Zones & Promos', icon: MapPin, badgeCls: 'bg-sky-500/15 text-sky-300' },
       { id: 'backups', label: 'Backup & Restore (4 AM)', icon: HardDrive, badgeCls: 'bg-cyan-500/15 text-cyan-300' },
@@ -106,10 +110,16 @@ export function AdminDashboard({ onOpenDownloads }) {
   const [editingBooking, setEditingBooking] = useState(null);
   const [toast, setToast] = useState(null);
   const [liveBookingAlert, setLiveBookingAlert] = useState(null);
+  const [sosAlerts, setSosAlerts] = useState([]);
+  const [sosModalOpen, setSosModalOpen] = useState(false);
   const [alertsEnabled, setAlertsEnabled] = useState(
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
   const seenPendingIdsRef = useRef(null);
+  const seenSosIdsRef = useRef(null);
+
+  const policeNumber = bootstrap?.settings?.emergency_police_number || '15';
+  const rescueNumber = bootstrap?.settings?.emergency_rescue_number || '1122';
 
   const [manualForm, setManualForm] = useState({
     customer_phone: '',
@@ -159,6 +169,23 @@ export function AdminDashboard({ onOpenDownloads }) {
         );
       }
     }
+
+    const activeSos = (ov?.active_sos_alerts || []).filter((s) => s.status === 'active');
+    if (seenSosIdsRef.current === null) {
+      seenSosIdsRef.current = new Set(activeSos.map((s) => s.id));
+    } else {
+      const freshSos = activeSos.filter((s) => !seenSosIdsRef.current.has(s.id));
+      if (freshSos.length > 0) {
+        freshSos.forEach((s) => seenSosIdsRef.current.add(s.id));
+        const topSos = freshSos[0];
+        playRideAlertChime('sos');
+        showBrowserRideNotification(
+          `EMERGENCY SOS: ${topSos.user_name}`,
+          `${topSos.user_phone} · ${topSos.zone_name} · Police ${policeNumber} / Rescue ${rescueNumber}`,
+          `admin-sos-${topSos.id}`
+        );
+      }
+    }
   };
 
   const loadOverviewAndRiders = async () => {
@@ -201,11 +228,33 @@ export function AdminDashboard({ onOpenDownloads }) {
     }
   };
 
+  const loadSosAlerts = async () => {
+    try {
+      setSosAlerts(await apiRequest('/api/admin/sos'));
+    } catch {
+      // ignore transient poll errors
+    }
+  };
+
+  const handleSosStatus = async (sosId, nextStatus, resolutionNote = '') => {
+    try {
+      await apiRequest(`/api/admin/sos/${sosId}/status`, {
+        method: 'POST',
+        body: { status: nextStatus, resolution_note: resolutionNote || null },
+      });
+      notify(`SOS alert marked ${nextStatus}.`);
+      await Promise.all([loadOverviewAndRiders(), loadSosAlerts()]);
+    } catch (e) {
+      notify(e.message, true);
+    }
+  };
+
   useEffect(() => {
     loadOverviewAndRiders();
     if (subpage === 'dispatch') loadBookings();
     if (subpage === 'customers') loadCustomers();
-    if (subpage === 'livemap' || subpage === 'overview') {
+    if (subpage === 'sos') loadSosAlerts();
+    if (subpage === 'livemap' || subpage === 'overview' || subpage === 'sos') {
       loadLiveMap();
     }
   }, [subpage, bookingStatusFilter]);
@@ -398,6 +447,11 @@ export function AdminDashboard({ onOpenDownloads }) {
                             {kpis.pending_dispatch_count}
                           </span>
                         )}
+                        {item.id === 'sos' && (overview?.active_sos_alerts?.length || 0) > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white font-extrabold text-[10px] mono-num animate-pulse">
+                            {overview.active_sos_alerts.length}
+                          </span>
+                        )}
                         <ChevronRight
                           className={`w-3.5 h-3.5 transition-all duration-200 ${
                             active
@@ -455,6 +509,23 @@ export function AdminDashboard({ onOpenDownloads }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => {
+                unlockRideAlertAudio();
+                setSosModalOpen(true);
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1.5 shadow-sm"
+              title={`Emergency SOS · Police ${policeNumber} · Rescue ${rescueNumber}`}
+            >
+              <Siren className="w-3.5 h-3.5" />
+              <span>SOS · {policeNumber}/{rescueNumber}</span>
+              {(overview?.active_sos_alerts?.length || 0) > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-white text-rose-700 text-[10px] font-extrabold mono-num">
+                  {overview.active_sos_alerts.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={async () => {
                 const perm = await requestRideNotificationsPermission();
                 setAlertsEnabled(perm === 'granted');
@@ -496,6 +567,101 @@ export function AdminDashboard({ onOpenDownloads }) {
         </header>
 
         <main className="p-4 sm:p-6 space-y-5 max-w-7xl w-full mx-auto">
+          {(overview?.active_sos_alerts || []).length > 0 && (
+            <div className="rounded-2xl bg-gradient-to-r from-rose-700 via-red-700 to-rose-900 text-white p-4 shadow-lg border-2 border-rose-300 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-extrabold text-sm">
+                  <Siren className="w-5 h-5 text-amber-300 animate-bounce" />
+                  <span>
+                    LIVE EMERGENCY SOS ALERTS ({overview.active_sos_alerts.length}) — Police {policeNumber} · Rescue {rescueNumber}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <a
+                    href={`tel:${policeNumber}`}
+                    className="px-3 py-1.5 rounded-xl bg-white text-rose-700 font-extrabold inline-flex items-center gap-1"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    Police {policeNumber}
+                  </a>
+                  <a
+                    href={`tel:${rescueNumber}`}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-extrabold inline-flex items-center gap-1"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    Rescue {rescueNumber}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setSubpage('sos')}
+                    className="px-3 py-1.5 rounded-xl bg-slate-950/60 border border-white/30 text-white font-bold"
+                  >
+                    Open SOS Center
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {overview.active_sos_alerts.map((s) => (
+                  <div
+                    key={s.id}
+                    className="rounded-xl bg-slate-950/45 border border-rose-300/40 p-3 flex flex-wrap items-center justify-between gap-2 text-xs"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="font-extrabold">
+                        [{s.status.toUpperCase()}] {s.user_name} ({s.user_phone}){' '}
+                        {s.bike_plate ? `· ${s.bike_model || ''} (${s.bike_plate})` : ''}
+                      </div>
+                      <div className="text-rose-100">
+                        Type: <strong>{s.emergency_type.replace(/_/g, ' ')}</strong> · Location: <strong>{s.zone_name}</strong>
+                        {s.booking_code
+                          ? ` · ${(s.service_type || 'ride').replace(/_/g, ' ').toUpperCase()} ${s.booking_code}${
+                              s.customer_phone ? ` (Cust: ${s.customer_name || ''} ${s.customer_phone})` : ''
+                            }${s.assigned_rider_phone ? ` (Capt: ${s.assigned_rider_name || ''} ${s.assigned_rider_phone})` : ''}`
+                          : ''}
+                      </div>
+                      {s.note && <div className="text-amber-200 font-semibold">Note: {s.note}</div>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <a
+                        href={`tel:${s.user_phone}`}
+                        className="px-2.5 py-1.5 rounded-lg bg-white text-slate-950 font-extrabold inline-flex items-center gap-1"
+                      >
+                        <Phone className="w-3 h-3" />
+                        Call
+                      </a>
+                      {s.google_maps_url && (
+                        <a
+                          href={s.google_maps_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-extrabold"
+                        >
+                          GPS Map ↗
+                        </a>
+                      )}
+                      {s.status === 'active' && (
+                        <button
+                          type="button"
+                          onClick={() => handleSosStatus(s.id, 'acknowledged', 'Admin dispatch responding')}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-400 text-slate-950 font-extrabold"
+                        >
+                          Acknowledge
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleSosStatus(s.id, 'resolved', 'Situation resolved by Admin')}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-400 text-slate-950 font-extrabold"
+                      >
+                        Mark Resolved
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {liveBookingAlert && (
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-teal-950 text-white shadow-lg border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1 text-xs">
@@ -801,8 +967,9 @@ export function AdminDashboard({ onOpenDownloads }) {
                 <SafarGoMap
                   captains={liveMap.captains}
                   activeBookings={liveMap.active_bookings}
+                  sosAlerts={overview?.active_sos_alerts || []}
                   heightClass="h-64 sm:h-72"
-                  fitSignature={`overview-${liveMap.captains.length}-${liveMap.active_bookings.length}`}
+                  fitSignature={`overview-${liveMap.captains.length}-${liveMap.active_bookings.length}-${overview?.active_sos_alerts?.length || 0}`}
                 />
               </div>
 
@@ -945,8 +1112,9 @@ export function AdminDashboard({ onOpenDownloads }) {
                 <SafarGoMap
                   captains={liveMap.captains}
                   activeBookings={liveMap.active_bookings}
+                  sosAlerts={overview?.active_sos_alerts || []}
                   heightClass="h-[440px]"
-                  fitSignature={`admin-${liveMap.captains.length}-${liveMap.active_bookings.length}`}
+                  fitSignature={`admin-${liveMap.captains.length}-${liveMap.active_bookings.length}-${overview?.active_sos_alerts?.length || 0}`}
                 />
               </div>
 
@@ -1347,8 +1515,186 @@ export function AdminDashboard({ onOpenDownloads }) {
               onRefreshBootstrap={refreshBootstrap}
             />
           )}
+
+          {/* 11. EMERGENCY POLICE 15 / RESCUE 1122 & SOS DISPATCH CENTER */}
+          {subpage === 'sos' && (
+            <div className="space-y-4 text-xs">
+              <div className="bg-gradient-to-r from-rose-900 via-red-900 to-slate-900 text-white rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/30 border border-rose-300/40 text-amber-300 font-extrabold text-[11px]">
+                    <Siren className="w-3.5 h-3.5" />
+                    24/7 Emergency Control Room · Mansehra &amp; KPK
+                  </div>
+                  <h2 className="text-base font-extrabold">Emergency Police ({policeNumber}), Rescue ({rescueNumber}) &amp; Live SOS Radar</h2>
+                  <p className="text-rose-100">
+                    Koi bhi Captain SOS press kare to yahan turant alarm + live GPS pin aata hai. Admin khud bhi 1-tap Call ya SOS trigger kar sakta hai.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={`tel:${policeNumber}`}
+                    className="px-4 py-2.5 rounded-xl bg-white text-rose-700 font-extrabold inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Phone className="w-4 h-4" />
+                    Police {policeNumber}
+                  </a>
+                  <a
+                    href={`tel:${rescueNumber}`}
+                    className="px-4 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-extrabold inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Phone className="w-4 h-4" />
+                    Rescue {rescueNumber}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setSosModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 border border-white/30 text-white font-extrabold inline-flex items-center gap-1.5"
+                  >
+                    <Siren className="w-4 h-4" />
+                    Trigger Admin SOS
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+                <div className="font-extrabold text-sm text-slate-900">
+                  Live SOS Location Radar Map ({sosAlerts.filter((a) => a.status !== 'resolved').length} Active)
+                </div>
+                <SafarGoMap
+                  captains={liveMap.captains}
+                  activeBookings={liveMap.active_bookings}
+                  sosAlerts={sosAlerts.filter((a) => a.status !== 'resolved')}
+                  heightClass="h-72"
+                  fitSignature={`sos-${sosAlerts.filter((a) => a.status !== 'resolved').length}-${liveMap.captains.length}`}
+                />
+              </div>
+
+              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-x-auto">
+                <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
+                  <span className="font-extrabold text-sm text-slate-900">SOS Alerts Log ({sosAlerts.length})</span>
+                  <button type="button" onClick={loadSosAlerts} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-bold">
+                    Refresh SOS
+                  </button>
+                </div>
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50/80 text-slate-500 border-b border-slate-200/80">
+                    <tr>
+                      <th className="p-3.5">Reporter &amp; Vehicle</th>
+                      <th className="p-3.5">Emergency Type &amp; Note</th>
+                      <th className="p-3.5">Live GPS Location</th>
+                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Dispatch Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sosAlerts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-slate-500">
+                          No SOS emergency alerts logged yet — safe operations.
+                        </td>
+                      </tr>
+                    ) : (
+                      sosAlerts.map((s) => (
+                        <tr key={s.id}>
+                          <td className="p-3.5">
+                            <div className="font-extrabold text-slate-900">
+                              {s.user_name} <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-100">{s.user_role}</span>
+                            </div>
+                            <div className="mono-num text-slate-600">{s.user_phone}</div>
+                            {s.bike_plate && <div className="text-[11px] text-slate-500">{s.bike_model} ({s.bike_plate})</div>}
+                            {s.booking_code && (
+                              <div className="text-[11px] text-sky-700 font-bold">
+                                Trip {s.booking_code} · Cust: {s.customer_name} ({s.customer_phone})
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="font-bold text-rose-700">{s.emergency_type.replace(/_/g, ' ').toUpperCase()}</div>
+                            {s.note && <div className="text-slate-700 mt-0.5">{s.note}</div>}
+                            <div className="text-[10px] text-slate-400 mono-num mt-0.5">
+                              {s.created_at ? new Date(s.created_at).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }) : ''}
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <div className="font-bold text-slate-900">{s.zone_name}</div>
+                            {s.lat != null && (
+                              <div className="mono-num text-[11px] text-slate-500">
+                                {Number(s.lat).toFixed(4)}, {Number(s.lng).toFixed(4)}
+                              </div>
+                            )}
+                            {s.google_maps_url && (
+                              <a
+                                href={s.google_maps_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block mt-1 text-[#008741] font-extrabold underline"
+                              >
+                                Open Google Maps ↗
+                              </a>
+                            )}
+                          </td>
+                          <td className="p-3.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                s.status === 'resolved'
+                                  ? 'bg-emerald-100 text-[#008741]'
+                                  : s.status === 'acknowledged'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}
+                            >
+                              {s.status.toUpperCase()}
+                            </span>
+                            {s.resolution_note && <div className="text-[10px] text-slate-500 mt-1">{s.resolution_note}</div>}
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap space-x-1.5">
+                            <a
+                              href={`tel:${s.user_phone}`}
+                              className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-bold inline-flex items-center gap-1"
+                            >
+                              <Phone className="w-3 h-3" />
+                              Call
+                            </a>
+                            {s.status === 'active' && (
+                              <button
+                                type="button"
+                                onClick={() => handleSosStatus(s.id, 'acknowledged', 'Admin dispatch responding')}
+                                className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 font-bold"
+                              >
+                                Acknowledge
+                              </button>
+                            )}
+                            {s.status !== 'resolved' && (
+                              <button
+                                type="button"
+                                onClick={() => handleSosStatus(s.id, 'resolved', 'Resolved by Admin')}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-100 text-[#008741] font-bold"
+                              >
+                                Resolve
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </main>
       </div>
+
+      <EmergencySosModal
+        isOpen={sosModalOpen}
+        onClose={() => setSosModalOpen(false)}
+        role="admin"
+        settings={bootstrap?.settings || {}}
+        mySosHistory={sosAlerts.filter((a) => a.user_id === user?.id)}
+        onTriggered={async () => {
+          await Promise.all([loadOverviewAndRiders(), loadSosAlerts()]);
+        }}
+      />
     </div>
   );
 }

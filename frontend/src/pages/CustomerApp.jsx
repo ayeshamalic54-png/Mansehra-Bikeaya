@@ -15,11 +15,13 @@ import {
   Printer,
   ShieldCheck,
   ShoppingBag,
+  Siren,
   Star,
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
+import { EmergencySosModal } from '../components/EmergencySosModal';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { SafarGoPayBox } from '../components/SafarGoPayBox';
@@ -86,6 +88,11 @@ export function CustomerApp({ onOpenDownloads }) {
   const [ratingTargetId, setRatingTargetId] = useState(null);
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingFeedback, setRatingFeedback] = useState('');
+  const [sosModalOpen, setSosModalOpen] = useState(false);
+  const [mySosHistory, setMySosHistory] = useState([]);
+
+  const policeNumber = bootstrap?.settings?.emergency_police_number || '15';
+  const rescueNumber = bootstrap?.settings?.emergency_rescue_number || '1122';
 
   useEffect(() => {
     if (!user?.id) return;
@@ -119,8 +126,12 @@ export function CustomerApp({ onOpenDownloads }) {
 
   const loadBookings = async () => {
     try {
-      const data = await apiRequest('/api/bookings/my');
+      const [data, sosRows] = await Promise.all([
+        apiRequest('/api/bookings/my'),
+        apiRequest('/api/sos/my').catch(() => []),
+      ]);
       setBookings(data);
+      setMySosHistory(sosRows || []);
     } catch (err) {
       console.error(err);
     }
@@ -428,7 +439,16 @@ export function CustomerApp({ onOpenDownloads }) {
       <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 no-print">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <BrandLogo subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setSosModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1 shadow-sm"
+              title={`Emergency SOS · Police ${policeNumber} · Rescue ${rescueNumber}`}
+            >
+              <Siren className="w-3.5 h-3.5" />
+              <span>SOS</span>
+            </button>
             <button
               onClick={() => setTab('support')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition ${
@@ -862,7 +882,33 @@ export function CustomerApp({ onOpenDownloads }) {
                         Call
                       </a>
                     </div>
-                  ) : (
+                  ) : null}
+
+                  {['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status) && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-extrabold text-rose-900 inline-flex items-center gap-1">
+                        <Siren className="w-3.5 h-3.5 text-rose-600" />
+                        Ride Safety: Police {policeNumber} · Rescue {rescueNumber}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <a href={`tel:${policeNumber}`} className="px-2 py-1 rounded-lg bg-rose-600 text-white font-bold">
+                          Police {policeNumber}
+                        </a>
+                        <a href={`tel:${rescueNumber}`} className="px-2 py-1 rounded-lg bg-amber-600 text-white font-bold">
+                          Rescue {rescueNumber}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setSosModalOpen(true)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-bold"
+                        >
+                          SOS Alert
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!b.rider && (
                     b.status === 'pending' && (
                       <div className="space-y-2.5">
                         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-wrap items-center justify-between gap-2">
@@ -1333,6 +1379,17 @@ export function CustomerApp({ onOpenDownloads }) {
           );
         })()}
       </main>
+
+      <EmergencySosModal
+        isOpen={sosModalOpen}
+        onClose={() => setSosModalOpen(false)}
+        role="customer"
+        settings={bootstrap?.settings || {}}
+        activeBooking={activeRides[0] || null}
+        fallbackCoords={pickupLat != null ? { lat: pickupLat, lng: pickupLng, zone_name: pickupZone } : null}
+        mySosHistory={mySosHistory}
+        onTriggered={() => loadBookings()}
+      />
 
       {/* Bottom Mobile Navigation */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80 no-print">
