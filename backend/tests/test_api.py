@@ -1710,17 +1710,38 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     assert rej.json()["status"] == "rejected"
     assert client.get("/api/auth/me", headers=_auth_header(bike_token)).json()["user"]["rider_profile"]["remaining_paid_rides"] == 0
 
+    # Direct Top-Up request does NOT require TID upfront; TID proof can be attached later only if Admin asks
     bike_req = client.post(
         "/api/riders/topup-requests",
         headers=_auth_header(bike_token),
-        json={"amount": 100, "rides_requested": 10, "payment_channel": "upaisa", "reference_no": "UP-1001"},
+        json={"amount": 100, "rides_requested": 10, "payment_channel": "upaisa"},
     )
+    assert bike_req.status_code == 201
+    assert bike_req.json()["reference_no"] is None
+    assert bike_req.json()["proof_submitted"] is False
+
+    ask_proof = client.post(
+        f"/api/finance/topup-requests/{bike_req.json()['id']}/request-proof",
+        headers=_auth_header(admin_token),
+        json={"admin_note": "Payment abhi nahi mili, TID bhejein"},
+    )
+    assert ask_proof.status_code == 200
+    assert "TID" in ask_proof.json()["admin_note"]
+
+    attach_proof = client.post(
+        f"/api/riders/topup-requests/{bike_req.json()['id']}/proof",
+        headers=_auth_header(bike_token),
+        json={"reference_no": "UP-1001"},
+    )
+    assert attach_proof.status_code == 200
+    assert attach_proof.json()["reference_no"] == "UP-1001"
+
     car_req = client.post(
         "/api/riders/topup-requests",
         headers=_auth_header(car_token),
         json={"amount": 100, "rides_requested": 10, "payment_channel": "bank", "reference_no": "MEZN-2002"},
     )
-    assert bike_req.status_code == 201 and car_req.status_code == 201
+    assert car_req.status_code == 201
 
     ov = client.get("/api/admin/overview", headers=_auth_header(admin_token)).json()
     assert ov["kpis"]["pending_topup_count"] >= 2
@@ -1746,16 +1767,17 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     assert app_bike.json()["topup_wallet_balance"] == 100.0
     assert app_bike.json()["topup_per_ride_fee"] == 10.0
 
-    # Now Bike Captain goes online, appears on Customer map, sees job, accepts & completes cash ride!
+    # Now Bike Captain goes online, appears on Customer map, sees job with 0 Commission (App Fee prepaid!), accepts & completes cash ride!
     assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).json()["is_online"] is True
     assert any(
         c["rider_id"] == bike_user["id"]
         for c in client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
     )
-    assert any(
-        j["id"] == bk["id"]
-        for j in client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
-    )
+    avail_jobs = client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
+    job_match = next(j for j in avail_jobs if j["id"] == bk["id"])
+    assert job_match["fee_mode"] == "app_fee_topup"
+    assert job_match["commission_amount"] == 0.0
+    assert job_match["rider_earning"] == bk["final_fare"]
 
     assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(bike_token)).status_code == 200
     done = client.post(
@@ -1764,17 +1786,21 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
         json={"status": "completed"},
     )
     assert done.status_code == 200
-    assert done.json()["commission_amount"] == 10.0
+    assert done.json()["commission_type_snapshot"] == "app_fee_topup"
+    assert done.json()["commission_amount"] == 0.0
+    assert done.json()["rider_earning"] == bk["final_fare"]
 
-    # Prepaid cash ride decrements rides 10 -> 9, topup balance 100 -> 90, adds ZERO udhaar due to admin!
+    # Prepaid App Fee ride decrements rides 10 -> 9, topup balance 100 -> 90, adds ZERO ride commission & ZERO udhaar!
     bike_led = client.get("/api/riders/ledger", headers=_auth_header(bike_token)).json()
     assert bike_led["summary"]["remaining_paid_rides"] == 9
     assert bike_led["summary"]["topup_wallet_balance"] == 90.0
     assert bike_led["summary"]["balance_due_to_admin"] == 0.0
+    assert bike_led["summary"]["total_commission_generated"] == 0.0
     assert bike_led["summary"]["total_topups_paid"] == 100.0
 
     pnl = client.get("/api/reports/pnl", headers=_auth_header(admin_token)).json()
     assert pnl["summary"]["topup_collected"] >= 200.0
+    assert pnl["summary"]["net_business_profit"] >= pnl["summary"]["topup_collected"] - pnl["summary"]["total_expenses"]
 
     # 4. Admin dynamically changes package to 5 Rides = Rs. 150 (Car Rs. 250) & exhaustion auto-offline test
     for k, v in [

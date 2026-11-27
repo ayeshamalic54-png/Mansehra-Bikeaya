@@ -113,10 +113,20 @@ def admin_overview(
 
     total_expenses = round(db.query(func.coalesce(func.sum(AdminExpense.amount), 0.0)).scalar() or 0.0, 2)
     total_commission = round(sum(b.commission_amount for b in completed_all), 2)
+    approved_topups = db.query(RiderTopupRequest).filter(RiderTopupRequest.status == "approved").all()
+    all_time_topups = round(sum(t.amount for t in approved_topups), 2)
+    today_topups = round(
+        sum(
+            t.amount
+            for t in approved_topups
+            if _as_utc(t.reviewed_at or t.created_at) >= today_start
+        ),
+        2,
+    )
     total_gross = round(sum(b.final_fare for b in completed_all), 2)
     today_gross = round(sum(b.final_fare for b in completed_today), 2)
     today_commission = round(sum(b.commission_amount for b in completed_today), 2)
-    net_profit = round(total_commission - total_expenses, 2)
+    net_profit = round(total_commission + all_time_topups - total_expenses, 2)
 
     recent_rows = (
         db.query(Booking)
@@ -159,10 +169,11 @@ def admin_overview(
             "today_total_rides": len(today_bookings),
             "today_completed_rides": len(completed_today),
             "today_gross_fare": today_gross,
-            "today_admin_profit": today_commission,
+            "today_admin_profit": round(today_commission + today_topups, 2),
             "all_time_completed_rides": len(completed_all),
             "all_time_gross_fare": total_gross,
             "all_time_admin_commission": total_commission,
+            "all_time_topup_fees": all_time_topups,
             "all_time_expenses": total_expenses,
             "all_time_net_profit": net_profit,
             "pending_dispatch_count": pending_count,

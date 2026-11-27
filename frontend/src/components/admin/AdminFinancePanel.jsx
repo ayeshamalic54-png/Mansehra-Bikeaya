@@ -160,6 +160,22 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
     }
   };
 
+  const handleAskTopupProof = async (req) => {
+    const draft = topupEdits[req.id] || {};
+    try {
+      await apiRequest(`/api/finance/topup-requests/${req.id}/request-proof`, {
+        method: 'POST',
+        body: {
+          admin_note: (draft.admin_note || '').trim() || null,
+        },
+      });
+      onNotify(`${req.rider_name} se TID / payment proof maang liya gaya hai.`);
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
+    }
+  };
+
   const handleSavePayAccounts = async (e) => {
     e.preventDefault();
     try {
@@ -775,11 +791,15 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     </div>
                     <div className="text-slate-700 mono-num">
                       Requested: <strong>Rs. {req.amount}</strong> ({req.rides_requested} rides) ·{' '}
-                      <span className="uppercase font-bold">{req.payment_channel}</span> · TID/Ref:{' '}
-                      <strong className="text-[#008741]">{req.reference_no || '—'}</strong>
+                      <span className="uppercase font-bold">{req.payment_channel}</span> ·{' '}
+                      {req.reference_no ? (
+                        <>TID/Ref: <strong className="text-[#008741]">{req.reference_no}</strong></>
+                      ) : (
+                        <span className="text-slate-500 font-semibold">Direct Request (No TID submitted)</span>
+                      )}
                     </div>
                     {(req.note || req.admin_note) && (
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-amber-800 font-semibold">
                         {req.note ? `Captain Note: ${req.note}` : ''}{' '}
                         {req.admin_note ? `· Admin Note: ${req.admin_note}` : ''}
                       </div>
@@ -835,6 +855,14 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                           className="px-3 py-1.5 rounded-lg bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold"
                         >
                           Approve &amp; Add Rides
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAskTopupProof(req)}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-bold"
+                          title="If payment not found, ask captain for TID / Proof"
+                        >
+                          Ask Proof
                         </button>
                         <button
                           type="button"

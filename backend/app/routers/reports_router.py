@@ -72,7 +72,7 @@ def get_pnl_report(
     settlements_collected = round(sum(s.amount for s in settlements), 2)
     topup_collected = round(sum(t.amount for t in approved_topups), 2)
     total_expenses = round(sum(e.amount for e in expenses), 2)
-    net_profit = round(admin_commission - total_expenses, 2)
+    net_profit = round(admin_commission + topup_collected - total_expenses, 2)
 
     # Service breakdown
     svc_map = defaultdict(lambda: {"service_type": "", "trips": 0, "gross_fare": 0.0, "admin_profit": 0.0})

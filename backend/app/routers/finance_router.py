@@ -418,3 +418,26 @@ def reject_topup_request(
         req.admin_note = payload.admin_note.strip() or None
     db.commit()
     return {"id": req.id, "status": req.status, "admin_note": req.admin_note}
+
+
+@router.post("/topup-requests/{req_id}/request-proof")
+def request_topup_proof(
+    req_id: int,
+    payload: Optional[AdminTopupReview] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_roles("admin", "dispatcher")),
+):
+    req = db.query(RiderTopupRequest).filter(RiderTopupRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Top-up request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Top-up request already {req.status}")
+
+    req.admin_note = (
+        payload.admin_note.strip()
+        if payload and payload.admin_note and payload.admin_note.strip()
+        else "Payment abhi receive nahi hui — meherbani apna TID / Transaction Proof submit karein."
+    )
+    req.approved_by_id = current_admin.id
+    db.commit()
+    return {"id": req.id, "status": req.status, "admin_note": req.admin_note}

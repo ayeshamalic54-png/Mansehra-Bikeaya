@@ -259,8 +259,13 @@ class RiderSettlementSubmit(BaseModel):
 class RiderTopupSubmit(BaseModel):
     amount: float = Field(..., gt=0)
     rides_requested: Optional[int] = Field(None, ge=1, le=500)
-    payment_channel: str = Field(..., pattern="^(cash|easypaisa|upaisa|jazzcash|bank)$")
+    payment_channel: str = Field("easypaisa", pattern="^(cash|easypaisa|upaisa|jazzcash|bank)$")
     reference_no: Optional[str] = Field(None, max_length=80)
+    note: Optional[str] = Field(None, max_length=255)
+
+
+class RiderTopupProofSubmit(BaseModel):
+    reference_no: str = Field(..., min_length=2, max_length=80)
     note: Optional[str] = Field(None, max_length=255)
 
 

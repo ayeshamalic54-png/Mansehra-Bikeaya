@@ -405,14 +405,14 @@ def complete_booking_and_post_ledger(
     use_prepaid_ride = bool(policy["required"]) and int(rider_profile.remaining_paid_rides or 0) > 0
 
     if use_prepaid_ride:
-        unit_fee = float(rider_profile.topup_per_ride_fee or policy["per_ride_fee"] or 10.0)
-        commission_amount = round(min(final_fare, unit_fee), 2)
-        rider_earning = round(max(0.0, final_fare - commission_amount), 2)
-        c_type = "topup_prepaid"
-        c_val = commission_amount
+        unit_fee = round(min(final_fare, float(rider_profile.topup_per_ride_fee or policy["per_ride_fee"] or 10.0)), 2)
+        commission_amount = 0.0
+        rider_earning = round(final_fare, 2)
+        c_type = "app_fee_topup"
+        c_val = unit_fee
         rider_profile.remaining_paid_rides = max(0, int(rider_profile.remaining_paid_rides or 0) - 1)
         rider_profile.topup_wallet_balance = round(
-            max(0.0, float(rider_profile.topup_wallet_balance or 0.0) - commission_amount), 2
+            max(0.0, float(rider_profile.topup_wallet_balance or 0.0) - unit_fee), 2
         )
     else:
         c_type, c_val, commission_amount, rider_earning = compute_commission(
@@ -431,19 +431,20 @@ def complete_booking_and_post_ledger(
     rider_profile.total_trips += 1
     rider_profile.total_gross_collected = round(rider_profile.total_gross_collected + final_fare, 2)
     rider_profile.total_net_earned = round(rider_profile.total_net_earned + rider_earning, 2)
-    rider_profile.total_commission_generated = round(
-        rider_profile.total_commission_generated + commission_amount, 2
-    )
+    if not use_prepaid_ride:
+        rider_profile.total_commission_generated = round(
+            rider_profile.total_commission_generated + commission_amount, 2
+        )
 
     if collector == "rider":
         if use_prepaid_ride:
             signed_delta = 0.0
             entry_type = "topup_ride_deduction"
-            ledger_amount = commission_amount
+            ledger_amount = unit_fee
             booking.payment_status = "paid"
             note = (
-                f"Ride {booking.booking_code}: Paid from Top-Up (-1 Ride / Rs.{commission_amount:.2f}, "
-                f"{rider_profile.remaining_paid_rides} rides left)"
+                f"Ride {booking.booking_code}: Pre-Paid App Fee (-1 Ride / Rs.{unit_fee:.2f} from Top-Up, "
+                f"0 Commission · {rider_profile.remaining_paid_rides} rides left)"
             )
         else:
             # Post-paid cash ride: rider owes admin the commission amount
@@ -460,7 +461,7 @@ def complete_booking_and_post_ledger(
         if use_prepaid_ride:
             note = (
                 f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, "
-                f"-1 Top-Up Ride (Rs.{commission_amount:.2f}), Captain credit Rs.{rider_earning:.2f}"
+                f"-1 Pre-Paid Ride (0 Commission), Captain credit Rs.{rider_earning:.2f}"
             )
         else:
             note = f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, Captain credit Rs.{rider_earning:.2f}"

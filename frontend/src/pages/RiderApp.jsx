@@ -49,10 +49,14 @@ export function RiderApp({ onOpenDownloads }) {
     note: '',
   });
   const [topupForm, setTopupForm] = useState({
+    amount: '',
     payment_channel: 'easypaisa',
     reference_no: '',
     note: '',
   });
+  const [showOptionalProofInput, setShowOptionalProofInput] = useState(false);
+  const [proofDrafts, setProofDrafts] = useState({});
+  const [showLegacySettlement, setShowLegacySettlement] = useState(false);
   const [submittingTopup, setSubmittingTopup] = useState(false);
   const [waitDrafts, setWaitDrafts] = useState({});
   const [offerDrafts, setOfferDrafts] = useState({}); // { [bookingId]: { fare, eta, note } }
@@ -363,26 +367,50 @@ export function RiderApp({ onOpenDownloads }) {
     setErr('');
     setMsg('');
     setSubmittingTopup(true);
+    const reqAmount = Math.max(1, Number(topupForm.amount || topupPackageFee));
+    const reqRides = Math.max(1, Math.round((reqAmount / topupPackageFee) * topupRidesCount));
     try {
       const res = await apiRequest('/api/riders/topup-requests', {
         method: 'POST',
         body: {
-          amount: topupPackageFee,
-          rides_requested: topupRidesCount,
+          amount: reqAmount,
+          rides_requested: reqRides,
           payment_channel: topupForm.payment_channel,
-          reference_no: topupForm.reference_no.trim(),
+          reference_no: topupForm.reference_no.trim() || null,
           note: topupForm.note.trim() || null,
         },
       });
-      setTopupForm((prev) => ({ ...prev, reference_no: '', note: '' }));
+      setTopupForm((prev) => ({ ...prev, amount: '', reference_no: '', note: '' }));
+      setShowOptionalProofInput(false);
       setMsg(
-        `Top-Up request Rs. ${res.amount} (${res.rides_requested} rides) bhej di gayi hai! Admin approve karega to aap kaam start kar sakein ge.`
+        `Top-Up request Rs. ${res.amount} (${res.rides_requested} rides) bhej di gayi hai! Admin confirm karke approve kar dega.`
       );
       await Promise.all([refreshMe(), loadAll()]);
     } catch (e2) {
       setErr(e2.message);
     } finally {
       setSubmittingTopup(false);
+    }
+  };
+
+  const handleAttachTopupProof = async (reqId) => {
+    const tid = (proofDrafts[reqId] || '').trim();
+    if (!tid) {
+      setErr('Meherbani payment TID / Reference # darj karein.');
+      return;
+    }
+    setErr('');
+    setMsg('');
+    try {
+      await apiRequest(`/api/riders/topup-requests/${reqId}/proof`, {
+        method: 'POST',
+        body: { reference_no: tid },
+      });
+      setProofDrafts((prev) => ({ ...prev, [reqId]: '' }));
+      setMsg('Payment TID / Proof submit ho gaya hai! Admin ab verify karke approve kar dega.');
+      await loadAll();
+    } catch (e2) {
+      setErr(e2.message);
     }
   };
 
@@ -393,6 +421,9 @@ export function RiderApp({ onOpenDownloads }) {
     if (!topupRequired && topupRequests.length === 0 && remainingPaidRides <= 0) {
       return null;
     }
+    const reqAmount = Math.max(1, Number(topupForm.amount || topupPackageFee));
+    const reqRides = Math.max(1, Math.round((reqAmount / topupPackageFee) * topupRidesCount));
+
     return (
       <div
         className={`rounded-2xl p-4 sm:p-5 space-y-3 text-xs border-2 ${
@@ -406,7 +437,7 @@ export function RiderApp({ onOpenDownloads }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-extrabold text-sm text-slate-900 inline-flex items-center gap-1.5">
                 <Wallet className={`w-4 h-4 ${needsTopup ? 'text-amber-600' : 'text-[#009E4D]'}`} />
-                {needsTopup ? 'Top-Up Required to Unlock Rides' : 'Pre-Paid Ride Package & Top-Up'}
+                {needsTopup ? 'App Fee / Top-Up Required to Start' : 'Pre-Paid App Fee & Top-Up Wallet'}
               </span>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold mono-num ${
@@ -421,16 +452,16 @@ export function RiderApp({ onOpenDownloads }) {
             <p className="text-slate-600 mt-1">
               {needsTopup ? (
                 <>
-                  Account active karne aur online rides lene ke liye pehle Admin ke SafarGo account par{' '}
+                  Yeh <strong className="text-slate-900">100% SafarGo App Fee</strong> hai (is mein ride commission nahi hai).{' '}
                   <strong className="text-slate-900">
                     {topupRidesCount} Rides = Rs. {topupPackageFee}
                   </strong>{' '}
-                  Top-Up bhejein aur neeche TID submit karein. Admin approve karega to aap foran kaam kar sakein ge.
+                  bhej kar neeche sirf Top-Up Request send karein — TID/saboot tab hi dein agar payment confirm na mile.
                 </>
               ) : (
                 <>
-                  Aapka pre-paid package active hai — har completed ride par{' '}
-                  <strong className="text-slate-900">1 Ride (Rs. {topupPerRideFee})</strong> kat-ti hai. Advance top-up bhi bhej sakte hain.
+                  Pre-paid App Fee active hai — har ride par <strong>1 Paid Ride (Rs. {topupPerRideFee} App Fee)</strong> adjust hoti hai,{' '}
+                  <strong className="text-[#008741]">0 Ride Commission</strong> aur poora fare aapka!
                 </>
               )}
             </p>
@@ -441,7 +472,7 @@ export function RiderApp({ onOpenDownloads }) {
               onClick={() => setTab('ledger')}
               className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold shrink-0"
             >
-              Open Full Wallet →
+              Open Hisab Wallet →
             </button>
           )}
         </div>
@@ -454,78 +485,131 @@ export function RiderApp({ onOpenDownloads }) {
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="text-[11px] text-slate-500">Top-Up Balance</div>
+            <div className="text-[11px] text-slate-500">App Fee Balance</div>
             <div className="text-base font-extrabold text-slate-900">Rs. {topupWalletBalance.toFixed(0)}</div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="text-[11px] text-slate-500">Current Package</div>
+            <div className="text-[11px] text-slate-500">Package Rate</div>
             <div className="text-sm font-extrabold text-slate-900">
               {topupRidesCount} Rides · Rs. {topupPackageFee}
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="text-[11px] text-slate-500">Per Ride Cut</div>
-            <div className="text-sm font-extrabold text-[#008741]">Rs. {topupPerRideFee} / ride</div>
+            <div className="text-[11px] text-slate-500">App Fee Paid</div>
+            <div className="text-sm font-extrabold text-[#008741]">
+              Rs. {Number(summary.total_topups_paid || rp?.total_topups_paid || 0).toFixed(0)}
+            </div>
           </div>
         </div>
 
         {pendingTopupRequests.length > 0 && (
-          <div className="p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 font-bold flex flex-wrap items-center justify-between gap-2">
-            <span>
-              Pending Approval: Rs. {pendingTopupRequests[0].amount} ({pendingTopupRequests[0].rides_requested} rides ·{' '}
-              {formatPaymentMethodLabel(pendingTopupRequests[0].payment_channel)} · Ref: {pendingTopupRequests[0].reference_no})
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold uppercase">
-              Waiting Admin Approval
-            </span>
+          <div className="p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 space-y-2">
+            <div className="font-bold flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Pending Request: Rs. {pendingTopupRequests[0].amount} ({pendingTopupRequests[0].rides_requested} rides ·{' '}
+                {formatPaymentMethodLabel(pendingTopupRequests[0].payment_channel)}
+                {pendingTopupRequests[0].reference_no ? ` · TID: ${pendingTopupRequests[0].reference_no}` : ''})
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold uppercase">
+                Waiting Admin Approval
+              </span>
+            </div>
+            {pendingTopupRequests[0].admin_note && (
+              <div className="p-2 rounded-lg bg-white/90 border border-amber-400 text-rose-800 font-bold">
+                Admin Message: {pendingTopupRequests[0].admin_note}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <input
+                type="text"
+                placeholder="Payment nahi mili? Yahan TID / Proof submit karein"
+                value={proofDrafts[pendingTopupRequests[0].id] ?? ''}
+                onChange={(e) =>
+                  setProofDrafts((prev) => ({ ...prev, [pendingTopupRequests[0].id]: e.target.value }))
+                }
+                className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg border border-amber-400 bg-white text-slate-900 font-semibold"
+              />
+              <button
+                type="button"
+                onClick={() => handleAttachTopupProof(pendingTopupRequests[0].id)}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold"
+              >
+                {pendingTopupRequests[0].reference_no ? 'Update Proof' : 'Attach Proof (If Needed)'}
+              </button>
+            </div>
           </div>
         )}
 
         <SafarGoPayBox
           settings={bootstrap?.settings}
           selectedChannel={topupForm.payment_channel}
-          amount={topupPackageFee}
+          amount={reqAmount}
           showAllChannels={true}
           onSelectChannel={(ch) => setTopupForm((prev) => ({ ...prev, payment_channel: ch }))}
         />
 
-        <form onSubmit={handleSubmitTopupRequest} className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-          <select
-            value={topupForm.payment_channel}
-            onChange={(e) => setTopupForm((prev) => ({ ...prev, payment_channel: e.target.value }))}
-            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-          >
-            {DIGITAL_PAYMENT_CHANNELS.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            required
-            placeholder="Transaction ID / TID (e.g. EP-987654)"
-            value={topupForm.reference_no}
-            onChange={(e) => setTopupForm((prev) => ({ ...prev, reference_no: e.target.value }))}
-            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold sm:col-span-2"
-          />
-          <button
-            type="submit"
-            disabled={submittingTopup}
-            className="py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
-          >
-            {submittingTopup ? 'Sending...' : `Top-Up Rs. ${topupPackageFee}`}
-          </button>
-          <input
-            type="text"
-            placeholder="Optional note (e.g. Sent from 03xx...)"
-            value={topupForm.note}
-            onChange={(e) => setTopupForm((prev) => ({ ...prev, note: e.target.value }))}
-            className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 sm:col-span-4"
-          />
+        <form onSubmit={handleSubmitTopupRequest} className="space-y-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <select
+              value={topupForm.payment_channel}
+              onChange={(e) => setTopupForm((prev) => ({ ...prev, payment_channel: e.target.value }))}
+              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+            >
+              {DIGITAL_PAYMENT_CHANNELS.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min="1"
+              placeholder={`Amount Rs. (${topupPackageFee})`}
+              value={topupForm.amount}
+              onChange={(e) => setTopupForm((prev) => ({ ...prev, amount: e.target.value }))}
+              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-bold mono-num"
+            />
+            <button
+              type="submit"
+              disabled={submittingTopup}
+              className="py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
+            >
+              {submittingTopup ? 'Sending...' : `Send Top-Up (Rs. ${reqAmount} · ${reqRides} Rides)`}
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowOptionalProofInput((v) => !v)}
+              className="text-[11px] font-bold text-[#008741] hover:underline"
+            >
+              {showOptionalProofInput
+                ? 'Hide Optional TID / Note'
+                : '+ Optional: TID ya Note saath likhna ho (lazmi nahi)'}
+            </button>
+            <span className="text-[11px] text-slate-500">Approval ke liye TID lazmi nahi hai</span>
+          </div>
+          {showOptionalProofInput && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Optional TID / Reference #"
+                value={topupForm.reference_no}
+                onChange={(e) => setTopupForm((prev) => ({ ...prev, reference_no: e.target.value }))}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white font-semibold"
+              />
+              <input
+                type="text"
+                placeholder="Optional note (e.g. Sent from 03xx...)"
+                value={topupForm.note}
+                onChange={(e) => setTopupForm((prev) => ({ ...prev, note: e.target.value }))}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+              />
+            </div>
+          )}
         </form>
 
-        {!compact && topupRequests.length > 0 && (
+        {topupRequests.length > 0 && (
           <div className="pt-2 border-t border-slate-100 space-y-1.5">
-            <div className="font-bold text-slate-700">Your Top-Up Requests</div>
+            <div className="font-bold text-slate-700">Top-Up Requests History</div>
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {topupRequests.map((tr) => (
                 <div
@@ -534,9 +618,10 @@ export function RiderApp({ onOpenDownloads }) {
                 >
                   <div>
                     <div className="font-bold text-slate-900 mono-num">
-                      Rs. {tr.amount} · {tr.rides_requested} Rides · {formatPaymentMethodLabel(tr.payment_channel)} · Ref: {tr.reference_no}
+                      Rs. {tr.amount} · {tr.rides_requested} Rides · {formatPaymentMethodLabel(tr.payment_channel)}
+                      {tr.reference_no ? ` · TID: ${tr.reference_no}` : ' · Direct Request'}
                     </div>
-                    {tr.admin_note && <div className="text-[11px] text-slate-500">Admin Note: {tr.admin_note}</div>}
+                    {tr.admin_note && <div className="text-[11px] text-amber-800 font-semibold">Admin: {tr.admin_note}</div>}
                   </div>
                   <StatusBadge value={tr.status === 'approved' ? 'paid' : tr.status} />
                 </div>
@@ -761,9 +846,23 @@ export function RiderApp({ onOpenDownloads }) {
                 </div>
               </div>
               <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
-                <div className="text-[11px] text-slate-500">Admin Due</div>
-                <div className={`text-base font-extrabold mono-num ${Number(summary.balance_due_to_admin || 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                  Rs. {Number(summary.balance_due_to_admin || 0).toFixed(0)}
+                <div className="text-[11px] text-slate-500">
+                  {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0 ? 'Rides Left' : 'Admin Due'}
+                </div>
+                <div
+                  className={`text-base font-extrabold mono-num ${
+                    topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
+                      ? remainingPaidRides > 0
+                        ? 'text-[#009E4D]'
+                        : 'text-rose-600'
+                      : Number(summary.balance_due_to_admin || 0) > 0
+                      ? 'text-amber-600'
+                      : 'text-emerald-600'
+                  }`}
+                >
+                  {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
+                    ? `${remainingPaidRides} Rides`
+                    : `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)}`}
                 </div>
               </div>
             </div>
@@ -1009,8 +1108,14 @@ export function RiderApp({ onOpenDownloads }) {
                       <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-[11px] text-slate-500">Less Commission</div>
-                      <div className="text-sm font-bold text-amber-700">-Rs. {job.commission_amount}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {job.fee_mode === 'app_fee_topup' ? 'Top-Up Package' : 'Less Commission'}
+                      </div>
+                      <div className="text-sm font-bold text-[#008741]">
+                        {job.fee_mode === 'app_fee_topup'
+                          ? '-1 Ride (0 Comm.)'
+                          : `-Rs. ${job.commission_amount}`}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-[11px] text-slate-500">Your Actual Net</div>
@@ -1306,111 +1411,164 @@ export function RiderApp({ onOpenDownloads }) {
           <div className="space-y-4">
             {renderTopupPackageCard({ compact: false })}
 
-            <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">Net Commission Balance with SafarGo</span>
-                {Number(summary.balance_due_to_admin || 0) <= 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
-                    All Paid ✓
+            {topupRequired ? (
+              <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-slate-300 font-bold">
+                    Trip Earnings &amp; App Fee Summary (0% Commission on Pre-Paid Rides)
                   </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
+                    Pre-Paid Mode Active ✓
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs mono-num">
+                  <div>
+                    <div className="text-slate-400">Completed Trips</div>
+                    <div className="text-base font-extrabold">{summary.total_trips || 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Gross Fare</div>
+                    <div className="text-base font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Your Take-Home</div>
+                    <div className="text-base font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">App Fee Paid</div>
+                    <div className="text-base font-bold text-amber-300">Rs. {Number(summary.total_topups_paid || rp?.total_topups_paid || 0).toFixed(0)}</div>
+                  </div>
+                </div>
+
+                {Number(summary.balance_due_to_admin || 0) !== 0 && (
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-amber-300 font-bold mono-num">
+                      {Number(summary.balance_due_to_admin || 0) > 0
+                        ? `Previous Settlement Due: Rs. ${Number(summary.balance_due_to_admin).toFixed(0)}`
+                        : `SafarGo Digital Payout Credit: Rs. ${Math.abs(Number(summary.balance_due_to_admin)).toFixed(0)}`}
+                    </span>
+                    {Number(summary.balance_due_to_admin || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowLegacySettlement((v) => !v)}
+                        className="px-3 py-1 rounded-lg bg-amber-400 text-slate-950 font-extrabold"
+                      >
+                        {showLegacySettlement ? 'Hide Old Due Form' : 'Clear Past Due'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              <div className="text-3xl font-extrabold mono-num text-amber-400">
-                {Number(summary.balance_due_to_admin || 0) >= 0
-                  ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Payable to SafarGo`
-                  : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} SafarGo Owes You`}
+            ) : (
+              <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-slate-400">Post-Paid Ride Commission Balance (Top-Up OFF)</span>
+                  {Number(summary.balance_due_to_admin || 0) <= 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
+                      All Paid ✓
+                    </span>
+                  )}
+                </div>
+                <div className="text-3xl font-extrabold mono-num text-amber-400">
+                  {Number(summary.balance_due_to_admin || 0) >= 0
+                    ? `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)} Payable to SafarGo`
+                    : `Rs. ${Math.abs(Number(summary.balance_due_to_admin || 0)).toFixed(0)} SafarGo Owes You`}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
+                  <div>
+                    <div className="text-slate-400">Gross Fare</div>
+                    <div className="font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Ride Commission</div>
+                    <div className="font-bold text-amber-300">-Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Your Actual Net</div>
+                    <div className="font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400">Settled / Paid</div>
+                    <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs mono-num">
-                <div>
-                  <div className="text-slate-400">Gross Fare</div>
-                  <div className="font-bold">Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Less Commission</div>
-                  <div className="font-bold text-amber-300">-Rs. {Number(summary.total_commission_generated || 0).toFixed(0)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Your Actual Net</div>
-                  <div className="font-extrabold text-emerald-400">Rs. {Number(summary.total_net_earned || 0).toFixed(0)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Settled / Paid</div>
-                  <div className="font-bold text-[#009E4D]">Rs. {Number(summary.total_settled_to_admin || 0).toFixed(0)}</div>
-                </div>
-              </div>
-            </div>
+            )}
 
-            {/* Pay Commission to SafarGo (Bank / EasyPaisa / UPaisa / JazzCash — Branded Strictly as SafarGo) */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setMsg('');
-                setErr('');
-                try {
-                  await apiRequest('/api/riders/settlement-requests', {
-                    method: 'POST',
-                    body: {
-                      amount: Number(commPayForm.amount || summary.balance_due_to_admin || 0),
-                      payment_channel: commPayForm.payment_channel,
-                      reference_no: commPayForm.reference_no.trim() || null,
-                      note: commPayForm.note.trim() || null,
-                    },
-                  });
-                  setCommPayForm({ amount: '', payment_channel: commPayForm.payment_channel, reference_no: '', note: '' });
-                  setMsg('Commission payment sent to SafarGo! It will mark Paid once confirmed.');
-                  await loadAll();
-                } catch (e2) {
-                  setErr(e2.message);
-                }
-              }}
-              className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs"
-            >
-              <div className="font-extrabold text-sm text-slate-900">
-                Send Commission Payment to SafarGo
-              </div>
-              <SafarGoPayBox
-                settings={bootstrap.settings}
-                selectedChannel={commPayForm.payment_channel}
-                amount={commPayForm.amount || (Number(summary.balance_due_to_admin || 0) > 0 ? Number(summary.balance_due_to_admin) : null)}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <select
-                  value={commPayForm.payment_channel}
-                  onChange={(e) => setCommPayForm({ ...commPayForm, payment_channel: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
-                >
-                  {DIGITAL_PAYMENT_CHANNELS.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.shortLabel} → SafarGo
-                    </option>
-                  ))}
-                  <option value="cash">Cash Office Handover</option>
-                </select>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  placeholder={Number(summary.balance_due_to_admin || 0) > 0 ? `Amount (Due Rs.${summary.balance_due_to_admin})` : 'Amount (Rs.)'}
-                  value={commPayForm.amount}
-                  onChange={(e) => setCommPayForm({ ...commPayForm, amount: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
-                />
-                <input
-                  type="text"
-                  required={commPayForm.payment_channel !== 'cash'}
-                  placeholder="TID / Bank Ref #"
-                  value={commPayForm.reference_no}
-                  onChange={(e) => setCommPayForm({ ...commPayForm, reference_no: e.target.value })}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
+            {/* Settlement form ONLY shown when Top-Up Mode is OFF OR Captain explicitly expands past-due settlement */}
+            {(!topupRequired || (showLegacySettlement && Number(summary.balance_due_to_admin || 0) > 0)) && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setMsg('');
+                  setErr('');
+                  try {
+                    await apiRequest('/api/riders/settlement-requests', {
+                      method: 'POST',
+                      body: {
+                        amount: Number(commPayForm.amount || summary.balance_due_to_admin || 0),
+                        payment_channel: commPayForm.payment_channel,
+                        reference_no: commPayForm.reference_no.trim() || null,
+                        note: commPayForm.note.trim() || null,
+                      },
+                    });
+                    setCommPayForm({ amount: '', payment_channel: commPayForm.payment_channel, reference_no: '', note: '' });
+                    setShowLegacySettlement(false);
+                    setMsg('Payment settlement sent to SafarGo! It will mark Paid once confirmed.');
+                    await loadAll();
+                  } catch (e2) {
+                    setErr(e2.message);
+                  }
+                }}
+                className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs"
               >
-                Submit Payment Proof to SafarGo
-              </button>
-            </form>
+                <div className="font-extrabold text-sm text-slate-900">
+                  {topupRequired ? 'Clear Past Ride Settlement Balance' : 'Send Ride Commission Payment to SafarGo'}
+                </div>
+                <SafarGoPayBox
+                  settings={bootstrap.settings}
+                  selectedChannel={commPayForm.payment_channel}
+                  showAllChannels={true}
+                  amount={commPayForm.amount || (Number(summary.balance_due_to_admin || 0) > 0 ? Number(summary.balance_due_to_admin) : null)}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select
+                    value={commPayForm.payment_channel}
+                    onChange={(e) => setCommPayForm({ ...commPayForm, payment_channel: e.target.value })}
+                    className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 font-bold"
+                  >
+                    {DIGITAL_PAYMENT_CHANNELS.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.shortLabel} → SafarGo
+                      </option>
+                    ))}
+                    <option value="cash">Cash Office Handover</option>
+                  </select>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder={Number(summary.balance_due_to_admin || 0) > 0 ? `Amount (Due Rs.${summary.balance_due_to_admin})` : 'Amount (Rs.)'}
+                    value={commPayForm.amount}
+                    onChange={(e) => setCommPayForm({ ...commPayForm, amount: e.target.value })}
+                    className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Optional TID / Bank Ref #"
+                    value={commPayForm.reference_no}
+                    onChange={(e) => setCommPayForm({ ...commPayForm, reference_no: e.target.value })}
+                    className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-bold"
+                >
+                  Send Settlement Payment
+                </button>
+              </form>
+            )}
 
             {(ledgerData.settlement_requests || []).length > 0 && (
               <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">

@@ -21,6 +21,7 @@ from app.schemas import (
     RiderLocationUpdate,
     RiderProfileSelfUpdate,
     RiderSettlementSubmit,
+    RiderTopupProofSubmit,
     RiderTopupSubmit,
 )
 from app.services.finance import (
@@ -231,15 +232,29 @@ def get_available_jobs(
         data["closest_captain_id"] = closest_id
         data["is_closest_captain"] = is_closest
 
+        topup_policy = get_topup_policy(db, rp.vehicle_type)
+        on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
         rule = rules.get(job.service_type)
-        if rule:
+        if on_prepaid:
+            data["fee_mode"] = "app_fee_topup"
+            data["prepaid_ride_fee"] = round(
+                float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"] or 10.0), 2
+            )
+            data["commission_amount"] = 0.0
+            data["rider_earning"] = job.final_fare
+        elif rule:
             _, _, comm, net = compute_commission(job.final_fare, rule, rp)
+            data["fee_mode"] = "commission"
+            data["prepaid_ride_fee"] = 0.0
             data["commission_amount"] = comm
             data["rider_earning"] = net
         my_offer = next((o for o in job.offers if o.rider_id == current_user.id and o.status != "withdrawn"), None)
         if my_offer:
             serialized_offer = serialize_offer(my_offer)
-            if rule:
+            if on_prepaid:
+                serialized_offer["commission_amount"] = 0.0
+                serialized_offer["rider_earning"] = my_offer.offered_fare
+            elif rule:
                 _, _, o_comm, o_net = compute_commission(my_offer.offered_fare, rule, rp)
                 serialized_offer["commission_amount"] = o_comm
                 serialized_offer["rider_earning"] = o_net
@@ -547,8 +562,6 @@ def submit_rider_topup_request(
     rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
     if not rp:
         raise HTTPException(status_code=404, detail="Rider profile not found")
-    if payload.payment_channel != "cash" and not (payload.reference_no or "").strip():
-        raise HTTPException(status_code=400, detail="Transaction ID / Reference # is required for digital Top-Up")
 
     policy = get_topup_policy(db, rp.vehicle_type)
     amt = round(float(payload.amount), 2)
@@ -557,12 +570,13 @@ def submit_rider_topup_request(
     else:
         rides_req = max(1, int(round((amt / policy["package_fee"]) * policy["rides_count"])))
 
+    ref_clean = payload.reference_no.strip() if payload.reference_no and payload.reference_no.strip() else None
     req = RiderTopupRequest(
         rider_id=current_user.id,
         amount=amt,
         rides_requested=rides_req,
         payment_channel=payload.payment_channel,
-        reference_no=payload.reference_no.strip() if payload.reference_no else None,
+        reference_no=ref_clean,
         note=payload.note.strip() if payload.note else None,
         status="pending",
     )
@@ -575,10 +589,43 @@ def submit_rider_topup_request(
         "rides_requested": req.rides_requested,
         "payment_channel": req.payment_channel,
         "reference_no": req.reference_no,
+        "proof_submitted": bool(req.reference_no),
         "note": req.note,
         "account_title": "SafarGo",
         "status": req.status,
         "created_at": req.created_at,
+    }
+
+
+@router.post("/topup-requests/{req_id}/proof")
+def submit_topup_proof_later(
+    req_id: int,
+    payload: RiderTopupProofSubmit,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    req = (
+        db.query(RiderTopupRequest)
+        .filter(RiderTopupRequest.id == req_id, RiderTopupRequest.rider_id == current_user.id)
+        .first()
+    )
+    if not req:
+        raise HTTPException(status_code=404, detail="Top-up request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Top-up request already {req.status}")
+
+    req.reference_no = payload.reference_no.strip()
+    if payload.note and payload.note.strip():
+        req.note = payload.note.strip()
+    req.admin_note = "Proof / TID submitted — waiting Admin confirmation"
+    db.commit()
+    db.refresh(req)
+    return {
+        "id": req.id,
+        "reference_no": req.reference_no,
+        "note": req.note,
+        "admin_note": req.admin_note,
+        "status": req.status,
     }
 
 

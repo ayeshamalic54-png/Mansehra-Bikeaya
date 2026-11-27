@@ -92,9 +92,9 @@ export function AdminReportsPanel({ onNotify }) {
           subtext={`${s.completed_trips} completed · ${s.cancelled_trips} cancelled`}
         />
         <StatCard
-          label="Admin Commission Earned"
-          value={`Rs. ${s.admin_commission_earned}`}
-          subtext={`Settlements collected: Rs. ${s.settlements_collected}`}
+          label="App Fees + Commission"
+          value={`Rs. ${Number((s.topup_collected || 0) + (s.admin_commission_earned || 0)).toFixed(0)}`}
+          subtext={`App Fees: Rs. ${s.topup_collected ?? 0} · Ride Comm: Rs. ${s.admin_commission_earned}`}
           accent="green"
         />
         <StatCard
@@ -106,7 +106,7 @@ export function AdminReportsPanel({ onNotify }) {
         <StatCard
           label="Net Business Profit"
           value={`Rs. ${s.net_profit ?? s.net_business_profit}`}
-          subtext="Commission minus expenses"
+          subtext="App Fees + Commission minus expenses"
           accent="magenta"
         />
       </div>
