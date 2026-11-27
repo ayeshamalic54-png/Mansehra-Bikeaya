@@ -19,6 +19,18 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   });
   const [topupEdits, setTopupEdits] = useState({});
   const [savingTopupPolicy, setSavingTopupPolicy] = useState(false);
+  const [referralPolicy, setReferralPolicy] = useState({
+    referral_program_enabled: 'true',
+    referral_customer_enabled: 'true',
+    referral_captain_enabled: 'true',
+    referral_customer_friend_discount: '30',
+    referral_customer_referrer_reward: '30',
+    referral_customer_min_fare: '120',
+    referral_captain_bonus_rides: '5',
+    referral_max_per_user: '20',
+  });
+  const [referralAudit, setReferralAudit] = useState({ summary: {}, items: [] });
+  const [savingReferralPolicy, setSavingReferralPolicy] = useState(false);
   const [expenses, setExpenses] = useState([]);
   const [pricing, setPricing] = useState([]);
   const [payAccounts, setPayAccounts] = useState({
@@ -46,6 +58,16 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       rider_topup_package_fee: String(s.rider_topup_package_fee || '100'),
       rider_topup_car_package_fee: s.rider_topup_car_package_fee != null ? String(s.rider_topup_car_package_fee) : '',
     });
+    setReferralPolicy({
+      referral_program_enabled: String(s.referral_program_enabled ?? 'true').toLowerCase() === 'false' ? 'false' : 'true',
+      referral_customer_enabled: String(s.referral_customer_enabled ?? 'true').toLowerCase() === 'false' ? 'false' : 'true',
+      referral_captain_enabled: String(s.referral_captain_enabled ?? 'true').toLowerCase() === 'false' ? 'false' : 'true',
+      referral_customer_friend_discount: String(s.referral_customer_friend_discount ?? '30'),
+      referral_customer_referrer_reward: String(s.referral_customer_referrer_reward ?? '30'),
+      referral_customer_min_fare: String(s.referral_customer_min_fare ?? '120'),
+      referral_captain_bonus_rides: String(s.referral_captain_bonus_rides ?? '5'),
+      referral_max_per_user: String(s.referral_max_per_user ?? '20'),
+    });
   }, [bootstrap?.settings]);
 
   const [settForm, setSettForm] = useState({
@@ -71,13 +93,14 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
 
   const loadFinanceData = async () => {
     try {
-      const [bal, led, exp, prc, reqs, topups] = await Promise.all([
+      const [bal, led, exp, prc, reqs, topups, refs] = await Promise.all([
         apiRequest('/api/finance/rider-balances'),
         apiRequest('/api/finance/ledger'),
         apiRequest('/api/finance/expenses'),
         apiRequest('/api/admin/pricing'),
         apiRequest('/api/finance/settlement-requests'),
         apiRequest('/api/finance/topup-requests'),
+        apiRequest('/api/admin/referrals').catch(() => ({ summary: {}, items: [] })),
       ]);
       setBalances(bal);
       setLedger(led);
@@ -85,6 +108,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       setPricing(prc);
       setSettlementRequests(reqs);
       setTopupRequests(topups || []);
+      setReferralAudit(refs || { summary: {}, items: [] });
       if (!settForm.rider_id && bal.length > 0) {
         setSettForm((prev) => ({ ...prev, rider_id: String(bal[0].rider_id) }));
       }
@@ -109,7 +133,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       onNotify(
         topupPolicy.rider_topup_required === 'false'
           ? 'Top-Up mode turned OFF — Captains can now take rides without pre-paid top-up.'
-          : `Top-Up mode turned ON (${updates[1][1]} Rides = Rs. ${updates[2][1]})! Unpaid captains remain offline and hidden from customers.`
+          : `Top-Up mode turned ON (${updates[1][1]} Rides = Rs. ${updates[2][1]})! Non-exempt unpaid captains remain offline.`
       );
       if (onRefreshBootstrap) await onRefreshBootstrap();
       await loadFinanceData();
@@ -117,6 +141,57 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       onNotify(err.message, true);
     } finally {
       setSavingTopupPolicy(false);
+    }
+  };
+
+  const handleSaveReferralPolicy = async (e, overrides = null) => {
+    if (e) e.preventDefault();
+    setSavingReferralPolicy(true);
+    const merged = { ...referralPolicy, ...(overrides || {}) };
+    if (overrides) setReferralPolicy(merged);
+    try {
+      const updates = [
+        ['referral_program_enabled', String(merged.referral_program_enabled === 'false' ? 'false' : 'true')],
+        ['referral_customer_enabled', String(merged.referral_customer_enabled === 'false' ? 'false' : 'true')],
+        ['referral_captain_enabled', String(merged.referral_captain_enabled === 'false' ? 'false' : 'true')],
+        ['referral_customer_friend_discount', String(Math.max(0, Number(merged.referral_customer_friend_discount || 0)))],
+        ['referral_customer_referrer_reward', String(Math.max(0, Number(merged.referral_customer_referrer_reward || 0)))],
+        ['referral_customer_min_fare', String(Math.max(0, Number(merged.referral_customer_min_fare || 0)))],
+        ['referral_captain_bonus_rides', String(Math.max(0, Number(merged.referral_captain_bonus_rides || 0)))],
+        ['referral_max_per_user', String(Math.max(0, Number(merged.referral_max_per_user || 0)))],
+      ];
+      await Promise.all(
+        updates.map(([key, value]) => apiRequest(`/api/admin/settings/${key}`, { method: 'PUT', body: { value } }))
+      );
+      onNotify(
+        merged.referral_program_enabled === 'false'
+          ? 'Referral Program turned OFF.'
+          : `Referral settings saved (Customer: ${merged.referral_customer_enabled === 'true' ? 'ON' : 'OFF'} · Captain: ${merged.referral_captain_enabled === 'true' ? 'ON' : 'OFF'})!`
+      );
+      if (onRefreshBootstrap) await onRefreshBootstrap();
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
+    } finally {
+      setSavingReferralPolicy(false);
+    }
+  };
+
+  const handleToggleTopupExempt = async (r) => {
+    try {
+      const nextVal = !r.is_topup_exempt;
+      await apiRequest(`/api/admin/riders/${r.rider_id}`, {
+        method: 'PATCH',
+        body: { is_topup_exempt: nextVal },
+      });
+      onNotify(
+        nextVal
+          ? `${r.full_name} is now EXEMPT from Pre-Paid App Access Fee!`
+          : `${r.full_name} now requires Pre-Paid App Access Fee when global Top-Up is ON.`
+      );
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
     }
   };
 
@@ -883,6 +958,194 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         )}
       </div>
 
+      {/* 3. SafarGo 2-Track Referral Program Toggles & Rules (Customer + Captain) */}
+      <form
+        onSubmit={(e) => handleSaveReferralPolicy(e)}
+        className="bg-white border-2 border-indigo-200 rounded-2xl p-5 space-y-3.5 text-xs"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-extrabold text-sm text-slate-900">
+              3. SafarGo Referral Program &amp; ON/OFF Toggles (Customer + Captain)
+            </div>
+            <p className="text-slate-500 mt-0.5">
+              Self-funding growth: Customers earn discount credit only AFTER their friend&apos;s 1st completed ride; Captains earn Free App Access Rides only AFTER their invited Captain activates &amp; verifies.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={savingReferralPolicy}
+              onClick={() =>
+                handleSaveReferralPolicy(null, {
+                  referral_program_enabled:
+                    referralPolicy.referral_program_enabled === 'false' ? 'true' : 'false',
+                })
+              }
+              className={`px-3 py-1.5 rounded-full font-extrabold text-[11px] transition ${
+                referralPolicy.referral_program_enabled === 'false'
+                  ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              {referralPolicy.referral_program_enabled === 'false'
+                ? 'MASTER REFERRAL: OFF (Click to ON)'
+                : 'MASTER REFERRAL: ON ✓'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Master Referral Switch</label>
+            <select
+              value={referralPolicy.referral_program_enabled}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_program_enabled: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-indigo-300 bg-indigo-50 font-extrabold text-slate-900"
+            >
+              <option value="true">ON — Referrals Enabled</option>
+              <option value="false">OFF — Pause All Referrals</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Customer Referral Track</label>
+            <select
+              value={referralPolicy.referral_customer_enabled}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_customer_enabled: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 font-extrabold text-slate-900"
+            >
+              <option value="true">ON — Friend &amp; Referrer Discounts</option>
+              <option value="false">OFF — Pause Customer Referrals</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Captain Referral Track</label>
+            <select
+              value={referralPolicy.referral_captain_enabled}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_captain_enabled: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 font-extrabold text-slate-900"
+            >
+              <option value="true">ON — Bonus App Access Rides</option>
+              <option value="false">OFF — Pause Captain Referrals</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Max Rewarded / User (0=∞)</label>
+            <input
+              type="number"
+              min="0"
+              value={referralPolicy.referral_max_per_user}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_max_per_user: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Friend 1st-Ride Discount (Rs.)</label>
+            <input
+              type="number"
+              min="0"
+              value={referralPolicy.referral_customer_friend_discount}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_customer_friend_discount: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Referrer Credit Reward (Rs.)</label>
+            <input
+              type="number"
+              min="0"
+              value={referralPolicy.referral_customer_referrer_reward}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_customer_referrer_reward: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Min Qualifying Fare (Rs.)</label>
+            <input
+              type="number"
+              min="0"
+              value={referralPolicy.referral_customer_min_fare}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_customer_min_fare: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Captain Bonus (+Free Rides)</label>
+            <input
+              type="number"
+              min="0"
+              value={referralPolicy.referral_captain_bonus_rides}
+              onChange={(e) =>
+                setReferralPolicy({ ...referralPolicy, referral_captain_bonus_rides: e.target.value })
+              }
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button
+            type="submit"
+            disabled={savingReferralPolicy}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-extrabold"
+          >
+            {savingReferralPolicy ? 'Saving...' : 'Save Referral Toggles & Rules'}
+          </button>
+          <div className="text-[11px] text-slate-600 mono-num font-semibold">
+            Rewarded: {referralAudit.summary?.rewarded || 0} · Pending: {referralAudit.summary?.pending || 0} · Bonus Rides:{' '}
+            +{referralAudit.summary?.total_bonus_rides || 0} · Credit Given: Rs.{' '}
+            {Number(referralAudit.summary?.total_credit_rewards || 0).toFixed(0)}
+          </div>
+        </div>
+
+        {(referralAudit.items || []).length > 0 && (
+          <div className="border-t border-slate-100 pt-2.5 divide-y divide-slate-100 max-h-48 overflow-y-auto">
+            {referralAudit.items.slice(0, 20).map((item) => (
+              <div key={item.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-slate-900">{item.referrer_name}</span>{' '}
+                  <span className="text-slate-500">invited</span>{' '}
+                  <span className="font-bold text-slate-900">{item.referred_name}</span>{' '}
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] uppercase font-bold">
+                    {item.track}
+                  </span>
+                  <div className="text-[10px] text-slate-500 mono-num">
+                    Code: {item.referral_code_used} · {new Date(item.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-right mono-num">
+                  {item.status === 'rewarded' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#008741] font-extrabold text-[10px]">
+                      {item.reward_type === 'app_fee_rides'
+                        ? `+${item.reward_rides} Bonus Rides ✓`
+                        : `+Rs. ${item.reward_amount} Credit ✓`}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">
+                      Pending {item.track === 'captain' ? 'Activation' : '1st Ride'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </form>
+
       {/* 2a. Ride Commission Settlement Approvals (Separate from App Fee) */}
       {settlementRequests.length > 0 && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-2.5 text-xs">
@@ -1049,10 +1312,16 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                   </td>
                   <td className="p-3.5 mono-num font-bold">{r.total_trips}</td>
                   <td className="p-3.5 mono-num">
-                    <div className={`font-extrabold ${(r.remaining_paid_rides || 0) > 0 ? 'text-[#008741]' : 'text-rose-600'}`}>
-                      {r.remaining_paid_rides ?? 0} rides left
-                    </div>
-                    <div className="text-[11px] text-slate-500">
+                    {r.is_topup_exempt ? (
+                      <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 font-extrabold text-[10px]">
+                        App Fee Exempt ✓
+                      </div>
+                    ) : (
+                      <div className={`font-extrabold ${(r.remaining_paid_rides || 0) > 0 ? 'text-[#008741]' : 'text-rose-600'}`}>
+                        {r.remaining_paid_rides ?? 0} rides left
+                      </div>
+                    )}
+                    <div className="text-[11px] text-slate-500 mt-0.5">
                       Bal: Rs. {Number(r.topup_wallet_balance || 0).toFixed(0)} · Paid: Rs. {Number(r.total_topups_paid || 0).toFixed(0)}
                     </div>
                   </td>
@@ -1069,7 +1338,18 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     )}
                     {r.is_over_limit && <div className="text-[10px] text-rose-600">OVER LIMIT!</div>}
                   </td>
-                  <td className="p-3.5">
+                  <td className="p-3.5 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTopupExempt(r)}
+                      className={`block w-full px-2.5 py-1 rounded-lg font-extrabold border text-[11px] transition ${
+                        r.is_topup_exempt
+                          ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-slate-700'
+                          : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                    >
+                      {r.is_topup_exempt ? 'Exempt ✓ (Unwaive)' : 'Waive App Fee'}
+                    </button>
                     {r.balance_due_to_admin > 0 && (
                       <button
                         onClick={() =>
@@ -1080,7 +1360,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                             entry_type: 'settlement_to_admin',
                           })
                         }
-                        className="px-2.5 py-1 rounded-lg bg-emerald-50 text-[#008741] font-bold border border-emerald-200"
+                        className="block w-full px-2.5 py-1 rounded-lg bg-emerald-50 text-[#008741] font-bold border border-emerald-200"
                       >
                         Fill Full Due
                       </button>
@@ -1099,7 +1379,10 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         </div>
         <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
           {ledger.map((e) => {
-            const isAppFee = e.entry_type === 'topup_approved' || e.entry_type === 'topup_ride_deduction';
+            const isAppFee =
+              e.entry_type === 'topup_approved' ||
+              e.entry_type === 'topup_ride_deduction' ||
+              e.entry_type === 'referral_app_fee_bonus';
             return (
               <div key={e.id} className="p-3.5 flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -1107,7 +1390,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
                     <span>{e.rider_name}</span>
                     {isAppFee && (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#008741] border border-emerald-200 text-[10px] font-extrabold">
-                        App Fee (Separate)
+                        {e.entry_type === 'referral_app_fee_bonus' ? 'Referral Pass Bonus' : 'App Fee (Separate)'}
                       </span>
                     )}
                     {(e.entry_type === 'settlement_to_admin' || e.entry_type === 'payout_to_rider') && (

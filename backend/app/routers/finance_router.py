@@ -51,6 +51,7 @@ def list_rider_balances(
             "credit_limit": rp.credit_limit,
             "is_over_limit": rp.balance_due_to_admin > rp.credit_limit,
             "remaining_paid_rides": rp.remaining_paid_rides or 0,
+            "is_topup_exempt": bool(getattr(rp, "is_topup_exempt", False)),
             "topup_wallet_balance": round(float(rp.topup_wallet_balance or 0.0), 2),
             "topup_per_ride_fee": round(float(rp.topup_per_ride_fee or 0.0), 2),
             "total_topups_paid": round(float(rp.total_topups_paid or 0.0), 2),

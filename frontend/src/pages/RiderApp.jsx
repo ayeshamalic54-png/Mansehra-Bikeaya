@@ -20,6 +20,7 @@ import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { CaptainPhotoUploads } from '../components/CaptainPhotoUploads';
 import { EmergencySosModal } from '../components/EmergencySosModal';
+import { ReferralCard } from '../components/ReferralCard';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
@@ -42,6 +43,7 @@ export function RiderApp({ onOpenDownloads }) {
   const [availableJobs, setAvailableJobs] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
   const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [], settlement_requests: [], topup_requests: [] });
+  const [referralData, setReferralData] = useState(null);
   const [commPayForm, setCommPayForm] = useState({
     amount: '',
     payment_channel: 'easypaisa',
@@ -106,9 +108,10 @@ export function RiderApp({ onOpenDownloads }) {
   const topupPerRideFee = Number((topupPackageFee / topupRidesCount).toFixed(2));
   const remainingPaidRides = Number(ledgerData?.summary?.remaining_paid_rides ?? rp?.remaining_paid_rides ?? 0);
   const topupWalletBalance = Number(ledgerData?.summary?.topup_wallet_balance ?? rp?.topup_wallet_balance ?? 0);
+  const isTopupExempt = Boolean(ledgerData?.summary?.is_topup_exempt ?? rp?.is_topup_exempt);
   const topupRequests = ledgerData?.topup_requests || [];
   const pendingTopupRequests = topupRequests.filter((t) => t.status === 'pending');
-  const needsTopup = topupRequired && remainingPaidRides <= 0;
+  const needsTopup = topupRequired && !isTopupExempt && remainingPaidRides <= 0;
 
   useEffect(() => {
     if (!user) return;
@@ -135,18 +138,20 @@ export function RiderApp({ onOpenDownloads }) {
         apiRequest(`/api/riders/available-jobs?include_other_vehicles=${overrideOther ? 'true' : 'false'}`),
         apiRequest('/api/bookings/my'),
       ];
-      const [avail, mine, ledger, sosRows] = includeSlow
+      const [avail, mine, ledger, sosRows, refRes] = includeSlow
         ? await Promise.all([
             ...fastReqs,
             apiRequest('/api/riders/ledger'),
             apiRequest('/api/sos/my').catch(() => []),
+            apiRequest('/api/referrals/my').catch(() => null),
           ])
-        : [...(await Promise.all(fastReqs)), null, null];
+        : [...(await Promise.all(fastReqs)), null, null, null];
       const list = avail || [];
       setAvailableJobs(list);
       setMyJobs(mine);
       if (ledger) setLedgerData(ledger);
       if (sosRows !== null) setMySosHistory(sosRows || []);
+      if (refRes) setReferralData(refRes);
 
       if (seenJobIdsRef.current === null) {
         seenJobIdsRef.current = new Set(list.map((j) => j.id));
@@ -458,16 +463,16 @@ export function RiderApp({ onOpenDownloads }) {
   const commissionEntries =
     ledgerData.commission_entries ||
     (ledgerData.entries || []).filter(
-      (e) => !['topup_approved', 'topup_ride_deduction'].includes(e.entry_type)
+      (e) => !['topup_approved', 'topup_ride_deduction', 'referral_app_fee_bonus'].includes(e.entry_type)
     );
   const appFeeEntries =
     ledgerData.app_fee_entries ||
     (ledgerData.entries || []).filter((e) =>
-      ['topup_approved', 'topup_ride_deduction'].includes(e.entry_type)
+      ['topup_approved', 'topup_ride_deduction', 'referral_app_fee_bonus'].includes(e.entry_type)
     );
 
   const renderTopupPackageCard = ({ compact = false } = {}) => {
-    if (!topupRequired && topupRequests.length === 0 && remainingPaidRides <= 0 && appFeeEntries.length === 0) {
+    if (!topupRequired && !isTopupExempt && topupRequests.length === 0 && remainingPaidRides <= 0 && appFeeEntries.length === 0) {
       return null;
     }
     const reqAmount = Math.max(1, Number(topupForm.amount || topupPackageFee));
@@ -476,7 +481,9 @@ export function RiderApp({ onOpenDownloads }) {
     return (
       <div
         className={`rounded-2xl p-4 sm:p-5 space-y-3 text-xs border-2 ${
-          needsTopup
+          isTopupExempt
+            ? 'bg-gradient-to-br from-indigo-50 via-white to-emerald-50 border-indigo-300'
+            : needsTopup
             ? 'bg-gradient-to-br from-amber-50 via-white to-emerald-50 border-amber-400 shadow-sm'
             : 'bg-white border-emerald-200/90'
         }`}
@@ -485,21 +492,35 @@ export function RiderApp({ onOpenDownloads }) {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-extrabold text-sm text-slate-900 inline-flex items-center gap-1.5">
-                <Wallet className={`w-4 h-4 ${needsTopup ? 'text-amber-600' : 'text-[#009E4D]'}`} />
-                {needsTopup ? '1. App Access Fee / Top-Up Required to Start' : '1. Pre-Paid App Access Fee & Approvals'}
+                <Wallet className={`w-4 h-4 ${isTopupExempt ? 'text-indigo-600' : needsTopup ? 'text-amber-600' : 'text-[#009E4D]'}`} />
+                {isTopupExempt
+                  ? '1. App Access Fee — Exempt / Waived by Admin'
+                  : needsTopup
+                  ? '1. App Access Fee / Top-Up Required to Start'
+                  : '1. Pre-Paid App Access Fee & Approvals'}
               </span>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold mono-num ${
-                  remainingPaidRides > 0
-                    ? 'bg-emerald-100 text-[#008741]'
-                    : 'bg-rose-100 text-rose-700'
-                }`}
-              >
-                {remainingPaidRides} Rides Remaining
-              </span>
+              {isTopupExempt ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                  App Fee Exempt ✓
+                </span>
+              ) : (
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold mono-num ${
+                    remainingPaidRides > 0
+                      ? 'bg-emerald-100 text-[#008741]'
+                      : 'bg-rose-100 text-rose-700'
+                  }`}
+                >
+                  {remainingPaidRides} Rides Remaining
+                </span>
+              )}
             </div>
             <p className="text-slate-600 mt-1">
-              {needsTopup ? (
+              {isTopupExempt ? (
+                <>
+                  Admin has <strong>exempted</strong> your account from the Pre-Paid App Access Fee. You can go online and accept rides directly with standard per-ride commission only.
+                </>
+              ) : needsTopup ? (
                 <>
                   This is a <strong className="text-slate-900">SafarGo App Access Fee</strong> (kept separate from per-ride commission). Send{' '}
                   <strong className="text-slate-900">
@@ -528,9 +549,9 @@ export function RiderApp({ onOpenDownloads }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mono-num">
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="text-[11px] text-slate-500">Rides Left</div>
-            <div className={`text-base font-extrabold ${remainingPaidRides > 0 ? 'text-[#009E4D]' : 'text-rose-600'}`}>
-              {remainingPaidRides}
+            <div className="text-[11px] text-slate-500">App Fee Status</div>
+            <div className={`text-base font-extrabold ${isTopupExempt ? 'text-indigo-700' : remainingPaidRides > 0 ? 'text-[#009E4D]' : 'text-rose-600'}`}>
+              {isTopupExempt ? 'Waived ✓' : `${remainingPaidRides} Left`}
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -551,7 +572,7 @@ export function RiderApp({ onOpenDownloads }) {
           </div>
         </div>
 
-        {pendingTopupRequests.length > 0 && (
+        {!isTopupExempt && pendingTopupRequests.length > 0 && (
           <div className="p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 space-y-2">
             <div className="font-bold flex flex-wrap items-center justify-between gap-2">
               <span>
@@ -589,72 +610,76 @@ export function RiderApp({ onOpenDownloads }) {
           </div>
         )}
 
-        <SafarGoPayBox
-          settings={bootstrap?.settings}
-          selectedChannel={topupForm.payment_channel}
-          amount={reqAmount}
-          showAllChannels={true}
-          onSelectChannel={(ch) => setTopupForm((prev) => ({ ...prev, payment_channel: ch }))}
-        />
-
-        <form onSubmit={handleSubmitTopupRequest} className="space-y-2 pt-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select
-              value={topupForm.payment_channel}
-              onChange={(e) => setTopupForm((prev) => ({ ...prev, payment_channel: e.target.value }))}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-            >
-              {DIGITAL_PAYMENT_CHANNELS.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min="1"
-              placeholder={`Amount Rs. (${topupPackageFee})`}
-              value={topupForm.amount}
-              onChange={(e) => setTopupForm((prev) => ({ ...prev, amount: e.target.value }))}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-bold mono-num"
+        {!isTopupExempt && (
+          <>
+            <SafarGoPayBox
+              settings={bootstrap?.settings}
+              selectedChannel={topupForm.payment_channel}
+              amount={reqAmount}
+              showAllChannels={true}
+              onSelectChannel={(ch) => setTopupForm((prev) => ({ ...prev, payment_channel: ch }))}
             />
-            <button
-              type="submit"
-              disabled={submittingTopup}
-              className="py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
-            >
-              {submittingTopup ? 'Sending...' : `Send Top-Up (Rs. ${reqAmount} · ${reqRides} Rides)`}
-            </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setShowOptionalProofInput((v) => !v)}
-              className="text-[11px] font-bold text-[#008741] hover:underline"
-            >
-              {showOptionalProofInput
-                ? 'Hide Optional TID / Note'
-                : '+ Optional: Add TID or Note (Not Required)'}
-            </button>
-            <span className="text-[11px] text-slate-500">TID is optional at submission</span>
-          </div>
-          {showOptionalProofInput && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input
-                type="text"
-                placeholder="Optional TID / Reference #"
-                value={topupForm.reference_no}
-                onChange={(e) => setTopupForm((prev) => ({ ...prev, reference_no: e.target.value }))}
-                className="px-3 py-2 rounded-xl border border-slate-200 bg-white font-semibold"
-              />
-              <input
-                type="text"
-                placeholder="Optional note (e.g. Sent from 03xx...)"
-                value={topupForm.note}
-                onChange={(e) => setTopupForm((prev) => ({ ...prev, note: e.target.value }))}
-                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-              />
-            </div>
-          )}
-        </form>
+
+            <form onSubmit={handleSubmitTopupRequest} className="space-y-2 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={topupForm.payment_channel}
+                  onChange={(e) => setTopupForm((prev) => ({ ...prev, payment_channel: e.target.value }))}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                >
+                  {DIGITAL_PAYMENT_CHANNELS.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder={`Amount Rs. (${topupPackageFee})`}
+                  value={topupForm.amount}
+                  onChange={(e) => setTopupForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-bold mono-num"
+                />
+                <button
+                  type="submit"
+                  disabled={submittingTopup}
+                  className="py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
+                >
+                  {submittingTopup ? 'Sending...' : `Send Top-Up (Rs. ${reqAmount} · ${reqRides} Rides)`}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowOptionalProofInput((v) => !v)}
+                  className="text-[11px] font-bold text-[#008741] hover:underline"
+                >
+                  {showOptionalProofInput
+                    ? 'Hide Optional TID / Note'
+                    : '+ Optional: Add TID or Note (Not Required)'}
+                </button>
+                <span className="text-[11px] text-slate-500">TID is optional at submission</span>
+              </div>
+              {showOptionalProofInput && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Optional TID / Reference #"
+                    value={topupForm.reference_no}
+                    onChange={(e) => setTopupForm((prev) => ({ ...prev, reference_no: e.target.value }))}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white font-semibold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Optional note (e.g. Sent from 03xx...)"
+                    value={topupForm.note}
+                    onChange={(e) => setTopupForm((prev) => ({ ...prev, note: e.target.value }))}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                  />
+                </div>
+              )}
+            </form>
+          </>
+        )}
 
         {(topupRequests.length > 0 || appFeeEntries.length > 0) && (
           <div className="pt-2 border-t border-slate-200/80 space-y-2.5">
@@ -702,10 +727,14 @@ export function RiderApp({ onOpenDownloads }) {
                       </div>
                       <span
                         className={`mono-num font-extrabold shrink-0 ${
-                          ae.entry_type === 'topup_approved' ? 'text-[#008741]' : 'text-amber-700'
+                          ae.entry_type === 'topup_approved' || ae.entry_type === 'referral_app_fee_bonus'
+                            ? 'text-[#008741]'
+                            : 'text-amber-700'
                         }`}
                       >
-                        {ae.entry_type === 'topup_approved' ? `+Rs. ${ae.amount}` : `-Rs. ${ae.amount}`}
+                        {ae.entry_type === 'topup_approved' || ae.entry_type === 'referral_app_fee_bonus'
+                          ? `+Rs. ${ae.amount}`
+                          : `-Rs. ${ae.amount}`}
                       </span>
                     </div>
                   ))}
@@ -940,12 +969,16 @@ export function RiderApp({ onOpenDownloads }) {
                     type="button"
                     onClick={() => setTab('ledger')}
                     className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold mono-num border transition-all duration-200 ${
-                      remainingPaidRides > 0
+                      isTopupExempt
+                        ? 'bg-gradient-to-r from-indigo-500 to-violet-600 border-indigo-200 text-white hover:from-emerald-500 hover:to-teal-500'
+                        : remainingPaidRides > 0
                         ? 'bg-gradient-to-r from-emerald-500 to-teal-600 border-emerald-200 text-white hover:from-amber-500 hover:to-orange-500 hover:border-amber-200'
                         : 'bg-gradient-to-r from-amber-400 to-orange-500 border-amber-200 text-slate-950 animate-pulse hover:from-rose-600 hover:to-red-600 hover:text-white'
                     }`}
                   >
-                    {remainingPaidRides > 0
+                    {isTopupExempt
+                      ? 'App Fee Exempt ✓'
+                      : remainingPaidRides > 0
                       ? `${remainingPaidRides} Rides Left · Rs. ${topupWalletBalance.toFixed(0)}`
                       : '0 Rides · Top-Up Required'}
                   </button>
@@ -1191,7 +1224,9 @@ export function RiderApp({ onOpenDownloads }) {
                 onClick={() => setTab('ledger')}
                 className={`cursor-pointer border-2 rounded-2xl p-3 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${
                   topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
-                    ? remainingPaidRides > 0
+                    ? isTopupExempt
+                      ? 'bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 border-indigo-200 text-white hover:from-emerald-500 hover:via-teal-500 hover:to-green-500 hover:border-emerald-200'
+                      : remainingPaidRides > 0
                       ? 'bg-gradient-to-br from-slate-900 via-cyan-950 to-teal-900 border-cyan-400/60 text-white hover:from-emerald-500 hover:via-teal-500 hover:to-green-500 hover:border-emerald-200'
                       : 'bg-gradient-to-br from-rose-700 via-red-700 to-amber-700 border-rose-300/70 text-white hover:from-amber-500 hover:via-orange-500 hover:to-yellow-500 hover:text-slate-950 hover:border-amber-200'
                     : Number(summary.balance_due_to_admin || 0) > 0
@@ -1200,11 +1235,17 @@ export function RiderApp({ onOpenDownloads }) {
                 }`}
               >
                 <div className="text-[11px] font-bold text-white/85">
-                  {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0 ? 'Rides Left' : 'Admin Due'}
+                  {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
+                    ? isTopupExempt
+                      ? 'App Fee'
+                      : 'Rides Left'
+                    : 'Admin Due'}
                 </div>
                 <div className="text-base font-extrabold mono-num text-white mt-0.5">
                   {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
-                    ? `${remainingPaidRides} Rides`
+                    ? isTopupExempt
+                      ? 'Waived ✓'
+                      : `${remainingPaidRides} Rides`
                     : `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)}`}
                 </div>
               </div>
@@ -1834,6 +1875,12 @@ export function RiderApp({ onOpenDownloads }) {
                 ))
               )}
             </div>
+
+            <ReferralCard
+              data={referralData}
+              onReload={() => loadAll(includeOtherVehicles, true)}
+              role="rider"
+            />
           </div>
         )}
 

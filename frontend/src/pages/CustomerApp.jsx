@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { EmergencySosModal } from '../components/EmergencySosModal';
 import { InteractiveRoutePicker } from '../components/InteractiveRoutePicker';
+import { ReferralCard } from '../components/ReferralCard';
 import { SafarGoMap } from '../components/SafarGoMap';
 import { SafarGoPayBox } from '../components/SafarGoPayBox';
 import { StatusBadge } from '../components/StatusBadge';
@@ -61,6 +62,8 @@ export function CustomerApp({ onOpenDownloads }) {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [useReferralCredit, setUseReferralCredit] = useState(true);
+  const [referralData, setReferralData] = useState(null);
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
   const [codAmount, setCodAmount] = useState(0);
@@ -193,12 +196,22 @@ export function CustomerApp({ onOpenDownloads }) {
     }
   };
 
+  const loadReferrals = async () => {
+    try {
+      const data = await apiRequest('/api/referrals/my');
+      setReferralData(data);
+    } catch {
+      // ignore
+    }
+  };
+
   const hasLiveRide = bookings.some((b) => ['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status));
   const hasSearching = bookings.some((b) => b.status === 'pending');
 
   useEffect(() => {
     loadBookings();
     loadTickets();
+    loadReferrals();
     let tick = 0;
     const timer = setInterval(() => {
       if (document.hidden) return;
@@ -206,6 +219,9 @@ export function CustomerApp({ onOpenDownloads }) {
       loadBookings();
       if (tab === 'support' || tick % 6 === 0) {
         loadTickets();
+      }
+      if (tab === 'payments' || tick % 6 === 0) {
+        loadReferrals();
       }
     }, hasLiveRide ? 5000 : 25000);
     const onVisible = () => {
@@ -317,6 +333,7 @@ export function CustomerApp({ onOpenDownloads }) {
           payment_method: paymentMethod,
           payment_reference: paymentMethod !== 'cash' ? (paymentReference.trim() || null) : null,
           promo_code: promoCode.trim() || null,
+          use_referral_credit: Boolean(useReferralCredit),
           receiver_name: serviceType === 'parcel' ? receiverName || null : null,
           receiver_phone: serviceType === 'parcel' ? receiverPhone || null : null,
           cod_amount: serviceType === 'parcel' ? Number(codAmount || 0) : 0,
@@ -337,7 +354,7 @@ export function CustomerApp({ onOpenDownloads }) {
       setPromoCode('');
       setCustomerNotes('');
       setOfferFareInput('');
-      await loadBookings();
+      await Promise.all([loadBookings(), loadReferrals()]);
       setTab('rides');
       setRideFilter('active');
     } catch (err) {
@@ -835,6 +852,32 @@ export function CustomerApp({ onOpenDownloads }) {
                 </div>
               </div>
 
+              {!promoCode.trim() &&
+                referralData?.policy?.customer_active &&
+                (Number(referralData?.invited_by?.friend_discount_available || 0) > 0 ||
+                  Number(referralData?.referral_discount_balance || 0) > 0) && (
+                  <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-indigo-950">
+                    {Number(referralData?.invited_by?.friend_discount_available || 0) > 0 ? (
+                      <span className="font-bold">
+                        1st-Ride Referral Discount Active: <strong>-Rs. {referralData.invited_by.friend_discount_available}</strong> (Min ride fare Rs.{' '}
+                        {referralData.policy.min_fare || 120})
+                      </span>
+                    ) : (
+                      <label className="inline-flex items-center gap-2 font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useReferralCredit}
+                          onChange={(e) => setUseReferralCredit(e.target.checked)}
+                        />
+                        <span>
+                          Apply Referral Credit (Available: <strong>Rs. {Number(referralData.referral_discount_balance || 0).toFixed(0)}</strong> · Min fare Rs.{' '}
+                          {referralData.policy.min_fare || 120})
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                )}
+
               {paymentMethod !== 'cash' && (
                 <div className="space-y-2.5">
                   <SafarGoPayBox
@@ -879,6 +922,26 @@ export function CustomerApp({ onOpenDownloads }) {
                   <div className="text-3xl font-extrabold mono-num text-[#009E4D]">
                     Rs. {activeOfferFare}
                   </div>
+                  {!promoCode.trim() &&
+                    referralData?.policy?.customer_active &&
+                    Number(activeOfferFare) >= Number(referralData?.policy?.min_fare || 0) &&
+                    (() => {
+                      const availDisc =
+                        Number(referralData?.invited_by?.friend_discount_available || 0) > 0
+                          ? Number(referralData.invited_by.friend_discount_available)
+                          : useReferralCredit
+                          ? Number(referralData?.referral_discount_balance || 0)
+                          : 0;
+                      const ruleMin = Number(activeRule?.min_fare || 50);
+                      const appliedPreview = Math.max(0, Math.min(availDisc, Number(activeOfferFare) - ruleMin));
+                      if (appliedPreview <= 0) return null;
+                      return (
+                        <div className="text-[11px] text-indigo-300 font-bold mono-num mt-0.5">
+                          Referral Discount at Booking: -Rs. {appliedPreview.toFixed(0)} → Pay Rs.{' '}
+                          {(Number(activeOfferFare) - appliedPreview).toFixed(0)}
+                        </div>
+                      );
+                    })()}
                   {offerFareInput !== '' && Number(offerFareInput) !== suggestedFare && (
                     <div className="text-[11px] text-amber-300 font-bold mono-num">
                       Your InDrive Offer (Recommended: Rs. {suggestedFare})
@@ -1421,6 +1484,8 @@ export function CustomerApp({ onOpenDownloads }) {
             </div>
 
             <SafarGoPayBox settings={bootstrap.settings} selectedChannel="easypaisa" />
+
+            <ReferralCard data={referralData} onReload={loadReferrals} role="customer" />
 
             <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100">
               {completedRides.length === 0 ? (

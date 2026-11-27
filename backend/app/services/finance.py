@@ -65,14 +65,15 @@ def get_topup_policy(db: Session, vehicle_type: Optional[str] = None) -> dict:
 
 
 def can_captain_work(db: Session, rp: RiderProfile) -> tuple[bool, Optional[str]]:
-    """Shared eligibility guard checking verification, prepaid top-up rides, and credit cap."""
+    """Shared eligibility guard checking verification, prepaid top-up exemption/rides, and credit cap."""
     if not rp.is_verified:
         return (
             False,
             "Please upload your Selfie, Vehicle Photo & CNIC in Profile and wait for Admin verification first.",
         )
     policy = get_topup_policy(db, rp.vehicle_type)
-    if policy["required"] and int(rp.remaining_paid_rides or 0) <= 0:
+    is_exempt = bool(getattr(rp, "is_topup_exempt", False))
+    if policy["required"] and not is_exempt and int(rp.remaining_paid_rides or 0) <= 0:
         return (
             False,
             (
@@ -166,7 +167,8 @@ def find_nearest_captains_for_booking(
         rp = u.rider_profile
         if not rp or not rp.is_verified or not rp.is_online:
             continue
-        if topup_required and int(rp.remaining_paid_rides or 0) <= 0:
+        is_exempt = bool(getattr(rp, "is_topup_exempt", False))
+        if topup_required and not is_exempt and int(rp.remaining_paid_rides or 0) <= 0:
             continue
         if rp.balance_due_to_admin > rp.credit_limit:
             continue
@@ -402,7 +404,12 @@ def complete_booking_and_post_ledger(
         collector = "rider" if booking.payment_method == "cash" else "admin"
 
     policy = get_topup_policy(db, rider_profile.vehicle_type)
-    use_prepaid_ride = bool(policy["required"]) and int(rider_profile.remaining_paid_rides or 0) > 0
+    is_exempt = bool(getattr(rider_profile, "is_topup_exempt", False))
+    use_prepaid_ride = (
+        bool(policy["required"])
+        and not is_exempt
+        and int(rider_profile.remaining_paid_rides or 0) > 0
+    )
 
     # Ride commission (e.g. Rs. 20/ride) ALWAYS applies per completed ride and stays
     # strictly separate from Pre-Paid App Access Fee Top-Ups.
@@ -485,7 +492,7 @@ def complete_booking_and_post_ledger(
             )
         )
 
-    if policy["required"] and int(rider_profile.remaining_paid_rides or 0) <= 0:
+    if policy["required"] and not is_exempt and int(rider_profile.remaining_paid_rides or 0) <= 0:
         other_active = (
             db.query(Booking.id)
             .filter(
@@ -497,6 +504,15 @@ def complete_booking_and_post_ledger(
         )
         if not other_active:
             rider_profile.is_online = False
+
+    from app.services.referral import (
+        unlock_captain_referral_reward,
+        unlock_customer_referral_reward_on_completion,
+    )
+
+    unlock_customer_referral_reward_on_completion(db, booking)
+    if not policy["required"] or is_exempt:
+        unlock_captain_referral_reward(db, rider_profile.user_id, trigger_booking=booking)
 
     db.commit()
     db.refresh(booking)
@@ -631,6 +647,12 @@ def approve_rider_topup_request(
         recorded_by_id=admin_user.id,
     )
     db.add(entry)
+    db.flush()
+
+    from app.services.referral import unlock_captain_referral_reward
+
+    unlock_captain_referral_reward(db, rider_profile.user_id, trigger_topup=req)
+
     db.commit()
     db.refresh(req)
     db.refresh(rider_profile)

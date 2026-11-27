@@ -166,9 +166,10 @@ def _load_eligible_online_captains(db: Session) -> list[dict]:
             continue
         vtype = (rp.vehicle_type or "bike").lower()
         pol = car_policy if vtype == "car" else bike_policy
-        if pol["required"] and int(rp.remaining_paid_rides or 0) <= 0:
+        is_exempt = bool(getattr(rp, "is_topup_exempt", False))
+        if pol["required"] and not is_exempt and int(rp.remaining_paid_rides or 0) <= 0:
             continue
-        if not pol["required"] and float(rp.balance_due_to_admin or 0.0) > float(rp.credit_limit or 0.0):
+        if (not pol["required"] or is_exempt) and float(rp.balance_due_to_admin or 0.0) > float(rp.credit_limit or 0.0):
             continue
         first_name = (u.full_name or "Captain").split()[0]
         snapshot.append(

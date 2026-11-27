@@ -15,6 +15,7 @@ from app.models import (
     MansehraZone,
     PricingRule,
     PromoCode,
+    ReferralRecord,
     RideOffer,
     RiderProfile,
     RiderSettlementRequest,
@@ -627,6 +628,7 @@ def list_riders(
                 "remaining_paid_rides": int(rp.remaining_paid_rides or 0) if rp else 0,
                 "topup_per_ride_fee": round(float(rp.topup_per_ride_fee or 0.0), 2) if rp else 0.0,
                 "total_topups_paid": round(float(rp.total_topups_paid or 0.0), 2) if rp else 0.0,
+                "is_topup_exempt": bool(getattr(rp, "is_topup_exempt", False)) if rp else False,
                 "custom_commission_type": rp.custom_commission_type if rp else None,
                 "custom_commission_value": rp.custom_commission_value if rp else None,
                 "total_trips": rp.total_trips if rp else 0,
@@ -667,12 +669,15 @@ def admin_create_rider(
     if db.query(User).filter(User.phone == clean_phone).first():
         raise HTTPException(status_code=400, detail="Phone number already registered")
 
+    from app.services.referral import generate_unique_referral_code
+
     user = User(
         full_name=payload.full_name.strip(),
         phone=clean_phone,
         password_hash=hash_password(payload.password),
         role="rider",
         is_active=True,
+        referral_code=generate_unique_referral_code(db, payload.full_name),
     )
     db.add(user)
     db.commit()
@@ -704,6 +709,7 @@ def admin_create_rider(
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
         is_verified=bool(payload.is_verified),
+        is_topup_exempt=bool(payload.is_topup_exempt),
         verification_status="verified" if payload.is_verified else "incomplete",
         is_online=False,
     )
@@ -807,6 +813,8 @@ def update_rider_config(
         rp.topup_wallet_balance = round(max(0.0, float(payload.topup_wallet_balance)), 2)
     if payload.topup_per_ride_fee is not None:
         rp.topup_per_ride_fee = round(max(0.0, float(payload.topup_per_ride_fee)), 2)
+    if payload.is_topup_exempt is not None:
+        rp.is_topup_exempt = bool(payload.is_topup_exempt)
     eligible, _ = can_captain_work(db, rp)
     if payload.is_online is not None:
         rp.is_online = bool(payload.is_online and rp.is_verified and user.is_active and eligible)
@@ -822,11 +830,23 @@ def update_rider_config(
     elif payload.custom_commission_value is not None and rp.custom_commission_type:
         rp.custom_commission_value = payload.custom_commission_value
 
+    if rp.is_verified:
+        first_approved = (
+            db.query(RiderTopupRequest)
+            .filter(RiderTopupRequest.rider_id == user.id, RiderTopupRequest.status == "approved")
+            .order_by(RiderTopupRequest.id.asc())
+            .first()
+        )
+        if first_approved:
+            from app.services.referral import unlock_captain_referral_reward
+
+            unlock_captain_referral_reward(db, user.id, trigger_topup=first_approved)
+
     db.commit()
     from app.routers.public_router import invalidate_nearby_captains_cache
 
     invalidate_nearby_captains_cache()
-    return {"status": "updated", "rider_id": user.id}
+    return {"status": "updated", "rider_id": user.id, "is_topup_exempt": bool(rp.is_topup_exempt)}
 
 
 @router.delete("/riders/{rider_user_id}")
@@ -852,6 +872,12 @@ def delete_rider(
     )
     db.query(RiderSettlementRequest).filter(RiderSettlementRequest.rider_id == rider_user_id).delete(
         synchronize_session=False
+    )
+    db.query(ReferralRecord).filter(
+        (ReferralRecord.referrer_id == rider_user_id) | (ReferralRecord.referred_user_id == rider_user_id)
+    ).delete(synchronize_session=False)
+    db.query(User).filter(User.referred_by_user_id == rider_user_id).update(
+        {User.referred_by_user_id: None}, synchronize_session=False
     )
     db.query(RideOffer).filter(RideOffer.rider_id == rider_user_id).delete(synchronize_session=False)
     db.query(RiderProfile).filter(RiderProfile.user_id == rider_user_id).delete(synchronize_session=False)
@@ -909,6 +935,8 @@ def admin_create_customer(
         raise HTTPException(status_code=400, detail="Phone number already registered")
     if payload.email and db.query(User).filter(User.email == payload.email.strip()).first():
         raise HTTPException(status_code=400, detail="Email already registered")
+    from app.services.referral import generate_unique_referral_code
+
     c = User(
         full_name=payload.full_name.strip(),
         phone=clean_phone,
@@ -916,11 +944,12 @@ def admin_create_customer(
         password_hash=hash_password(payload.password),
         role="customer",
         is_active=True,
+        referral_code=generate_unique_referral_code(db, payload.full_name),
     )
     db.add(c)
     db.commit()
     db.refresh(c)
-    return {"id": c.id, "full_name": c.full_name, "phone": c.phone}
+    return {"id": c.id, "full_name": c.full_name, "phone": c.phone, "referral_code": c.referral_code}
 
 
 @router.patch("/customers/{user_id}")
@@ -967,11 +996,20 @@ def admin_delete_customer(
     if booking_ids:
         db.query(SupportTicket).filter(SupportTicket.booking_id.in_(booking_ids)).update({"booking_id": None})
         db.query(EmergencySosAlert).filter(EmergencySosAlert.booking_id.in_(booking_ids)).update({"booking_id": None})
+        db.query(ReferralRecord).filter(ReferralRecord.trigger_booking_id.in_(booking_ids)).update(
+            {ReferralRecord.trigger_booking_id: None}, synchronize_session=False
+        )
         db.query(LedgerEntry).filter(LedgerEntry.booking_id.in_(booking_ids)).delete()
         db.query(Booking).filter(Booking.id.in_(booking_ids)).delete()
     db.query(SupportTicket).filter(SupportTicket.user_id == user_id).delete()
     db.query(EmergencySosAlert).filter(EmergencySosAlert.user_id == user_id).delete()
     db.query(EmergencySosAlert).filter(EmergencySosAlert.resolved_by_id == user_id).update({"resolved_by_id": None})
+    db.query(ReferralRecord).filter(
+        (ReferralRecord.referrer_id == user_id) | (ReferralRecord.referred_user_id == user_id)
+    ).delete(synchronize_session=False)
+    db.query(User).filter(User.referred_by_user_id == user_id).update(
+        {User.referred_by_user_id: None}, synchronize_session=False
+    )
     db.delete(user)
     db.commit()
     for r_id in affected_riders:
@@ -1448,9 +1486,10 @@ def admin_update_setting(
     else:
         s.value = val
     if key == "rider_topup_required" and str(val).strip().lower() in ("1", "true", "yes", "on"):
-        db.query(RiderProfile).filter(RiderProfile.remaining_paid_rides <= 0).update(
-            {RiderProfile.is_online: False}, synchronize_session=False
-        )
+        db.query(RiderProfile).filter(
+            RiderProfile.remaining_paid_rides <= 0,
+            RiderProfile.is_topup_exempt.is_(False),
+        ).update({RiderProfile.is_online: False}, synchronize_session=False)
     db.commit()
     from app.routers.public_router import invalidate_nearby_captains_cache, invalidate_public_bootstrap_cache
 

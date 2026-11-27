@@ -47,6 +47,7 @@ export function AdminPeoplePanel({
     custom_commission_type: 'none',
     custom_commission_value: '',
     is_verified: false,
+    is_topup_exempt: false,
   });
 
   // Dedicated Full Edit Modal States (Captain & Customer)
@@ -125,6 +126,7 @@ export function AdminPeoplePanel({
       custom_commission_value: r.custom_commission_value ?? '',
       is_active: r.is_active !== false,
       is_verified: Boolean(r.is_verified),
+      is_topup_exempt: Boolean(r.is_topup_exempt),
       verification_status: r.is_verified ? 'verified' : r.verification_status || 'incomplete',
       verification_note: r.verification_note || '',
       is_online: Boolean(r.is_online),
@@ -166,6 +168,7 @@ export function AdminPeoplePanel({
             : null,
         is_active: Boolean(editRiderForm.is_active),
         is_verified: Boolean(editRiderForm.is_verified),
+        is_topup_exempt: Boolean(editRiderForm.is_topup_exempt),
         verification_status: editRiderForm.is_verified
           ? 'verified'
           : editRiderForm.verification_status === 'verified'
@@ -218,6 +221,7 @@ export function AdminPeoplePanel({
               ? Number(riderForm.custom_commission_value)
               : null,
           is_verified: Boolean(riderForm.is_verified),
+          is_topup_exempt: Boolean(riderForm.is_topup_exempt),
         },
       });
       onNotify(
@@ -721,6 +725,16 @@ export function AdminPeoplePanel({
                       />
                       Account Active (Uncheck to Suspend)
                     </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editRiderForm.is_topup_exempt)}
+                        onChange={(e) =>
+                          setEditRiderForm({ ...editRiderForm, is_topup_exempt: e.target.checked })
+                        }
+                      />
+                      App Fee Exempt (Waive Top-Up for this Captain)
+                    </label>
                     <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
                       <input
                         type="checkbox"
@@ -911,9 +925,19 @@ export function AdminPeoplePanel({
                 />
               )}
             </div>
-            <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
-              Save New Captain
-            </button>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(riderForm.is_topup_exempt)}
+                  onChange={(e) => setRiderForm({ ...riderForm, is_topup_exempt: e.target.checked })}
+                />
+                Exempt from Pre-Paid App Access Fee (Waived)
+              </label>
+              <button type="submit" className="px-5 py-2.5 rounded-xl bg-[#009E4D] text-white font-bold">
+                Save New Captain
+              </button>
+            </div>
           </form>
           )}
 
@@ -991,6 +1015,11 @@ export function AdminPeoplePanel({
                         <span className={`px-2 py-0.5 rounded-full font-bold ${r.is_active ? 'bg-sky-50 text-sky-700' : 'bg-rose-50 text-rose-600'}`}>
                           {r.is_active ? 'Active' : 'Suspended'}
                         </span>
+                        {r.is_topup_exempt && (
+                          <span className="px-2 py-0.5 rounded-full font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            App Fee Exempt ✓
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1060,6 +1089,34 @@ export function AdminPeoplePanel({
                         className="px-2 py-1 rounded-lg border border-slate-200/80 font-bold"
                       >
                         {r.is_active ? 'Suspend' : 'Activate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const nextVal = !r.is_topup_exempt;
+                            await apiRequest(`/api/admin/riders/${r.id}`, {
+                              method: 'PATCH',
+                              body: { is_topup_exempt: nextVal },
+                            });
+                            onNotify(
+                              nextVal
+                                ? `${r.full_name} App Access Fee waived (Exempt ✓).`
+                                : `${r.full_name} App Access Fee waiver removed.`
+                            );
+                            onReloadRiders();
+                          } catch (err) {
+                            onNotify(err.message, true);
+                          }
+                        }}
+                        className={`px-2 py-1 rounded-lg border font-bold ${
+                          r.is_topup_exempt
+                            ? 'bg-indigo-600 text-white border-indigo-700'
+                            : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                        }`}
+                        title="Toggle Pre-Paid App Access Fee exemption for this Captain"
+                      >
+                        {r.is_topup_exempt ? 'Exempt ✓' : 'Waive Fee'}
                       </button>
                       <button
                         type="button"

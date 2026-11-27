@@ -49,6 +49,7 @@ def serialize_rider_profile(rp: RiderProfile) -> dict:
         "remaining_paid_rides": int(getattr(rp, "remaining_paid_rides", 0) or 0),
         "topup_per_ride_fee": float(getattr(rp, "topup_per_ride_fee", 10.0) or 10.0),
         "total_topups_paid": float(getattr(rp, "total_topups_paid", 0.0) or 0.0),
+        "is_topup_exempt": bool(getattr(rp, "is_topup_exempt", False)),
         "custom_commission_type": rp.custom_commission_type,
         "custom_commission_value": rp.custom_commission_value,
         "total_trips": rp.total_trips,
@@ -68,6 +69,9 @@ def serialize_user(user: User) -> dict:
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
+        "referral_code": getattr(user, "referral_code", None),
+        "referred_by_user_id": getattr(user, "referred_by_user_id", None),
+        "referral_discount_balance": round(float(getattr(user, "referral_discount_balance", 0.0) or 0.0), 2),
         "created_at": user.created_at,
         "rider_profile": serialize_rider_profile(user.rider_profile) if user.rider_profile else None,
     }
@@ -88,6 +92,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     cnic_front_photo = clean_image_data_uri(payload.cnic_front_photo) or None
     cnic_back_photo = clean_image_data_uri(payload.cnic_back_photo) or None
 
+    from app.services.referral import apply_referral_code_for_user, generate_unique_referral_code
+
     user = User(
         full_name=payload.full_name.strip(),
         phone=clean_phone,
@@ -95,10 +101,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         password_hash=hash_password(payload.password),
         role=payload.role,
         is_active=True,
+        referral_code=generate_unique_referral_code(db, payload.full_name),
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    db.flush()
 
     if payload.role == "rider":
         cap_setting = db.query(SystemSetting).filter(SystemSetting.key == "default_credit_limit").first()
@@ -142,10 +148,20 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             remaining_paid_rides=0,
             topup_per_ride_fee=10.0,
             total_topups_paid=0.0,
+            is_topup_exempt=False,
         )
         db.add(rp)
-        db.commit()
-        db.refresh(user)
+        db.flush()
+
+    if payload.referral_code and payload.referral_code.strip():
+        try:
+            apply_referral_code_for_user(db, user, payload.referral_code, commit=False)
+        except HTTPException:
+            db.rollback()
+            raise
+
+    db.commit()
+    db.refresh(user)
 
     token = create_access_token(user)
     return {"access_token": token, "token_type": "bearer", "user": serialize_user(user)}

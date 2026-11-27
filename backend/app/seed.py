@@ -14,6 +14,7 @@ from app.models import (
     User,
 )
 from app.services.finance import complete_booking_and_post_ledger, utcnow
+from app.services.referral import backfill_missing_referral_codes
 
 
 def seed_initial_data(db: Session) -> None:
@@ -205,6 +206,14 @@ def seed_initial_data(db: Session) -> None:
         "rider_topup_rides_count": "10",
         "rider_topup_package_fee": "100",
         "rider_topup_car_package_fee": "",
+        "referral_program_enabled": "true",
+        "referral_customer_enabled": "true",
+        "referral_captain_enabled": "true",
+        "referral_customer_friend_discount": "30",
+        "referral_customer_referrer_reward": "30",
+        "referral_customer_min_fare": "120",
+        "referral_captain_bonus_rides": "5",
+        "referral_max_per_user": "20",
         "support_phone": "+92 300 1111111",
         "support_whatsapp": "+92 300 1111111",
         "emergency_rescue_number": "1122",
@@ -294,6 +303,7 @@ def seed_initial_data(db: Session) -> None:
                     changed = True
         if changed:
             db.commit()
+        backfill_missing_referral_codes(db)
         return
 
     admin = User(
@@ -495,3 +505,4 @@ def seed_initial_data(db: Session) -> None:
         )
     )
     db.commit()
+    backfill_missing_referral_codes(db)

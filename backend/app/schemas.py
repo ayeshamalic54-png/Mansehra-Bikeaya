@@ -10,6 +10,7 @@ class RegisterRequest(BaseModel):
     email: Optional[str] = None
     password: str = Field(..., min_length=4, max_length=100)
     role: str = Field("customer", pattern="^(customer|rider)$")
+    referral_code: Optional[str] = Field(None, max_length=24)
     # Rider signup optional fields
     cnic_number: Optional[str] = None
     vehicle_type: Optional[str] = Field("bike", pattern="^(bike|car)$")
@@ -73,6 +74,7 @@ class BookingCreate(BaseModel):
     payment_method: str = Field("cash", pattern="^(cash|easypaisa|upaisa|jazzcash|bank|wallet)$")
     payment_reference: Optional[str] = Field(None, max_length=80)
     promo_code: Optional[str] = None
+    use_referral_credit: bool = True
     receiver_name: Optional[str] = None
     receiver_phone: Optional[str] = None
     cod_amount: float = Field(0.0, ge=0)
@@ -155,6 +157,7 @@ class AdminCreateRider(BaseModel):
     cnic_front_photo: Optional[str] = Field(None, max_length=950000)
     cnic_back_photo: Optional[str] = Field(None, max_length=950000)
     is_verified: bool = False
+    is_topup_exempt: bool = False
 
 
 class RiderConfigUpdate(BaseModel):
@@ -172,6 +175,7 @@ class RiderConfigUpdate(BaseModel):
     verification_status: Optional[str] = Field(None, pattern="^(incomplete|pending|verified|rejected)$")
     verification_note: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
+    is_topup_exempt: Optional[bool] = None
     zone_name: Optional[str] = None
     sync_zone_coords: Optional[bool] = None
     rider_photo: Optional[str] = Field(None, max_length=950000)
@@ -381,3 +385,7 @@ class EmergencySosCreate(BaseModel):
 class EmergencySosStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(active|acknowledged|resolved)$")
     resolution_note: Optional[str] = Field(None, max_length=255)
+
+
+class ReferralApplyRequest(BaseModel):
+    referral_code: str = Field(..., min_length=3, max_length=24)

@@ -19,6 +19,7 @@ export function AuthPage({ onNavigate }) {
   const [bikePlate, setBikePlate] = useState('');
   const [licenseNo, setLicenseNo] = useState('');
   const [zoneName, setZoneName] = useState('Main Bazar / Lari Adda');
+  const [referralCode, setReferralCode] = useState('');
   const [photos, setPhotos] = useState({
     rider_photo: '',
     vehicle_photo: '',
@@ -47,6 +48,7 @@ export function AuthPage({ onNavigate }) {
           email: email || null,
           password,
           role,
+          referral_code: referralCode.trim() ? referralCode.trim().toUpperCase() : null,
           cnic_number: role === 'rider' ? cnic : null,
           vehicle_type: role === 'rider' ? vehicleType : null,
           bike_model: role === 'rider' ? bikeModel : null,
@@ -226,6 +228,21 @@ export function AuthPage({ onNavigate }) {
                       />
                     </div>
                   </div>
+
+                  {bootstrap?.settings?.referral_program_enabled !== 'false' && (
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Referral Code (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. SGHAM482 — unlock bonus after 1st ride/activation"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50 focus:bg-white focus:outline-none focus:border-indigo-500 mono-num uppercase font-bold"
+                      />
+                    </div>
+                  )}
 
                   {role === 'rider' && (
                     <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">

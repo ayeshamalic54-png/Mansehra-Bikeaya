@@ -1959,3 +1959,376 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     assert del_car.status_code == 200
 
 
+def test_specific_rider_topup_exemption(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "true"},
+        ).status_code
+        == 200
+    )
+
+    sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+
+    # Register Non-Exempt unpaid Captain A and Exempted unpaid Captain B
+    cap_a_res = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Paid Required Capt",
+            "phone": "03170001111",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_plate": "MNS-EX01",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    ).json()
+    cap_b_res = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Fee Waived Capt",
+            "phone": "03170002222",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_plate": "MNS-EX02",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    ).json()
+    cap_a_id, cap_a_tok = cap_a_res["user"]["id"], cap_a_res["access_token"]
+    cap_b_id, cap_b_tok = cap_b_res["user"]["id"], cap_b_res["access_token"]
+
+    # Verify both, but ONLY exempt Captain B from Pre-Paid App Access Fee!
+    assert (
+        client.patch(
+            f"/api/admin/riders/{cap_a_id}",
+            headers=_auth_header(admin_token),
+            json={"is_verified": True, "sync_zone_coords": True, "is_topup_exempt": False},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.patch(
+            f"/api/admin/riders/{cap_b_id}",
+            headers=_auth_header(admin_token),
+            json={"is_verified": True, "sync_zone_coords": True, "is_topup_exempt": True},
+        ).status_code
+        == 200
+    )
+
+    # Captain A (0 paid rides, non-exempt) is BLOCKED; Captain B (0 paid rides, exempt) goes ONLINE!
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(cap_a_tok)).status_code == 403
+    tog_b = client.post("/api/riders/toggle-online", headers=_auth_header(cap_b_tok))
+    assert tog_b.status_code == 200
+    assert tog_b.json()["is_online"] is True
+    assert tog_b.json()["is_topup_exempt"] is True
+
+    # Global toggle OFF -> ON keeps Captain B online while everyone else with 0 paid rides goes offline
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "false"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "true"},
+        ).status_code
+        == 200
+    )
+    me_b = client.get("/api/auth/me", headers=_auth_header(cap_b_tok)).json()["user"]["rider_profile"]
+    assert me_b["is_online"] is True
+    assert me_b["is_topup_exempt"] is True
+
+    # Captain B appears on customer map, receives job with uses_topup_ride=False, completes Rs. 120 ride -> Rs. 20 commission, stays ONLINE!
+    nearby = client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
+    assert any(c["rider_id"] == cap_b_id for c in nearby)
+    assert not any(c["rider_id"] == cap_a_id for c in nearby)
+
+    bk = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk Exempt Test",
+            "pickup_lat": 34.328548,
+            "pickup_lng": 73.188513,
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Exempt Test",
+            "distance_km": 2.0,
+            "offer_fare": 120.0,
+            "payment_method": "cash",
+        },
+    ).json()
+
+    avail_a = client.get("/api/riders/available-jobs", headers=_auth_header(cap_a_tok)).json()
+    assert avail_a == []
+    avail_b = client.get("/api/riders/available-jobs", headers=_auth_header(cap_b_tok)).json()
+    job_b = next(j for j in avail_b if j["id"] == bk["id"])
+    assert job_b["uses_topup_ride"] is False
+    assert job_b["fee_mode"] == "commission"
+    assert job_b["commission_amount"] == 20.0
+
+    assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(cap_b_tok)).status_code == 200
+    done = client.post(
+        f"/api/riders/jobs/{bk['id']}/status",
+        headers=_auth_header(cap_b_tok),
+        json={"status": "completed"},
+    )
+    assert done.status_code == 200
+    assert done.json()["commission_amount"] == 20.0
+    assert done.json()["rider_earning"] == 100.0
+
+    led_b = client.get("/api/riders/ledger", headers=_auth_header(cap_b_tok)).json()
+    assert led_b["summary"]["is_topup_exempt"] is True
+    assert led_b["summary"]["topup_blocked"] is False
+    assert led_b["summary"]["remaining_paid_rides"] == 0
+    assert led_b["summary"]["balance_due_to_admin"] == 20.0
+    assert led_b["app_fee_entries"] == []
+
+    me_b_after = client.get("/api/auth/me", headers=_auth_header(cap_b_tok)).json()["user"]["rider_profile"]
+    assert me_b_after["is_online"] is True
+
+    # Removing exemption immediately auto-offlines Captain B (0 paid rides)
+    assert (
+        client.patch(
+            f"/api/admin/riders/{cap_b_id}",
+            headers=_auth_header(admin_token),
+            json={"is_topup_exempt": False},
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/auth/me", headers=_auth_header(cap_b_tok)).json()["user"]["rider_profile"]["is_online"] is False
+
+    assert client.delete(f"/api/admin/riders/{cap_a_id}", headers=_auth_header(admin_token)).status_code == 200
+    assert client.delete(f"/api/admin/riders/{cap_b_id}", headers=_auth_header(admin_token)).status_code == 200
+
+
+def test_two_track_referral_program_and_toggles(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+
+    # Configure Referral Program ON with clear rewards & toggles
+    for k, v in [
+        ("rider_topup_required", "true"),
+        ("rider_topup_rides_count", "10"),
+        ("rider_topup_package_fee", "167"),
+        ("referral_program_enabled", "true"),
+        ("referral_customer_enabled", "true"),
+        ("referral_captain_enabled", "true"),
+        ("referral_customer_friend_discount", "30"),
+        ("referral_customer_referrer_reward", "30"),
+        ("referral_customer_min_fare", "120"),
+        ("referral_captain_bonus_rides", "5"),
+        ("referral_max_per_user", "20"),
+    ]:
+        assert client.put(f"/api/admin/settings/{k}", headers=_auth_header(admin_token), json={"value": v}).status_code == 200
+
+    # 1. Master Toggle OFF blocks referral application cleanly
+    assert client.put("/api/admin/settings/referral_program_enabled", headers=_auth_header(admin_token), json={"value": "false"}).status_code == 200
+
+    c1 = client.post(
+        "/api/auth/register",
+        json={"full_name": "Hammad Referrer", "phone": "03180001111", "password": "pass1234", "role": "customer"},
+    ).json()
+    c1_tok = c1["access_token"]
+    c1_code = c1["user"]["referral_code"]
+    assert c1_code and c1_code.startswith("SG")
+
+    blocked_reg = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Bilal Blocked",
+            "phone": "03180002222",
+            "password": "pass1234",
+            "role": "customer",
+            "referral_code": c1_code,
+        },
+    )
+    assert blocked_reg.status_code == 400
+
+    # Turn Master Toggle ON -> Customer Track OFF still blocks Customer referral, while Captain Track works!
+    assert client.put("/api/admin/settings/referral_program_enabled", headers=_auth_header(admin_token), json={"value": "true"}).status_code == 200
+    assert client.put("/api/admin/settings/referral_customer_enabled", headers=_auth_header(admin_token), json={"value": "false"}).status_code == 200
+    assert (
+        client.post(
+            "/api/auth/register",
+            json={
+                "full_name": "Bilal Paused",
+                "phone": "03180002222",
+                "password": "pass1234",
+                "role": "customer",
+                "referral_code": c1_code,
+            },
+        ).status_code
+        == 400
+    )
+
+    # Turn Customer Track ON -> Bilal registers cleanly with Hammad's code!
+    assert client.put("/api/admin/settings/referral_customer_enabled", headers=_auth_header(admin_token), json={"value": "true"}).status_code == 200
+    c2 = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Bilal Referred",
+            "phone": "03180002222",
+            "password": "pass1234",
+            "role": "customer",
+            "referral_code": c1_code,
+        },
+    )
+    assert c2.status_code == 201, c2.text
+    c2_tok = c2.json()["access_token"]
+
+    # Self-referral blocked
+    assert client.post("/api/referrals/apply", headers=_auth_header(c1_tok), json={"referral_code": c1_code}).status_code == 400
+
+    # Before Bilal completes a ride, Hammad has 0 discount balance & status == pending
+    c1_refs_before = client.get("/api/referrals/my", headers=_auth_header(c1_tok)).json()
+    assert c1_refs_before["referral_discount_balance"] == 0.0
+    assert c1_refs_before["stats"]["pending_count"] == 1
+    assert c1_refs_before["stats"]["rewarded_count"] == 0
+
+    # Bilal books 1st ride -> Rs. 30 Friend Discount auto-applies cleanly!
+    bk_c2 = client.post(
+        "/api/bookings",
+        headers=_auth_header(c2_tok),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk",
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Chowk",
+            "distance_km": 2.0,
+            "payment_method": "cash",
+        },
+    )
+    assert bk_c2.status_code == 201, bk_c2.text
+    bk_c2_data = bk_c2.json()
+    assert bk_c2_data["discount_amount"] == 30.0
+    assert bk_c2_data["promo_code"] == f"REF-1ST-{c1_code}"
+    assert bk_c2_data["final_fare"] == bk_c2_data["recommended_fare"] - 30.0
+
+    # Create & verify an exempt helper rider to complete Bilal's ride
+    helper = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Helper Capt",
+            "phone": "03180003333",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_plate": "MNS-REF1",
+            "zone_name": "Mansehra — Punjab Chowk",
+        },
+    ).json()
+    helper_id, helper_tok = helper["user"]["id"], helper["access_token"]
+    assert client.patch(f"/api/admin/riders/{helper_id}", headers=_auth_header(admin_token), json={"is_verified": True, "is_topup_exempt": True, "is_online": True}).status_code == 200
+    assert client.post(f"/api/riders/jobs/{bk_c2_data['id']}/accept", headers=_auth_header(helper_tok)).status_code == 200
+    assert client.post(f"/api/riders/jobs/{bk_c2_data['id']}/status", headers=_auth_header(helper_tok), json={"status": "completed"}).status_code == 200
+
+    # After Bilal's 1st ride completes -> Hammad earns Rs. 30 credit!
+    c1_refs_after = client.get("/api/referrals/my", headers=_auth_header(c1_tok)).json()
+    assert c1_refs_after["referral_discount_balance"] == 30.0
+    assert c1_refs_after["stats"]["rewarded_count"] == 1
+
+    # Hammad books a ride -> Rs. 30 earned credit applies (`REF-BONUS`); cancelling refunds it cleanly!
+    bk_c1_cancel = client.post(
+        "/api/bookings",
+        headers=_auth_header(c1_tok),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk",
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Chowk",
+            "distance_km": 2.0,
+            "payment_method": "cash",
+        },
+    ).json()
+    assert bk_c1_cancel["discount_amount"] == 30.0
+    assert bk_c1_cancel["promo_code"] == "REF-BONUS"
+    assert client.get("/api/referrals/my", headers=_auth_header(c1_tok)).json()["referral_discount_balance"] == 0.0
+
+    assert client.post(f"/api/bookings/{bk_c1_cancel['id']}/cancel", headers=_auth_header(c1_tok)).status_code == 200
+    assert client.get("/api/referrals/my", headers=_auth_header(c1_tok)).json()["referral_discount_balance"] == 30.0
+
+    # 2. Captain Referral Track (+5 Free App Access Rides on verified 1st Top-Up approval)
+    helper_code = helper["user"]["referral_code"]
+    invited_cap = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Invited Capt Two",
+            "phone": "03180004444",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_plate": "MNS-REF2",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "referral_code": helper_code,
+        },
+    )
+    assert invited_cap.status_code == 201, invited_cap.text
+    inv_id, inv_tok = invited_cap.json()["user"]["id"], invited_cap.json()["access_token"]
+
+    assert client.patch(f"/api/admin/riders/{inv_id}", headers=_auth_header(admin_token), json={"is_verified": True}).status_code == 200
+    topup_req = client.post(
+        "/api/riders/topup-requests",
+        headers=_auth_header(inv_tok),
+        json={"amount": 167, "rides_requested": 10, "payment_channel": "easypaisa"},
+    )
+    assert topup_req.status_code == 201
+    assert (
+        client.post(
+            f"/api/finance/topup-requests/{topup_req.json()['id']}/approve",
+            headers=_auth_header(admin_token),
+            json={"admin_note": "Approved"},
+        ).status_code
+        == 200
+    )
+
+    helper_led = client.get("/api/riders/ledger", headers=_auth_header(helper_tok)).json()
+    assert helper_led["summary"]["remaining_paid_rides"] == 5
+    assert any(e["entry_type"] == "referral_app_fee_bonus" for e in helper_led["app_fee_entries"])
+    assert not any(e["entry_type"] == "referral_app_fee_bonus" for e in helper_led["commission_entries"])
+
+    # Admin Referral Summary & P&L check + FK clean deletions
+    adm_refs = client.get("/api/admin/referrals", headers=_auth_header(admin_token)).json()
+    assert adm_refs["summary"]["rewarded"] >= 2
+    assert adm_refs["summary"]["total_bonus_rides"] >= 5
+
+    pnl = client.get("/api/reports/pnl", headers=_auth_header(admin_token)).json()
+    assert pnl["summary"]["referral_discounts_given"] >= 30.0
+    assert pnl["summary"]["referral_bonus_rides"] >= 5
+
+    assert client.delete(f"/api/admin/riders/{inv_id}", headers=_auth_header(admin_token)).status_code == 200
+    assert client.delete(f"/api/admin/riders/{helper_id}", headers=_auth_header(admin_token)).status_code == 200
+    assert client.delete(f"/api/admin/customers/{c2.json()['user']['id']}", headers=_auth_header(admin_token)).status_code == 200
+    assert client.delete(f"/api/admin/customers/{c1['user']['id']}", headers=_auth_header(admin_token)).status_code == 200
+
+
+

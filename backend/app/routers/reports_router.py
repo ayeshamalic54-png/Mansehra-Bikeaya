@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import AdminExpense, Booking, LedgerEntry, RiderProfile, RiderTopupRequest, User
+from app.models import AdminExpense, Booking, LedgerEntry, ReferralRecord, RiderProfile, RiderTopupRequest, User
 
 router = APIRouter(prefix="/api/reports", tags=["Profit & Loss Reports"])
 
@@ -63,6 +63,15 @@ def get_pnl_report(
         )
         .all()
     )
+    rewarded_referrals = (
+        db.query(ReferralRecord)
+        .filter(
+            ReferralRecord.status == "rewarded",
+            func.coalesce(ReferralRecord.rewarded_at, ReferralRecord.created_at) >= dt_start,
+            func.coalesce(ReferralRecord.rewarded_at, ReferralRecord.created_at) <= dt_end,
+        )
+        .all()
+    )
 
     gross_gmv = round(sum(b.final_fare for b in completed), 2)
     admin_commission = round(sum(b.commission_amount for b in completed), 2)
@@ -73,6 +82,15 @@ def get_pnl_report(
     topup_collected = round(sum(t.amount for t in approved_topups), 2)
     total_expenses = round(sum(e.amount for e in expenses), 2)
     net_profit = round(admin_commission + topup_collected - total_expenses, 2)
+    referral_discounts_given = round(
+        sum(float(b.discount_amount or 0.0) for b in completed if (b.promo_code or "").startswith("REF-")),
+        2,
+    )
+    referral_bonus_rides = sum(int(r.reward_rides or 0) for r in rewarded_referrals)
+    referral_credit_rewards = round(
+        sum(float(r.reward_amount or 0.0) for r in rewarded_referrals if r.reward_type == "discount_credit"),
+        2,
+    )
 
     # Service breakdown
     svc_map = defaultdict(lambda: {"service_type": "", "trips": 0, "gross_fare": 0.0, "admin_profit": 0.0})
@@ -141,6 +159,9 @@ def get_pnl_report(
             "topup_collected": topup_collected,
             "total_expenses": total_expenses,
             "net_business_profit": net_profit,
+            "referral_discounts_given": referral_discounts_given,
+            "referral_bonus_rides": referral_bonus_rides,
+            "referral_credit_rewards": referral_credit_rewards,
         },
         "service_breakdown": list(svc_map.values()),
         "expense_by_category": [{"category": k, "amount": v} for k, v in exp_cat.items()],

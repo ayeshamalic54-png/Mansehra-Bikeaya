@@ -19,6 +19,7 @@ from app.routers import (
     bookings_router,
     finance_router,
     public_router,
+    referral_router,
     reports_router,
     riders_router,
     sos_router,
@@ -123,6 +124,11 @@ def ensure_schema_migrations() -> None:
     is_pg = engine.dialect.name == "postgresql"
     ts_type = "TIMESTAMPTZ" if is_pg else "DATETIME"
     column_specs = {
+        "users": [
+            ("referral_code", "VARCHAR(24)"),
+            ("referred_by_user_id", "INTEGER"),
+            ("referral_discount_balance", "FLOAT NOT NULL DEFAULT 0.0"),
+        ],
         "rider_profiles": [
             ("vehicle_type", "VARCHAR(20) NOT NULL DEFAULT 'bike'"),
             ("current_lat", "FLOAT"),
@@ -139,6 +145,7 @@ def ensure_schema_migrations() -> None:
             ("remaining_paid_rides", "INTEGER NOT NULL DEFAULT 0"),
             ("topup_per_ride_fee", "FLOAT NOT NULL DEFAULT 10.0"),
             ("total_topups_paid", "FLOAT NOT NULL DEFAULT 0.0"),
+            ("is_topup_exempt", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ],
         "mansehra_zones": [
             ("lat", "FLOAT"),
@@ -183,6 +190,8 @@ def ensure_schema_migrations() -> None:
                     "WHERE status = 'completed' AND payment_status = 'pending' AND payment_collector = 'rider'"
                 )
             )
+        if "users" in tables:
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_referral_code ON users (referral_code)"))
         if "rider_profiles" in tables:
             conn.execute(
                 text(
@@ -293,6 +302,7 @@ app.include_router(bookings_router.router)
 app.include_router(riders_router.router)
 app.include_router(admin_router.router)
 app.include_router(finance_router.router)
+app.include_router(referral_router.router)
 app.include_router(reports_router.router)
 app.include_router(sos_router.router)
 

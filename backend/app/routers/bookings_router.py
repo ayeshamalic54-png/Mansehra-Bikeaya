@@ -185,7 +185,10 @@ def create_customer_booking(
     comm_val = est["commission_value"]
     comm_amount = est["estimated_commission"]
     rider_net = est["estimated_rider_earning"]
+    applied_promo = est["applied_promo"]
+    discount_amount = float(est["discount_amount"] or 0.0)
 
+    rule = db.query(PricingRule).filter(PricingRule.service_type == payload.service_type).first()
     if payload.offer_fare is not None:
         min_floor = max(50.0, float(round(recommended * 0.5)))
         if payload.offer_fare < min_floor:
@@ -194,9 +197,32 @@ def create_customer_booking(
                 detail=f"InDrive offer fare must be at least Rs. {min_floor:.0f} (recommended Rs. {recommended:.0f}).",
             )
         final_fare = float(round(payload.offer_fare))
-        rule = db.query(PricingRule).filter(PricingRule.service_type == payload.service_type).first()
         if rule:
             comm_type, comm_val, comm_amount, rider_net = compute_commission(final_fare, rule, None)
+
+    if not applied_promo and current_user.role == "customer":
+        from app.services.referral import preview_customer_referral_discount
+
+        min_rule_fare = float(rule.min_fare) if rule else 50.0
+        ref_prev = preview_customer_referral_discount(
+            db=db,
+            customer=current_user,
+            raw_fare=final_fare,
+            min_rule_fare=min_rule_fare,
+            promo_code_entered=payload.promo_code,
+            use_referral_credit=bool(payload.use_referral_credit),
+        )
+        if ref_prev["discount"] > 0:
+            discount_amount = float(ref_prev["discount"])
+            applied_promo = ref_prev["code"]
+            final_fare = float(round(max(min_rule_fare, final_fare - discount_amount)))
+            if rule:
+                comm_type, comm_val, comm_amount, rider_net = compute_commission(final_fare, rule, None)
+            if ref_prev["source"] == "earned_credit":
+                current_user.referral_discount_balance = round(
+                    max(0.0, float(getattr(current_user, "referral_discount_balance", 0.0) or 0.0) - discount_amount),
+                    2,
+                )
 
     p_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.pickup_zone).first()
     d_zone_row = db.query(MansehraZone).filter(MansehraZone.name == payload.drop_zone).first()
@@ -216,8 +242,8 @@ def create_customer_booking(
         distance_km=payload.distance_km,
         estimated_fare=recommended,
         recommended_fare=recommended,
-        discount_amount=est["discount_amount"],
-        promo_code=est["applied_promo"],
+        discount_amount=discount_amount,
+        promo_code=applied_promo,
         wait_minutes=est["wait_minutes"],
         wait_charge=est["wait_charge"],
         final_fare=final_fare,
@@ -429,6 +455,13 @@ def cancel_booking(
 
     booking.status = "cancelled"
     booking.cancelled_reason = reason
+    if booking.promo_code == "REF-BONUS" and float(booking.discount_amount or 0.0) > 0 and booking.customer_id:
+        cust = db.query(User).filter(User.id == booking.customer_id).first()
+        if cust:
+            cust.referral_discount_balance = round(
+                float(getattr(cust, "referral_discount_balance", 0.0) or 0.0) + float(booking.discount_amount or 0.0),
+                2,
+            )
     for o in booking.offers:
         if o.status == "pending":
             o.status = "declined"

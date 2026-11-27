@@ -462,7 +462,7 @@ def restore_database_from_payload(db: Session, payload: dict) -> dict:
                         )
                     )
 
-        # Ensure emergency helpline and top-up keys exist when restoring older backups
+        # Ensure emergency helpline, top-up, and referral defaults exist when restoring older backups
         emergency_defaults = [
             ("emergency_rescue_number", "1122"),
             ("emergency_police_number", "15"),
@@ -470,6 +470,14 @@ def restore_database_from_payload(db: Session, payload: dict) -> dict:
             ("rider_topup_rides_count", "10"),
             ("rider_topup_package_fee", "100"),
             ("rider_topup_car_package_fee", ""),
+            ("referral_program_enabled", "true"),
+            ("referral_customer_enabled", "true"),
+            ("referral_captain_enabled", "true"),
+            ("referral_customer_friend_discount", "30"),
+            ("referral_customer_referrer_reward", "30"),
+            ("referral_customer_min_fare", "120"),
+            ("referral_captain_bonus_rides", "5"),
+            ("referral_max_per_user", "20"),
         ]
         for key, val in emergency_defaults:
             if not db.query(SystemSetting).filter(SystemSetting.key == key).first():

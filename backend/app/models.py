@@ -28,6 +28,9 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(24), nullable=False, index=True)  # admin | rider | customer
     is_active = Column(Boolean, default=True, nullable=False)
+    referral_code = Column(String(24), unique=True, index=True, nullable=True)
+    referred_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    referral_discount_balance = Column(Float, default=0.0, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     rider_profile = relationship("RiderProfile", back_populates="user", uselist=False)
@@ -58,9 +61,10 @@ class RiderProfile(Base):
     verification_note = Column(String(255), nullable=True)
     docs_submitted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Optional per-rider commission override (editable anytime by Admin)
+    # Optional per-rider commission override & specific App Fee waiver (editable anytime by Admin)
     custom_commission_type = Column(String(20), nullable=True)  # percent | fixed | None
     custom_commission_value = Column(Float, nullable=True)
+    is_topup_exempt = Column(Boolean, default=False, nullable=False)
 
     # Financial ledger & Prepaid Top-Up Ride Package counters
     credit_limit = Column(Float, default=1500.0, nullable=False)
@@ -359,3 +363,27 @@ class EmergencySosAlert(Base):
     user = relationship("User", foreign_keys=[user_id])
     resolved_by = relationship("User", foreign_keys=[resolved_by_id])
     booking = relationship("Booking")
+
+
+class ReferralRecord(Base):
+    __tablename__ = "referrals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    referrer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    referred_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    referral_code_used = Column(String(24), nullable=False)
+    track = Column(String(24), nullable=False, default="customer")  # customer | captain
+    status = Column(String(24), nullable=False, default="pending", index=True)  # pending | rewarded | cancelled
+    reward_type = Column(String(32), nullable=False, default="discount_credit")  # discount_credit | app_fee_rides
+    reward_amount = Column(Float, default=0.0, nullable=False)
+    reward_rides = Column(Integer, default=0, nullable=False)
+    friend_discount_given = Column(Float, default=0.0, nullable=False)
+    trigger_booking_id = Column(Integer, ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
+    trigger_topup_id = Column(Integer, ForeignKey("rider_topup_requests.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    rewarded_at = Column(DateTime(timezone=True), nullable=True)
+
+    referrer = relationship("User", foreign_keys=[referrer_id])
+    referred_user = relationship("User", foreign_keys=[referred_user_id])
+    trigger_booking = relationship("Booking", foreign_keys=[trigger_booking_id])
+    trigger_topup = relationship("RiderTopupRequest", foreign_keys=[trigger_topup_id])

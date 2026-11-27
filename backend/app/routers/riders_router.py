@@ -138,6 +138,7 @@ def toggle_online(
         "is_online": rp.is_online,
         "balance_due_to_admin": rp.balance_due_to_admin,
         "remaining_paid_rides": int(rp.remaining_paid_rides or 0),
+        "is_topup_exempt": bool(getattr(rp, "is_topup_exempt", False)),
         "topup_wallet_balance": float(rp.topup_wallet_balance or 0.0),
         "current_lat": rp.current_lat,
         "current_lng": rp.current_lng,
@@ -239,7 +240,8 @@ def get_available_jobs(
         data["is_closest_captain"] = is_closest
 
         topup_policy = get_topup_policy(db, rp.vehicle_type)
-        on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
+        is_exempt = bool(getattr(rp, "is_topup_exempt", False))
+        on_prepaid = bool(topup_policy["required"]) and not is_exempt and int(rp.remaining_paid_rides or 0) > 0
         rule = rules.get(job.service_type)
         data["uses_topup_ride"] = on_prepaid
         data["prepaid_ride_fee"] = (
@@ -327,7 +329,8 @@ def send_or_update_ride_offer(
     db.commit()
     db.refresh(offer)
     topup_policy = get_topup_policy(db, rp.vehicle_type)
-    on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
+    is_exempt = bool(getattr(rp, "is_topup_exempt", False))
+    on_prepaid = bool(topup_policy["required"]) and not is_exempt and int(rp.remaining_paid_rides or 0) > 0
     rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
     res = serialize_offer(offer)
     res["uses_topup_ride"] = on_prepaid
@@ -514,7 +517,8 @@ def get_my_rider_ledger(
         }
         for e in entries
     ]
-    app_fee_types = ("topup_approved", "topup_ride_deduction")
+    app_fee_types = ("topup_approved", "topup_ride_deduction", "referral_app_fee_bonus")
+    is_exempt = bool(getattr(rp, "is_topup_exempt", False))
     completed_ids = [b.id for b in completed_rides]
     prepaid_booking_ids = (
         {
@@ -539,8 +543,9 @@ def get_my_rider_ledger(
             "remaining_paid_rides": int(rp.remaining_paid_rides or 0),
             "topup_per_ride_fee": float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"]),
             "total_topups_paid": float(rp.total_topups_paid or 0.0),
+            "is_topup_exempt": is_exempt,
             "topup_policy": topup_policy,
-            "topup_blocked": bool(topup_policy["required"] and int(rp.remaining_paid_rides or 0) <= 0),
+            "topup_blocked": bool(topup_policy["required"] and not is_exempt and int(rp.remaining_paid_rides or 0) <= 0),
             "total_trips": rp.total_trips,
             "total_gross_collected": rp.total_gross_collected,
             "total_net_earned": rp.total_net_earned,

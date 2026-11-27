@@ -100,13 +100,13 @@ export function AdminReportsPanel({ onNotify }) {
         <StatCard
           label="Operating Expenses"
           value={`Rs. ${s.total_expenses}`}
-          subtext="Logged office & promo costs"
+          subtext={`Promo/Referral Disc: Rs. ${s.referral_discounts_given ?? 0} · Bonus Rides: ${s.referral_bonus_rides ?? 0}`}
           accent="rose"
         />
         <StatCard
           label="Net Business Profit"
           value={`Rs. ${s.net_profit ?? s.net_business_profit}`}
-          subtext="App Fees + Commission minus expenses"
+          subtext={`App Fees + Comm − Exp (Ref Credits: Rs. ${s.referral_credit_rewards ?? 0})`}
           accent="magenta"
         />
       </div>
