@@ -1293,15 +1293,26 @@ def test_full_db_backup_download_and_restore(client):
         promos_after = client.get("/api/admin/promos", headers=_auth_header(admin_token)).json()
         assert not any(p["code"] == "TEMP99" for p in promos_after)
 
-        # Also test restore-file upload endpoint
+        # Also test restore-file upload endpoint with an older backup missing emergency_* keys
+        import gzip as _gzip
+        import json as _json
+        older_payload = _json.loads(_gzip.decompress(dl.content).decode("utf-8"))
+        older_payload["tables"]["system_settings"] = [
+            s for s in older_payload["tables"].get("system_settings", [])
+            if s.get("key") not in ("emergency_rescue_number", "emergency_police_number")
+        ]
+        older_gz = _gzip.compress(_json.dumps(older_payload).encode("utf-8"))
         up_rst = client.post(
             "/api/admin/backups/restore-file",
             headers=_auth_header(admin_token),
-            files={"file": (bk["file_name"], dl.content, "application/gzip")},
+            files={"file": (bk["file_name"], older_gz, "application/gzip")},
         )
         assert up_rst.status_code == 200
         assert up_rst.json()["status"] == "restored"
         assert up_rst.json()["safety_backup_status"] == "local_only"
+        boot_after = client.get("/api/public/bootstrap").json()["settings"]
+        assert boot_after["emergency_rescue_number"] == "1122"
+        assert boot_after["emergency_police_number"] == "15"
         if up_rst.json().get("safety_backup_file"):
             sf2 = BACKEND_DIR.parent / "backups" / up_rst.json()["safety_backup_file"]
             created_files.append(sf2)

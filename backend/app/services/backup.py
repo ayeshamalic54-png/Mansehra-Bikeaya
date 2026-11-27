@@ -464,12 +464,12 @@ def restore_database_from_payload(db: Session, payload: dict) -> dict:
 
         # Ensure emergency helpline keys exist when restoring older backups
         emergency_defaults = [
-            ("emergency_rescue_number", "1122", "Emergency Rescue helpline across Pakistan (1122)"),
-            ("emergency_police_number", "15", "Emergency Police helpline across Pakistan (15)"),
+            ("emergency_rescue_number", "1122"),
+            ("emergency_police_number", "15"),
         ]
-        for key, val, desc in emergency_defaults:
+        for key, val in emergency_defaults:
             if not db.query(SystemSetting).filter(SystemSetting.key == key).first():
-                db.add(SystemSetting(key=key, value=val, description=desc))
+                db.add(SystemSetting(key=key, value=val))
 
         db.commit()
     except Exception:
