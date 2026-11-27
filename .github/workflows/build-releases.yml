@@ -113,7 +113,7 @@ jobs:
           tag_name: v1.2.0
           name: SafarGo v1.2.0 (Android APK & Windows EXE)
           body: |
-            Official SafarGo installable apps connected to https://mansehra-bikeaya.onrender.com:
+            Official SafarGo installable apps connected to https://safargoride.onrender.com:
             - **SafarGo.apk (v1.2.0)** — Native Android GPS Bridge, Mobile Map Fix, Target SDK 35 & Verified v2/v3 APK Signature
             - **SafarGoDesk.exe (v1.2.0)** — Windows Desktop App (Admin Dispatch, Rider Settlements & P&L)
           files: |

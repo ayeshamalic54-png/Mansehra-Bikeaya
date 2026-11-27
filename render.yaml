@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: mansehra-bikeaya
+    name: safargoride
     runtime: python
     plan: free
     buildCommand: |

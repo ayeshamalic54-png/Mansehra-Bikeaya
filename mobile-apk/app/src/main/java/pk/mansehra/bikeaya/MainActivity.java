@@ -37,7 +37,7 @@ import androidx.core.location.LocationManagerCompat;
 import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String APP_URL = "https://mansehra-bikeaya.onrender.com";
+    private static final String APP_URL = "https://safargoride.onrender.com";
     private WebView webView;
     private ProgressBar progressBar;
     private ValueCallback<Uri[]> filePathCallback;
@@ -339,7 +339,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     return true;
                 }
-                if (!host.contains("mansehra-bikeaya.onrender.com") && ("http".equals(scheme) || "https".equals(scheme))) {
+                if (!host.contains("safargoride.onrender.com") && !host.contains("mansehra-bikeaya.onrender.com") && ("http".equals(scheme) || "https".equals(scheme))) {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, uri));
                     } catch (Exception ignored) {

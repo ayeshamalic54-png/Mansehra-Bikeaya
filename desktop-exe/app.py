@@ -2,7 +2,7 @@ import os
 import webbrowser
 import webview
 
-APP_URL = os.environ.get("SAFARGO_APP_URL") or os.environ.get("BIKEAYA_APP_URL", "https://mansehra-bikeaya.onrender.com")
+APP_URL = os.environ.get("SAFARGO_APP_URL") or os.environ.get("BIKEAYA_APP_URL", "https://safargoride.onrender.com")
 APP_TITLE = "SafarGo — Rides, Cars, Parcels & Dispatch"
 
 
