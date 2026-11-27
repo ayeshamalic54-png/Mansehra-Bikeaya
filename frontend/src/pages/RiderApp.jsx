@@ -913,36 +913,36 @@ export function RiderApp({ onOpenDownloads }) {
   );
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-28 overflow-x-hidden">
       {/* Dark Captain Header */}
-      <header className="sticky top-0 z-20 bg-slate-900 text-white border-b border-slate-800">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
+      <header className="sticky top-0 z-20 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 text-white border-b border-emerald-500/35 shadow-lg">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
             {rp?.rider_photo ? (
-              <img src={rp.rider_photo} alt={user?.full_name} className="w-10 h-10 rounded-full object-cover border-2 border-[#009E4D] shrink-0" />
+              <img src={rp.rider_photo} alt={user?.full_name} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-[#009E4D] shrink-0" />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-emerald-600/30 border border-emerald-400/50 flex items-center justify-center font-extrabold text-emerald-300 shrink-0">
-                {isCarCaptain ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />}
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-600/30 border border-emerald-400/50 flex items-center justify-center font-extrabold text-emerald-300 shrink-0">
+                {isCarCaptain ? <Car className="w-4 h-4 sm:w-5 sm:h-5" /> : <Bike className="w-4 h-4 sm:w-5 sm:h-5" />}
               </div>
             )}
-            <div>
-              <div className="text-[11px] text-slate-400">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] sm:text-[11px] text-slate-300 truncate">
                 {isCarCaptain ? 'AC Car Captain' : 'Bike Captain'} · {rp?.bike_model} ({rp?.bike_plate})
               </div>
-              <div className="text-base font-extrabold">{user?.full_name}</div>
-              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                <div className="text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {rp?.zone_name || 'Syncing GPS...'}
+              <div className="text-sm sm:text-base font-extrabold truncate">{user?.full_name}</div>
+              <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mt-0.5">
+                <div className="text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1 truncate max-w-full">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{rp?.zone_name || 'Syncing GPS...'}</span>
                 </div>
                 {topupRequired && (
                   <button
                     type="button"
                     onClick={() => setTab('ledger')}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold mono-num border ${
+                    className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold mono-num border transition-all duration-200 ${
                       remainingPaidRides > 0
-                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
-                        : 'bg-amber-400 border-amber-300 text-slate-950 animate-pulse'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 border-emerald-200 text-white hover:from-amber-500 hover:to-orange-500 hover:border-amber-200'
+                        : 'bg-gradient-to-r from-amber-400 to-orange-500 border-amber-200 text-slate-950 animate-pulse hover:from-rose-600 hover:to-red-600 hover:text-white'
                     }`}
                   >
                     {remainingPaidRides > 0
@@ -954,14 +954,14 @@ export function RiderApp({ onOpenDownloads }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => {
                 unlockRideAlertAudio();
                 setSosModalOpen(true);
               }}
-              className="px-2.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold inline-flex items-center gap-1 shadow-sm animate-pulse-once"
+              className="px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border border-rose-300/60 bg-gradient-to-br from-rose-600 to-red-700 text-white text-[10px] sm:text-[11px] font-extrabold inline-flex items-center gap-1 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-amber-500 hover:to-orange-600 hover:border-amber-200"
               title={`Emergency SOS · Police ${policeNumber} · Rescue ${rescueNumber}`}
             >
               <Siren className="w-3.5 h-3.5" />
@@ -974,19 +974,21 @@ export function RiderApp({ onOpenDownloads }) {
                 setAlertsEnabled(perm === 'granted');
                 playRideAlertChime('captain');
               }}
-              className={`p-2 rounded-xl border text-xs font-bold inline-flex items-center gap-1 ${
+              className={`p-1.5 sm:p-2 rounded-xl border text-xs font-bold inline-flex items-center gap-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 ${
                 alertsEnabled
-                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-200'
-                  : 'bg-slate-800 border-slate-700 text-slate-300'
+                  ? 'bg-gradient-to-br from-sky-500 to-indigo-600 border-sky-300 text-white hover:from-amber-500 hover:to-orange-500 hover:border-amber-200'
+                  : 'bg-gradient-to-br from-slate-800 to-slate-700 border-slate-500/60 text-slate-200 hover:from-amber-500 hover:to-orange-500 hover:text-white hover:border-amber-200'
               }`}
               title="Enable Ride Sound & Notifications"
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               onClick={handleToggleOnline}
-              className={`px-3.5 py-2 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 transition ${
-                rp?.is_online ? 'bg-[#009E4D] text-white' : 'bg-slate-700 text-slate-300'
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border text-[10px] sm:text-xs font-extrabold inline-flex items-center gap-1 sm:gap-1.5 shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
+                rp?.is_online
+                  ? 'bg-gradient-to-br from-emerald-500 via-[#009E4D] to-teal-600 border-emerald-200 text-white hover:from-amber-500 hover:to-orange-600 hover:border-amber-200'
+                  : 'bg-gradient-to-br from-slate-700 to-slate-800 border-slate-500 text-slate-100 hover:from-emerald-500 hover:to-teal-600 hover:text-white hover:border-emerald-200'
               }`}
             >
               <Power className="w-3.5 h-3.5" />
@@ -994,10 +996,10 @@ export function RiderApp({ onOpenDownloads }) {
             </button>
             <button
               onClick={logout}
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+              className="p-1.5 sm:p-2 rounded-xl border border-slate-500/60 bg-gradient-to-br from-slate-800 to-slate-700 text-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:from-rose-600 hover:to-red-600 hover:text-white hover:border-rose-300"
               title="Logout"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
@@ -1171,35 +1173,36 @@ export function RiderApp({ onOpenDownloads }) {
         {/* TAB 1: DUTY & AVAILABLE JOBS */}
         {tab === 'duty' && (
           <div className="space-y-4">
-            {/* Captain Ledger Strip */}
+            {/* Captain Ledger Strip — HD Contrast Boxes with 3rd-Color Hover */}
             <div className="grid grid-cols-3 gap-2.5 text-center">
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
-                <div className="text-[11px] text-slate-500">Collected</div>
-                <div className="text-base font-extrabold mono-num text-slate-900">
+              <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-900 border-2 border-sky-400/60 text-white rounded-2xl p-3 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-violet-600 hover:via-purple-600 hover:to-fuchsia-600 hover:border-purple-200 hover:shadow-xl hover:shadow-purple-500/30">
+                <div className="text-[11px] font-bold text-sky-200">Collected</div>
+                <div className="text-base font-extrabold mono-num text-white mt-0.5">
                   Rs. {Number(summary.total_gross_collected || 0).toFixed(0)}
                 </div>
               </div>
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
-                <div className="text-[11px] text-slate-500">My Share</div>
-                <div className="text-base font-extrabold mono-num text-[#009E4D]">
+              <div className="bg-gradient-to-br from-emerald-600 via-[#009E4D] to-teal-600 border-2 border-emerald-300/70 text-white rounded-2xl p-3 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:shadow-xl hover:shadow-orange-500/30">
+                <div className="text-[11px] font-bold text-emerald-100">My Share</div>
+                <div className="text-base font-extrabold mono-num text-white mt-0.5">
                   Rs. {Number(summary.total_net_earned || 0).toFixed(0)}
                 </div>
               </div>
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-3">
-                <div className="text-[11px] text-slate-500">
+              <div
+                onClick={() => setTab('ledger')}
+                className={`cursor-pointer border-2 rounded-2xl p-3 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${
+                  topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
+                    ? remainingPaidRides > 0
+                      ? 'bg-gradient-to-br from-slate-900 via-cyan-950 to-teal-900 border-cyan-400/60 text-white hover:from-emerald-500 hover:via-teal-500 hover:to-green-500 hover:border-emerald-200'
+                      : 'bg-gradient-to-br from-rose-700 via-red-700 to-amber-700 border-rose-300/70 text-white hover:from-amber-500 hover:via-orange-500 hover:to-yellow-500 hover:text-slate-950 hover:border-amber-200'
+                    : Number(summary.balance_due_to_admin || 0) > 0
+                    ? 'bg-gradient-to-br from-amber-700 via-orange-700 to-rose-800 border-amber-300/70 text-white hover:from-fuchsia-600 hover:via-purple-600 hover:to-indigo-600 hover:border-pink-200'
+                    : 'bg-gradient-to-br from-slate-900 via-teal-950 to-emerald-900 border-emerald-400/60 text-white hover:from-cyan-500 hover:via-sky-500 hover:to-blue-600 hover:border-cyan-200'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-white/85">
                   {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0 ? 'Rides Left' : 'Admin Due'}
                 </div>
-                <div
-                  className={`text-base font-extrabold mono-num ${
-                    topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
-                      ? remainingPaidRides > 0
-                        ? 'text-[#009E4D]'
-                        : 'text-rose-600'
-                      : Number(summary.balance_due_to_admin || 0) > 0
-                      ? 'text-amber-600'
-                      : 'text-emerald-600'
-                  }`}
-                >
+                <div className="text-base font-extrabold mono-num text-white mt-0.5">
                   {topupRequired && Number(summary.balance_due_to_admin || 0) <= 0
                     ? `${remainingPaidRides} Rides`
                     : `Rs. ${Number(summary.balance_due_to_admin || 0).toFixed(0)}`}
@@ -1208,22 +1211,22 @@ export function RiderApp({ onOpenDownloads }) {
             </div>
 
             {/* Emergency Police 15 · Rescue 1122 · Quick SOS Bar */}
-            <div className="rounded-2xl bg-rose-50/80 border border-rose-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 font-extrabold text-rose-900">
-                <Siren className="w-4 h-4 text-rose-600 shrink-0" />
+            <div className="rounded-2xl bg-gradient-to-r from-rose-950 via-red-900 to-slate-900 text-white border border-rose-400/50 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md">
+              <div className="flex items-center gap-2 font-extrabold text-rose-100">
+                <Siren className="w-4 h-4 text-rose-300 shrink-0" />
                 <span>Emergency Helpline · Police {policeNumber} · Rescue {rescueNumber}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <a
                   href={`tel:${policeNumber}`}
-                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold inline-flex items-center gap-1"
+                  className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 border border-rose-300/50 text-white font-extrabold inline-flex items-center gap-1 transition-all duration-200 hover:from-amber-500 hover:to-orange-500 hover:border-amber-200"
                 >
                   <Phone className="w-3 h-3" />
                   Police {policeNumber}
                 </a>
                 <a
                   href={`tel:${rescueNumber}`}
-                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold inline-flex items-center gap-1"
+                  className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-300/50 text-slate-950 font-extrabold inline-flex items-center gap-1 transition-all duration-200 hover:from-cyan-500 hover:to-teal-500 hover:text-white hover:border-cyan-200"
                 >
                   <Phone className="w-3 h-3" />
                   Rescue {rescueNumber}
@@ -1231,7 +1234,7 @@ export function RiderApp({ onOpenDownloads }) {
                 <button
                   type="button"
                   onClick={() => setSosModalOpen(true)}
-                  className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold"
+                  className="px-3 py-1 rounded-lg bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-400/50 text-white font-extrabold transition-all duration-200 hover:from-rose-600 hover:to-pink-600 hover:border-rose-200"
                 >
                   Send SOS
                 </button>
@@ -2043,26 +2046,66 @@ export function RiderApp({ onOpenDownloads }) {
         onTriggered={() => loadAll()}
       />
 
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80">
-        <div className="max-w-3xl mx-auto grid grid-cols-4">
+      {/* Bottom Captain Navigation — HD Contrast Boxes with 3rd-Color Hover */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/90 px-2 sm:px-4 py-2 shadow-[0_-10px_28px_-6px_rgba(15,23,42,0.5)]">
+        <div className="max-w-3xl mx-auto grid grid-cols-4 gap-1.5 sm:gap-2.5">
           {[
-            { id: 'duty', label: 'Duty', icon: isCarCaptain ? Car : Bike },
-            { id: 'active', label: `Active (${activeJobs.length})`, icon: CheckCircle2 },
-            { id: 'ledger', label: 'Wallet', icon: Wallet },
-            { id: 'profile', label: rp?.is_verified ? 'Profile' : 'Profile (!)', icon: User },
+            {
+              id: 'duty',
+              label: 'Duty',
+              icon: isCarCaptain ? Car : Bike,
+              activeCls:
+                'bg-gradient-to-br from-emerald-500 via-[#00A651] to-teal-500 border-white text-white shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300/80 -translate-y-0.5 hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:shadow-orange-500/40',
+              restCls:
+                'bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 border-emerald-400/50 text-emerald-100 shadow-sm hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:text-white hover:shadow-lg hover:shadow-orange-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'active',
+              label: `Active (${activeJobs.length})`,
+              icon: CheckCircle2,
+              activeCls:
+                'bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 border-white text-white shadow-lg shadow-blue-500/40 ring-2 ring-sky-300/80 -translate-y-0.5 hover:from-fuchsia-600 hover:via-pink-600 hover:to-rose-600 hover:border-pink-200 hover:shadow-fuchsia-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 border-sky-400/50 text-sky-100 shadow-sm hover:from-fuchsia-600 hover:via-pink-600 hover:to-rose-600 hover:border-pink-200 hover:text-white hover:shadow-lg hover:shadow-fuchsia-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'ledger',
+              label: 'Wallet',
+              icon: Wallet,
+              activeCls:
+                'bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 border-white text-white shadow-lg shadow-orange-500/40 ring-2 ring-amber-300/80 -translate-y-0.5 hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:shadow-cyan-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-amber-950 to-orange-950 border-amber-400/50 text-amber-100 shadow-sm hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:text-white hover:shadow-lg hover:shadow-cyan-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'profile',
+              label: rp?.is_verified ? 'Profile' : 'Profile (!)',
+              icon: User,
+              activeCls:
+                'bg-gradient-to-br from-violet-500 via-purple-600 to-fuchsia-600 border-white text-white shadow-lg shadow-purple-500/40 ring-2 ring-purple-300/80 -translate-y-0.5 hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:shadow-rose-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-violet-950 to-purple-950 border-violet-400/50 text-violet-100 shadow-sm hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:text-white hover:shadow-lg hover:shadow-rose-500/40 hover:-translate-y-0.5',
+            },
           ].map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => setTab(item.id)}
-                className={`py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
-                  active ? 'border-[#009E4D] text-[#009E4D]' : 'border-transparent text-slate-500'
+                className={`py-2 px-1 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] sm:text-xs font-extrabold transition-all duration-200 cursor-pointer group ${
+                  active ? item.activeCls : item.restCls
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
+                <span
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition ${
+                    active ? 'bg-white text-slate-950 shadow-sm' : 'bg-white/15 text-white group-hover:bg-white/25'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </span>
+                <span className="truncate max-w-full tracking-tight">{item.label}</span>
               </button>
             );
           })}

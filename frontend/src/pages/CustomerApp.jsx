@@ -513,12 +513,14 @@ export function CustomerApp({ onOpenDownloads }) {
     );
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-28 overflow-x-hidden">
       {/* Top Bar */}
-      <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 no-print">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
-          <BrandLogo subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
-          <div className="flex items-center gap-1.5 sm:gap-2">
+      <header className="sticky top-0 z-20 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 text-white border-b border-emerald-500/35 shadow-lg no-print">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2 min-w-0">
+          <div className="min-w-0 shrink">
+            <BrandLogo dark={true} size="sm" subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={async () => {
@@ -526,10 +528,10 @@ export function CustomerApp({ onOpenDownloads }) {
                 setAlertsEnabled(perm === 'granted');
                 playRideAlertChime('captain');
               }}
-              className={`p-2 rounded-xl border text-xs font-bold inline-flex items-center ${
+              className={`p-1.5 sm:p-2 rounded-xl border text-xs font-bold inline-flex items-center shadow-sm transition-all duration-200 hover:-translate-y-0.5 ${
                 alertsEnabled
-                  ? 'bg-emerald-50 border-emerald-200 text-[#008741]'
-                  : 'bg-slate-50 border-slate-200 text-slate-600'
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-300 text-white hover:from-amber-500 hover:to-orange-500 hover:border-amber-200'
+                  : 'bg-gradient-to-br from-slate-800 to-slate-700 border-slate-500/60 text-slate-200 hover:from-amber-500 hover:to-orange-500 hover:text-white hover:border-amber-200'
               }`}
               title="Enable Sound & Offer Alerts"
             >
@@ -538,7 +540,7 @@ export function CustomerApp({ onOpenDownloads }) {
             <button
               type="button"
               onClick={() => setSosModalOpen(true)}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1 shadow-sm"
+              className="px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-extrabold border border-rose-300/60 bg-gradient-to-br from-rose-600 to-red-700 text-white inline-flex items-center gap-1 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-amber-500 hover:to-orange-600 hover:border-amber-200"
               title={`Emergency SOS · Police ${policeNumber} · Rescue ${rescueNumber}`}
             >
               <Siren className="w-3.5 h-3.5" />
@@ -546,33 +548,34 @@ export function CustomerApp({ onOpenDownloads }) {
             </button>
             <button
               onClick={() => setTab('support')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition ${
+              className={`px-2 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-extrabold border inline-flex items-center gap-1 sm:gap-1.5 shadow-md transition-all duration-200 hover:-translate-y-0.5 ${
                 tab === 'support'
-                  ? 'bg-[#009E4D] text-white border-[#009E4D]'
-                  : 'bg-emerald-50 text-[#008741] border-emerald-200 hover:bg-emerald-100/70'
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-emerald-200 ring-2 ring-white/70'
+                  : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-sky-300/50 hover:from-fuchsia-600 hover:to-pink-600 hover:border-pink-200'
               }`}
+              title="Support"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              <span>Support</span>
+              <span className="hidden sm:inline">Support</span>
               {unreadRepliesCount > 0 && (
-                <span className="px-1.5 py-0.5 leading-none rounded-full bg-white text-[#008741] text-[10px] font-extrabold mono-num">
+                <span className="px-1.5 py-0.5 leading-none rounded-full bg-white text-slate-950 text-[10px] font-extrabold mono-num">
                   {unreadRepliesCount}
                 </span>
               )}
             </button>
             <button
               onClick={onOpenDownloads}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1"
+              className="px-2 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-extrabold border border-amber-300/70 bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 inline-flex items-center gap-1 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-cyan-500 hover:to-teal-500 hover:text-white hover:border-cyan-200"
             >
               <Download className="w-3.5 h-3.5" />
-              APK
+              <span>APK</span>
             </button>
             <button
               onClick={logout}
-              className="p-2 rounded-xl border border-slate-200/80 text-slate-600 hover:bg-slate-100"
+              className="p-1.5 sm:p-2 rounded-xl border border-slate-500/60 bg-gradient-to-br from-slate-800 to-slate-700 text-slate-100 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:from-rose-600 hover:to-red-600 hover:text-white hover:border-rose-300"
               title="Logout"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
@@ -656,13 +659,49 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 1: BOOK RIDE / PARCEL / ERRAND */}
         {tab === 'book' && (
           <form onSubmit={handleBook} className="space-y-4">
-            {/* Bykea-style Service Cards */}
+            {/* Bykea-style Service Cards — HD Contrast Boxes with 3rd-Color Hover */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
-                { id: 'bike_ride', label: 'Bike Ride', sub: 'Sawari', icon: Bike },
-                { id: 'car_ride', label: 'Car Ride', sub: 'City & Intercity', icon: Car },
-                { id: 'parcel', label: 'Parcel', sub: 'Delivery', icon: Package },
-                { id: 'errand', label: 'Bazaar', sub: 'Errand', icon: ShoppingBag },
+                {
+                  id: 'bike_ride',
+                  label: 'Bike Ride',
+                  sub: 'Sawari',
+                  icon: Bike,
+                  activeCls:
+                    'bg-gradient-to-br from-emerald-500 via-[#00A651] to-teal-500 border-white text-white shadow-xl shadow-emerald-600/35 ring-2 ring-emerald-400/70 -translate-y-0.5 hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:shadow-orange-500/40',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 via-emerald-950 to-teal-900 border-emerald-400/60 text-white shadow-md hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:shadow-xl hover:shadow-orange-500/35 hover:-translate-y-0.5',
+                },
+                {
+                  id: 'car_ride',
+                  label: 'Car Ride',
+                  sub: 'City & Intercity',
+                  icon: Car,
+                  activeCls:
+                    'bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 border-white text-white shadow-xl shadow-blue-600/35 ring-2 ring-sky-400/70 -translate-y-0.5 hover:from-fuchsia-600 hover:via-purple-600 hover:to-pink-600 hover:border-pink-200 hover:shadow-fuchsia-500/40',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-900 border-sky-400/60 text-white shadow-md hover:from-fuchsia-600 hover:via-purple-600 hover:to-pink-600 hover:border-pink-200 hover:shadow-xl hover:shadow-fuchsia-500/35 hover:-translate-y-0.5',
+                },
+                {
+                  id: 'parcel',
+                  label: 'Parcel',
+                  sub: 'Delivery',
+                  icon: Package,
+                  activeCls:
+                    'bg-gradient-to-br from-violet-500 via-purple-600 to-fuchsia-600 border-white text-white shadow-xl shadow-purple-600/35 ring-2 ring-purple-400/70 -translate-y-0.5 hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:shadow-cyan-500/40',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 via-violet-950 to-purple-900 border-violet-400/60 text-white shadow-md hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:shadow-xl hover:shadow-cyan-500/35 hover:-translate-y-0.5',
+                },
+                {
+                  id: 'errand',
+                  label: 'Bazaar',
+                  sub: 'Errand',
+                  icon: ShoppingBag,
+                  activeCls:
+                    'bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 border-white text-white shadow-xl shadow-orange-600/35 ring-2 ring-amber-400/70 -translate-y-0.5 hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:shadow-rose-500/40',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 via-amber-950 to-orange-900 border-amber-400/60 text-white shadow-md hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:shadow-xl hover:shadow-rose-500/35 hover:-translate-y-0.5',
+                },
               ].map((s) => {
                 const Icon = s.icon;
                 const active = serviceType === s.id;
@@ -671,21 +710,28 @@ export function CustomerApp({ onOpenDownloads }) {
                     key={s.id}
                     type="button"
                     onClick={() => setServiceType(s.id)}
-                    className={`p-3.5 rounded-2xl border-2 text-left transition flex flex-col gap-1.5 ${
-                      active
-                        ? 'bg-white border-[#009E4D] shadow-sm'
-                        : 'bg-white/70 border-slate-200/80 text-slate-600 hover:bg-white'
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all duration-200 flex flex-col gap-1.5 group cursor-pointer ${
+                      active ? s.activeCls : s.restCls
                     }`}
                   >
-                    <span
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                        active ? 'bg-[#009E4D] text-white' : 'bg-slate-50/80 text-slate-600'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </span>
-                    <div className="text-xs sm:text-sm font-extrabold text-slate-900">{s.label}</div>
-                    <div className="text-[11px] text-slate-500">{s.sub}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+                          active
+                            ? 'bg-white text-slate-950 shadow-sm'
+                            : 'bg-white/15 text-white group-hover:bg-white/25'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      {active && (
+                        <span className="px-2 py-0.5 rounded-full bg-white/25 text-white text-[9px] font-extrabold tracking-wide uppercase">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs sm:text-sm font-extrabold text-white drop-shadow-sm">{s.label}</div>
+                    <div className="text-[11px] font-medium text-white/85">{s.sub}</div>
                   </button>
                 );
               })}
@@ -915,20 +961,42 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 2: MY RIDES */}
         {tab === 'rides' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 bg-white border border-slate-200/80 p-1 rounded-2xl text-xs font-bold">
+            <div className="grid grid-cols-3 bg-slate-950 border border-slate-800 p-1.5 rounded-2xl gap-1.5 text-xs font-extrabold shadow-md">
               {[
-                ['active', `Active (${activeRides.length})`],
-                ['completed', `Completed (${completedRides.length})`],
-                ['cancelled', `Cancelled (${cancelledRides.length})`],
-              ].map(([id, label]) => (
+                {
+                  id: 'active',
+                  label: `Active (${activeRides.length})`,
+                  activeCls:
+                    'bg-gradient-to-br from-sky-500 to-blue-600 text-white border-white/60 shadow-md hover:from-fuchsia-600 hover:to-pink-600 hover:border-pink-200',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 to-blue-950 text-sky-200 border-sky-500/40 hover:from-fuchsia-600 hover:to-pink-600 hover:text-white hover:border-pink-200',
+                },
+                {
+                  id: 'completed',
+                  label: `Completed (${completedRides.length})`,
+                  activeCls:
+                    'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-white/60 shadow-md hover:from-amber-500 hover:to-orange-500 hover:border-amber-200',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 to-emerald-950 text-emerald-200 border-emerald-500/40 hover:from-amber-500 hover:to-orange-500 hover:text-white hover:border-amber-200',
+                },
+                {
+                  id: 'cancelled',
+                  label: `Cancelled (${cancelledRides.length})`,
+                  activeCls:
+                    'bg-gradient-to-br from-rose-600 to-red-600 text-white border-white/60 shadow-md hover:from-cyan-500 hover:to-teal-500 hover:border-cyan-200',
+                  restCls:
+                    'bg-gradient-to-br from-slate-900 to-rose-950 text-rose-200 border-rose-500/40 hover:from-cyan-500 hover:to-teal-500 hover:text-white hover:border-cyan-200',
+                },
+              ].map((item) => (
                 <button
-                  key={id}
-                  onClick={() => setRideFilter(id)}
-                  className={`py-2 rounded-xl transition ${
-                    rideFilter === id ? 'bg-[#009E4D] text-white' : 'text-slate-600'
+                  key={item.id}
+                  type="button"
+                  onClick={() => setRideFilter(item.id)}
+                  className={`py-2 px-2 rounded-xl border transition-all duration-200 cursor-pointer ${
+                    rideFilter === item.id ? item.activeCls : item.restCls
                   }`}
                 >
-                  {label}
+                  {item.label}
                 </button>
               ))}
             </div>
@@ -1335,17 +1403,17 @@ export function CustomerApp({ onOpenDownloads }) {
         {/* TAB 3: PAYMENTS & RECEIPTS */}
         {tab === 'payments' && (
           <div className="space-y-4">
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 flex items-center justify-between">
+            <div className="bg-gradient-to-br from-slate-900 via-violet-950 to-indigo-950 text-white border-2 border-violet-400/50 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
               <div>
-                <div className="text-xs text-slate-500 font-semibold">Total Completed Ride Spend</div>
-                <div className="text-3xl font-extrabold mono-num text-slate-900">Rs. {totalSpent.toFixed(0)}</div>
-                <div className="text-xs text-[#009E4D] font-semibold mt-0.5">
+                <div className="text-xs text-violet-200 font-bold">Total Completed Ride Spend</div>
+                <div className="text-3xl font-extrabold mono-num text-white mt-0.5">Rs. {totalSpent.toFixed(0)}</div>
+                <div className="text-xs text-emerald-300 font-bold mt-0.5">
                   {completedRides.length} completed trips
                 </div>
               </div>
               <button
                 onClick={() => window.print()}
-                className="no-print px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                className="no-print px-4 py-2.5 rounded-xl border border-amber-300/70 bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 text-xs font-extrabold inline-flex items-center gap-1.5 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-cyan-500 hover:to-teal-500 hover:text-white hover:border-cyan-200"
               >
                 <Printer className="w-4 h-4" />
                 Print Statement
@@ -1430,17 +1498,23 @@ export function CustomerApp({ onOpenDownloads }) {
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-700 block">Select Type</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {SUPPORT_CATEGORIES.map((cat) => {
+                    {SUPPORT_CATEGORIES.map((cat, idx) => {
                       const active = ticketForm.category === cat.id;
+                      const restPalettes = [
+                        'bg-gradient-to-br from-slate-900 to-emerald-950 text-emerald-100 border-emerald-400/50 hover:from-amber-500 hover:to-orange-500 hover:text-white hover:border-amber-200',
+                        'bg-gradient-to-br from-slate-900 to-blue-950 text-sky-100 border-sky-400/50 hover:from-fuchsia-600 hover:to-pink-600 hover:text-white hover:border-pink-200',
+                        'bg-gradient-to-br from-slate-900 to-violet-950 text-violet-100 border-violet-400/50 hover:from-cyan-500 hover:to-teal-500 hover:text-white hover:border-cyan-200',
+                        'bg-gradient-to-br from-slate-900 to-amber-950 text-amber-100 border-amber-400/50 hover:from-rose-600 hover:to-red-600 hover:text-white hover:border-rose-200',
+                      ];
                       return (
                         <button
                           key={cat.id}
                           type="button"
                           onClick={() => setTicketForm({ ...ticketForm, category: cat.id })}
-                          className={`px-3 py-1.5 rounded-xl font-bold border transition ${
+                          className={`px-3 py-1.5 rounded-xl font-extrabold border-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 ${
                             active
-                              ? 'bg-[#009E4D] text-white border-[#009E4D]'
-                              : 'bg-slate-50/80 text-slate-700 border-slate-200/80 hover:border-emerald-300'
+                              ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-white ring-2 ring-emerald-400/60 hover:from-amber-500 hover:to-orange-500 hover:border-amber-200'
+                              : restPalettes[idx % restPalettes.length]
                           }`}
                         >
                           {cat.label}
@@ -1565,29 +1639,69 @@ export function CustomerApp({ onOpenDownloads }) {
         onTriggered={() => loadBookings()}
       />
 
-      {/* Bottom Mobile Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200/80 no-print">
-        <div className="max-w-3xl mx-auto grid grid-cols-4">
+      {/* Bottom Mobile Navigation — HD Contrast Boxes with 3rd-Color Hover */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/90 px-2 sm:px-4 py-2 shadow-[0_-10px_28px_-6px_rgba(15,23,42,0.5)] no-print">
+        <div className="max-w-3xl mx-auto grid grid-cols-4 gap-1.5 sm:gap-2.5">
           {[
-            { id: 'book', label: 'Book', icon: Bike },
-            { id: 'rides', label: 'My Rides', icon: CheckCircle2 },
-            { id: 'payments', label: 'Payments', icon: CreditCard },
-            { id: 'support', label: 'Support', icon: MessageSquare, badge: unreadRepliesCount },
+            {
+              id: 'book',
+              label: 'Book',
+              icon: Bike,
+              activeCls:
+                'bg-gradient-to-br from-emerald-500 via-[#00A651] to-teal-500 border-white text-white shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300/80 -translate-y-0.5 hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:shadow-orange-500/40',
+              restCls:
+                'bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 border-emerald-400/50 text-emerald-100 shadow-sm hover:from-amber-500 hover:via-orange-500 hover:to-rose-500 hover:border-amber-200 hover:text-white hover:shadow-lg hover:shadow-orange-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'rides',
+              label: 'My Rides',
+              icon: CheckCircle2,
+              activeCls:
+                'bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 border-white text-white shadow-lg shadow-blue-500/40 ring-2 ring-sky-300/80 -translate-y-0.5 hover:from-fuchsia-600 hover:via-pink-600 hover:to-rose-600 hover:border-pink-200 hover:shadow-fuchsia-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 border-sky-400/50 text-sky-100 shadow-sm hover:from-fuchsia-600 hover:via-pink-600 hover:to-rose-600 hover:border-pink-200 hover:text-white hover:shadow-lg hover:shadow-fuchsia-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'payments',
+              label: 'Payments',
+              icon: CreditCard,
+              activeCls:
+                'bg-gradient-to-br from-violet-500 via-purple-600 to-fuchsia-600 border-white text-white shadow-lg shadow-purple-500/40 ring-2 ring-purple-300/80 -translate-y-0.5 hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:shadow-cyan-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-violet-950 to-purple-950 border-violet-400/50 text-violet-100 shadow-sm hover:from-cyan-500 hover:via-teal-500 hover:to-emerald-500 hover:border-cyan-200 hover:text-white hover:shadow-lg hover:shadow-cyan-500/40 hover:-translate-y-0.5',
+            },
+            {
+              id: 'support',
+              label: 'Support',
+              icon: MessageSquare,
+              badge: unreadRepliesCount,
+              activeCls:
+                'bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 border-white text-white shadow-lg shadow-orange-500/40 ring-2 ring-amber-300/80 -translate-y-0.5 hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:shadow-rose-500/40',
+              restCls:
+                'bg-gradient-to-br from-slate-900 via-amber-950 to-orange-950 border-amber-400/50 text-amber-100 shadow-sm hover:from-rose-600 hover:via-red-600 hover:to-pink-600 hover:border-rose-200 hover:text-white hover:shadow-lg hover:shadow-rose-500/40 hover:-translate-y-0.5',
+            },
           ].map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => setTab(item.id)}
-                className={`relative py-2.5 flex flex-col items-center gap-1 text-xs font-bold border-t-2 transition ${
-                  active ? 'border-[#009E4D] text-[#009E4D]' : 'border-transparent text-slate-500'
+                className={`relative py-2 px-1 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 text-[11px] sm:text-xs font-extrabold transition-all duration-200 cursor-pointer group ${
+                  active ? item.activeCls : item.restCls
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
+                <span
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition ${
+                    active ? 'bg-white text-slate-950 shadow-sm' : 'bg-white/15 text-white group-hover:bg-white/25'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </span>
+                <span className="truncate max-w-full tracking-tight">{item.label}</span>
                 {item.badge > 0 && (
-                  <span className="absolute top-1.5 right-6 px-1.5 rounded-full bg-[#009E4D] text-white text-[10px] font-extrabold mono-num">
+                  <span className="absolute top-1 right-1.5 px-1.5 py-0.5 leading-none rounded-full bg-white text-slate-950 text-[10px] font-extrabold mono-num shadow">
                     {item.badge}
                   </span>
                 )}

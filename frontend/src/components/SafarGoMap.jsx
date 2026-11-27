@@ -477,7 +477,7 @@ export function SafarGoMap({
   return (
     <div className={hasSidebar ? 'flex flex-col md:flex-row gap-3 items-stretch' : ''}>
       <div
-        className={`relative ${
+        className={`relative z-10 isolate ${
           hasSidebar ? 'w-full shrink-0 md:shrink md:flex-1 md:min-w-0' : 'w-full'
         } ${heightClass} rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100`}
         style={{ minHeight: `${minHeightPx}px` }}
