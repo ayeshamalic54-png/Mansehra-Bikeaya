@@ -108,8 +108,8 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       );
       onNotify(
         topupPolicy.rider_topup_required === 'false'
-          ? 'Top-Up OFF kar diya gaya — Captains ab baghair advance top-up ke rides kar sakein ge!'
-          : `Top-Up ON & saved (${updates[1][1]} Rides = Rs. ${updates[2][1]})! Unpaid captains offline & hidden rahein ge.`
+          ? 'Top-Up mode turned OFF — Captains can now take rides without pre-paid top-up.'
+          : `Top-Up mode turned ON (${updates[1][1]} Rides = Rs. ${updates[2][1]})! Unpaid captains remain offline and hidden from customers.`
       );
       if (onRefreshBootstrap) await onRefreshBootstrap();
       await loadFinanceData();
@@ -134,7 +134,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         },
       });
       onNotify(
-        `Top-Up approved! ${req.rider_name} ko +${res.rides_approved} rides mil gayein (Total left: ${res.remaining_paid_rides}).`
+        `Top-Up approved! ${req.rider_name} credited +${res.rides_approved} rides (Total remaining: ${res.remaining_paid_rides}).`
       );
       if (onRefreshBootstrap) await onRefreshBootstrap();
       await loadFinanceData();
@@ -169,7 +169,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
           admin_note: (draft.admin_note || '').trim() || null,
         },
       });
-      onNotify(`${req.rider_name} se TID / payment proof maang liya gaya hai.`);
+      onNotify(`Requested payment TID / proof from ${req.rider_name}.`);
       await loadFinanceData();
     } catch (err) {
       onNotify(err.message, true);
@@ -677,8 +677,8 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               Captain Pre-Paid Top-Up Package &amp; Mode Toggle (Bike + Car)
             </div>
             <p className="text-slate-500 mt-0.5">
-              <strong>ON</strong> karne par naye/0-ride captains customer map aur ride requests se hidden rahein ge jab tak Top-Up pay karke approve na hon.{' '}
-              <strong>OFF</strong> karne par sab verified captains baghair top-up free rides kar sakte hain.
+              When <strong>ON</strong>, unpaid / 0-ride captains stay offline and hidden from the customer map and ride requests until Top-Up is approved.{' '}
+              When <strong>OFF</strong>, verified captains can work without paying upfront Top-Up.
             </p>
           </div>
           <span
@@ -759,12 +759,12 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
             Captain Pre-Paid Top-Up Approvals ({topupRequests.filter((r) => r.status === 'pending').length} pending)
           </span>
           <span className="text-[11px] text-slate-500">
-            Approve karne par Captain ke wallet mein paid rides aur balance foran add ho jayega.
+            Approving immediately adds paid rides and App Fee balance to the captain&apos;s wallet.
           </span>
         </div>
         {topupRequests.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-500 text-center">
-            Abhi tak kisi captain ki top-up request nahi aayi.
+            No captain top-up requests submitted yet.
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -1001,7 +1001,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
 
       <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-xs">
         <div className="p-4 border-b border-slate-200/80 font-extrabold text-sm text-slate-900">
-          Rider Hisab Summary (Who Owes How Much)
+          Captain Ledger &amp; Top-Up Summary
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">

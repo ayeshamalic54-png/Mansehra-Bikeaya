@@ -903,7 +903,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   <div className="flex items-center gap-2 text-amber-900 font-bold">
                     <Bell className="w-4 h-4 text-amber-600" />
                     <span>
-                      {kpis.pending_topup_count} Captain Top-Up approval request(s) waiting! Approve karein taake Bike/Car captains rides le sakein.
+                      {kpis.pending_topup_count} Captain Top-Up approval request(s) pending review. Approve to activate Bike/Car captains.
                     </span>
                   </div>
                   <button
@@ -1550,7 +1550,7 @@ export function AdminDashboard({ onOpenDownloads }) {
                   </div>
                   <h2 className="text-base font-extrabold">Emergency Police ({policeNumber}), Rescue ({rescueNumber}) &amp; Live SOS Radar</h2>
                   <p className="text-rose-100">
-                    Koi bhi Captain SOS press kare to yahan turant alarm + live GPS pin aata hai. Admin khud bhi 1-tap Call ya SOS trigger kar sakta hai.
+                    Live emergency SOS alarms and GPS pins appear here immediately whenever a Captain or Customer triggers SOS. Admin can 1-tap call Police/Rescue or respond directly.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

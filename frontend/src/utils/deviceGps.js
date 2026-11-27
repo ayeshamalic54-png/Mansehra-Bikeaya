@@ -116,7 +116,7 @@ export function getReliableDevicePosition({ onRefine = null, timeoutMs = 15000 }
       }
       reject({
         code: 'LOCATION_OFF',
-        message: 'Phone ki Location / GPS band hai. Mobile ke quick panel se Location ON karein.',
+        message: 'Phone Location / GPS is turned off. Please enable Location in your mobile quick settings.',
       });
       return;
     }
@@ -129,7 +129,7 @@ export function getReliableDevicePosition({ onRefine = null, timeoutMs = 15000 }
       }
       reject({
         code: 'UNAVAILABLE',
-        message: 'Device GPS unavailable — neeche apna Chowk select karein ya map par tap karein.',
+        message: 'Device GPS unavailable — please select your area below or tap the map.',
       });
       return;
     }
@@ -207,7 +207,7 @@ export function getReliableDevicePosition({ onRefine = null, timeoutMs = 15000 }
         deniedCount += 1;
         failFinal({
           code: 'PERMISSION_DENIED',
-          message: 'Location permission blocked hai. Address bar / App Settings mein Allow Location karein.',
+          message: 'Location permission is blocked. Please allow Location in Browser / App Settings.',
         });
       }
     };
@@ -247,8 +247,8 @@ export function getReliableDevicePosition({ onRefine = null, timeoutMs = 15000 }
           code: deniedCount > 0 ? 'PERMISSION_DENIED' : 'TIMEOUT',
           message:
             deniedCount > 0 || errorCount > 0
-              ? 'GPS lock nahi ho saka — apna current Chowk choose karein ya map par tap karein.'
-              : 'Live GPS timeout — mobile ki Location ON karke dobara Detect dabayein ya Chowk choose karein.',
+              ? 'GPS lock failed — please select your current area below or tap on the map.'
+              : 'Live GPS timed out — enable Mobile Location and tap Detect again, or select your area below.',
         });
       } else {
         cleanupWatchers();

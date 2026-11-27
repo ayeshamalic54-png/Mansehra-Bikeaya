@@ -29,7 +29,7 @@ function AppRouter() {
           </div>
           {serverWaking && (
             <div className="text-xs text-slate-500">
-              Server sleep se start ho raha hai — auto-connect ho raha hai (10–30s)...
+              Server is waking from sleep — auto-connecting (10–30s)...
             </div>
           )}
         </div>
@@ -59,7 +59,7 @@ function AppRouter() {
           <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-950 space-y-1.5">
             <div className="font-extrabold">
               {isQuota
-                ? 'Neon PostgreSQL Free Plan quota exceeded — server online hai, database connect nahi ho pa raha.'
+                ? 'Neon PostgreSQL Free Plan quota exceeded — server is online, but the database cannot connect.'
                 : 'PostgreSQL Database temporarily unreachable.'}
             </div>
             <div className="text-amber-900/90 break-words">{dbError.message}</div>
@@ -87,8 +87,8 @@ function AppRouter() {
 
           <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3.5 text-xs text-slate-700 space-y-1">
             <div className="font-extrabold text-slate-900">Admin Quick Fix:</div>
-            <p>1. Neon Console mein plan upgrade karein, YA naya free PostgreSQL DB (Neon / Supabase / Render) bana kar Render &rarr; Environment &rarr; <code className="bg-slate-200 px-1 rounded">DATABASE_URL</code> update karein.</p>
-            <p>2. Phir Admin &rarr; Backup &amp; Restore mein apne PC / app folder ki file <code className="bg-slate-200 px-1 rounded">backups/safargo-full-backup-20261126-001005-PKT.json.gz</code> upload karke 1-click restore karein.</p>
+            <p>1. Upgrade plan in Neon Console, OR create a new PostgreSQL DB and update <code className="bg-slate-200 px-1 rounded">DATABASE_URL</code> in Render Environment.</p>
+            <p>2. Then upload your <code className="bg-slate-200 px-1 rounded">.json.gz</code> backup under Admin &rarr; Backup &amp; Restore to restore in 1 click.</p>
           </div>
 
           <button

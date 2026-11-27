@@ -212,8 +212,8 @@ export function RiderApp({ onOpenDownloads }) {
       const notice =
         geoErr?.message ||
         (denied
-          ? 'Location blocked! Browser / App settings mein Allow Location karein ya apna current Chowk choose karein.'
-          : 'Mobile ki Location ON karein ya neeche apna current Chowk choose / map par tap karein.');
+          ? 'Location blocked! Please allow Location in Browser / App Settings or select your current area below.'
+          : 'Please enable Mobile Location / GPS, or select your current area / tap the map below.');
       setGpsBanner(notice);
       if (showErrorToast) setErr(notice);
     }
@@ -325,10 +325,10 @@ export function RiderApp({ onOpenDownloads }) {
       const missing = updatedUser?.rider_profile?.missing_required_docs || [];
       if (missing.length > 0) {
         setMsg(
-          `Uploaded documents save ho gaye hain! Abhi yeh baqi documents complete karein: ${missing.join(', ')} — Jab tak tamam documents complete aur Admin khud verify na kare, verification nahi hogi.`
+          `Uploaded documents saved! Please complete the remaining items: ${missing.join(', ')} — account verification activates once all documents are submitted and approved by Admin.`
         );
       } else {
-        setMsg('Tamam documents save aur submit ho gaye hain! Admin khud review karke verify karega tab ride active hogi.');
+        setMsg('All documents saved and submitted! Admin will review and verify your account shortly.');
       }
     } catch (e2) {
       setErr(e2.message);
@@ -383,7 +383,7 @@ export function RiderApp({ onOpenDownloads }) {
       setTopupForm((prev) => ({ ...prev, amount: '', reference_no: '', note: '' }));
       setShowOptionalProofInput(false);
       setMsg(
-        `Top-Up request Rs. ${res.amount} (${res.rides_requested} rides) bhej di gayi hai! Admin confirm karke approve kar dega.`
+        `Top-Up request for Rs. ${res.amount} (${res.rides_requested} rides) sent! You can go online once Admin approves.`
       );
       await Promise.all([refreshMe(), loadAll()]);
     } catch (e2) {
@@ -396,7 +396,7 @@ export function RiderApp({ onOpenDownloads }) {
   const handleAttachTopupProof = async (reqId) => {
     const tid = (proofDrafts[reqId] || '').trim();
     if (!tid) {
-      setErr('Meherbani payment TID / Reference # darj karein.');
+      setErr('Please enter your payment TID / Reference number.');
       return;
     }
     setErr('');
@@ -407,7 +407,7 @@ export function RiderApp({ onOpenDownloads }) {
         body: { reference_no: tid },
       });
       setProofDrafts((prev) => ({ ...prev, [reqId]: '' }));
-      setMsg('Payment TID / Proof submit ho gaya hai! Admin ab verify karke approve kar dega.');
+      setMsg('Payment TID / Proof submitted. Waiting for Admin confirmation.');
       await loadAll();
     } catch (e2) {
       setErr(e2.message);
@@ -452,16 +452,16 @@ export function RiderApp({ onOpenDownloads }) {
             <p className="text-slate-600 mt-1">
               {needsTopup ? (
                 <>
-                  Yeh <strong className="text-slate-900">100% SafarGo App Fee</strong> hai (is mein ride commission nahi hai).{' '}
+                  This is a <strong className="text-slate-900">100% SafarGo App Access Fee</strong> (no ride commission included). Send{' '}
                   <strong className="text-slate-900">
                     {topupRidesCount} Rides = Rs. {topupPackageFee}
                   </strong>{' '}
-                  bhej kar neeche sirf Top-Up Request send karein — TID/saboot tab hi dein agar payment confirm na mile.
+                  to any SafarGo account below and submit your Top-Up request — proof/TID is only needed if Admin cannot confirm the payment.
                 </>
               ) : (
                 <>
-                  Pre-paid App Fee active hai — har ride par <strong>1 Paid Ride (Rs. {topupPerRideFee} App Fee)</strong> adjust hoti hai,{' '}
-                  <strong className="text-[#008741]">0 Ride Commission</strong> aur poora fare aapka!
+                  Pre-paid App Fee active — <strong>1 Paid Ride (Rs. {topupPerRideFee} App Fee)</strong> is deducted per completed trip with{' '}
+                  <strong className="text-[#008741]">0% Ride Commission</strong>. You keep 100% of the fare.
                 </>
               )}
             </p>
@@ -472,7 +472,7 @@ export function RiderApp({ onOpenDownloads }) {
               onClick={() => setTab('ledger')}
               className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold shrink-0"
             >
-              Open Hisab Wallet →
+              Open Wallet →
             </button>
           )}
         </div>
@@ -522,7 +522,7 @@ export function RiderApp({ onOpenDownloads }) {
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <input
                 type="text"
-                placeholder="Payment nahi mili? Yahan TID / Proof submit karein"
+                placeholder="Payment not received yet? Enter TID / Proof here"
                 value={proofDrafts[pendingTopupRequests[0].id] ?? ''}
                 onChange={(e) =>
                   setProofDrafts((prev) => ({ ...prev, [pendingTopupRequests[0].id]: e.target.value }))
@@ -583,9 +583,9 @@ export function RiderApp({ onOpenDownloads }) {
             >
               {showOptionalProofInput
                 ? 'Hide Optional TID / Note'
-                : '+ Optional: TID ya Note saath likhna ho (lazmi nahi)'}
+                : '+ Optional: Add TID or Note (Not Required)'}
             </button>
-            <span className="text-[11px] text-slate-500">Approval ke liye TID lazmi nahi hai</span>
+            <span className="text-[11px] text-slate-500">TID is optional at submission</span>
           </div>
           {showOptionalProofInput && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -779,8 +779,8 @@ export function RiderApp({ onOpenDownloads }) {
                 {rp?.verification_status === 'rejected'
                   ? `Docs Returned: ${rp.verification_note || 'Please upload clearer Selfie, Vehicle & CNIC photos in Profile.'}`
                   : !rp?.has_required_docs
-                  ? `Apnay baqi documents complete karein (${(rp?.missing_required_docs || ['Selfie', isCarCaptain ? 'Car Photo' : 'Bike Photo', 'CNIC Front', 'CNIC Back / License', 'CNIC #']).join(', ')}) — jab tak tamam documents complete aur Admin khud verify na kare, verification nahi hogi.`
-                  : `Tamam ${isCarCaptain ? 'AC Car' : 'Bike'} Captain documents complete hain — ab Admin manual review & verification ka intezar karein.`}
+                  ? `Please upload remaining documents (${(rp?.missing_required_docs || ['Selfie', isCarCaptain ? 'Car Photo' : 'Bike Photo', 'CNIC Front', 'CNIC Back / License', 'CNIC #']).join(', ')}) — account verification activates once all items are completed and approved by Admin.`
+                  : `All ${isCarCaptain ? 'AC Car' : 'Bike'} Captain documents submitted — waiting for Admin manual verification.`}
               </span>
             </div>
             <button
@@ -1590,7 +1590,7 @@ export function RiderApp({ onOpenDownloads }) {
             )}
 
             <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 text-xs">
-              <div className="p-4 font-extrabold text-slate-900">Hisab-Kitab Transaction Log</div>
+              <div className="p-4 font-extrabold text-slate-900">Wallet Transaction History</div>
               {(ledgerData.entries || []).length === 0 ? (
                 <div className="p-6 text-center text-slate-500">No ledger entries yet.</div>
               ) : (
@@ -1752,7 +1752,7 @@ export function RiderApp({ onOpenDownloads }) {
                   Captain Verification Documents ({profileForm.vehicle_type === 'car' ? 'AC Car Captain' : 'Bike Captain'})
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Apnay 4 documents (Selfie, {profileForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Photo, CNIC Front, CNIC Back / License) + CNIC number upload karke Save dabayein. Jo photos abhi lagayenge woh save ho jayengi; verification tab hogi jab tamam documents complete honge aur Admin khud approve karega.
+                  Upload all 4 required documents (Selfie, {profileForm.vehicle_type === 'car' ? 'AC Car' : 'Bike'} Photo, CNIC Front, CNIC Back / License) plus your CNIC number and tap Save. Uploaded photos are saved automatically; verification activates after Admin review.
                 </p>
               </div>
 
@@ -1769,10 +1769,10 @@ export function RiderApp({ onOpenDownloads }) {
                 if (draftMissing.length > 0) {
                   return (
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold">
-                      Baqi Documents Complete Karein ({4 - [profileForm.rider_photo, profileForm.vehicle_photo, profileForm.cnic_front_photo, profileForm.cnic_back_photo].filter(Boolean).length} photos missing):{' '}
+                      Remaining Documents Required ({4 - [profileForm.rider_photo, profileForm.vehicle_photo, profileForm.cnic_front_photo, profileForm.cnic_back_photo].filter(Boolean).length} photos missing):{' '}
                       <span className="text-rose-700">{draftMissing.join(' · ')}</span>
                       <div className="text-[10px] text-amber-800 mt-1">
-                        Aap abhi jo kuch upload kar chuke hain woh Save click karne par safe save ho jayega, lekin verification aur online duty sab documents complete hone aur Admin ke khud verify karne par hi khulegi.
+                        Your uploaded files are saved safely on Save, and online duty opens once all documents are completed and verified by Admin.
                       </div>
                     </div>
                   );
@@ -1780,7 +1780,7 @@ export function RiderApp({ onOpenDownloads }) {
                 if (!rp?.is_verified) {
                   return (
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#008741] text-[11px] font-bold">
-                      Tamam 4 documents complete hain — Save button dabakar Admin manual approval ka intezar karein.
+                      All 4 documents complete — tap Save and wait for Admin verification approval.
                     </div>
                   );
                 }
@@ -1834,7 +1834,7 @@ export function RiderApp({ onOpenDownloads }) {
           {[
             { id: 'duty', label: 'Duty', icon: isCarCaptain ? Car : Bike },
             { id: 'active', label: `Active (${activeJobs.length})`, icon: CheckCircle2 },
-            { id: 'ledger', label: 'Hisab', icon: Wallet },
+            { id: 'ledger', label: 'Wallet', icon: Wallet },
             { id: 'profile', label: rp?.is_verified ? 'Profile' : 'Profile (!)', icon: User },
           ].map((item) => {
             const Icon = item.icon;

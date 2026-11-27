@@ -209,7 +209,7 @@ export function LandingPage({ onNavigate }) {
                 <div className="text-slate-500 mt-0.5">CNIC &amp; Bike Plate</div>
               </div>
               <div className="card-elevated rounded-2xl p-3.5">
-                <div className="font-extrabold text-teal-700 text-base">Live Hisab</div>
+                <div className="font-extrabold text-teal-700 text-base">Live Ledger</div>
                 <div className="text-slate-500 mt-0.5">Transparent Ledger</div>
               </div>
             </div>

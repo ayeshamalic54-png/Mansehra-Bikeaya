@@ -60,7 +60,7 @@ export function DownloadsPage({ onBack }) {
 
   const handleInstallPwa = async () => {
     if (window.SafarGoNative) {
-      setNotice('Aap pehle se hi SafarGo Android App use kar rahe hain ✓');
+      setNotice('You are already using the SafarGo Android App ✓');
       return;
     }
     const promptObj = deferredPrompt || window.__safargoDeferredPrompt;
@@ -68,7 +68,7 @@ export function DownloadsPage({ onBack }) {
       promptObj.prompt();
       const choice = await promptObj.userChoice;
       if (choice?.outcome === 'accepted') {
-        setNotice('SafarGo App bina kisi warning ke aap ke phone par install ho rahi hai ✓');
+        setNotice('Installing SafarGo App cleanly on your device ✓');
         setPwaInstalled(true);
       }
       window.__safargoDeferredPrompt = null;
@@ -77,11 +77,11 @@ export function DownloadsPage({ onBack }) {
     }
     if (window.matchMedia?.('(display-mode: standalone)')?.matches) {
       setPwaInstalled(true);
-      setNotice('SafarGo Official App pehle se installed aur active hai ✓');
+      setNotice('SafarGo Official App is already installed and active ✓');
       return;
     }
     setNotice(
-      'Direct Warning-Free Install ke liye: Phone ke Chrome menu (⋮) ya iPhone Safari Share (⬆) par tap karein aur "Install app" / "Add to Home screen" select karein. Bina kisi virus/harmful warning ke SafarGo Home Screen par install ho jayegi.'
+      'For warning-free installation: Tap your browser menu (⋮ in Chrome or Share ⬆ in iOS Safari) and select "Install app" / "Add to Home screen".'
     );
   };
 
@@ -158,7 +158,7 @@ export function DownloadsPage({ onBack }) {
               </div>
               <h2 className="text-lg sm:text-xl font-extrabold">Install Official SafarGo App (1-Tap, No Warnings)</h2>
               <p className="text-xs text-emerald-100 mt-0.5">
-                Bina kisi &ldquo;Harmful app&rdquo; ya &ldquo;Download anyway&rdquo; warning ke phone mein install karein — live auto-updates, full GPS aur Camera ke sath!
+                Install directly on your phone without &ldquo;Harmful app&rdquo; or &ldquo;Download anyway&rdquo; prompts — with live auto-updates, full GPS, and Camera access.
               </p>
             </div>
           </div>
@@ -197,7 +197,7 @@ export function DownloadsPage({ onBack }) {
                   'Standalone Android APK (SafarGo.apk) with Native Android GPS Bridge for Customers, Bike & AC Car Captains & Parcels.'}
               </p>
               <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 text-[11px] text-emerald-950 leading-relaxed">
-                <strong>100% Virus-Free &amp; Safe:</strong> Play Store ke bahar kisi bhi direct <code>.apk</code> download par Android phone apni default security ki wajah se <em>&ldquo;File might be harmful / Unknown app&rdquo;</em> popup dikhata hai. Agar aap bina kisi warning aur extra Allow steps ke install chahte hain to upar wala <strong>Install SafarGo App Now</strong> (Chrome Verified) use karein.
+                <strong>100% Virus-Free &amp; Safe:</strong> Outside Google Play Store, Android displays a standard <em>&ldquo;File might be harmful / Unknown app&rdquo;</em> prompt for direct <code>.apk</code> sideloads. Use <strong>Install SafarGo App Now</strong> above for instant warning-free installation.
               </div>
               <div className="text-xs text-slate-500 mono-num">
                 File: <strong>{latestApk?.file_name || 'SafarGo.apk'}</strong> · Downloads: {latestApk?.download_count ?? 0}

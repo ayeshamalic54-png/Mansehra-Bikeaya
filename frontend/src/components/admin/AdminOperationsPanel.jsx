@@ -595,7 +595,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
         await navigator.clipboard.writeText(APPS_SCRIPT_SNIPPET);
         setCopiedScript(true);
         setTimeout(() => setCopiedScript(false), 2500);
-        onNotify('Google Apps Script copy ho gaya — ab script.google.com par deploy karein!');
+        onNotify('Google Apps Script copied — deploy it at script.google.com!');
       } catch {
         setShowAppsScript(true);
       }
@@ -611,12 +611,12 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
           );
         } else if (created.email_status === 'failed') {
           onNotify(
-            `Backup (${created.total_rows} rows, ${created.size_kb} KB) app folder mein save ho gaya, lekin email failed: ${created.email_error || 'Network unreachable'}. Neeche HTTPS Gmail Relay setup karein.`,
+            `Backup (${created.total_rows} rows, ${created.size_kb} KB) saved locally, but email failed: ${created.email_error || 'Network unreachable'}. Configure HTTPS Gmail Relay below.`,
             true
           );
         } else {
           onNotify(
-            `Full DB Backup (${created.total_rows} rows, ${created.size_kb} KB) app folder & DB mein save ho gaya! (${created.email_status})`
+            `Full DB Backup (${created.total_rows} rows, ${created.size_kb} KB) saved locally & in DB! (${created.email_status})`
           );
         }
         await loadSubpage();
@@ -757,11 +757,11 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                   Automatic Safety Guarantee
                 </div>
                 <p>
-                  1. Pehle current live database ka <strong>Pre-Restore Safety Snapshot</strong> app folder mein{' '}
-                  <em>Saved Locally (Pre-Restore)</em> mark ke saath mehfooz kiya jayega.
+                  1. First, a <strong>Pre-Restore Safety Snapshot</strong> of the current live database is saved locally with the{' '}
+                  <em>Saved Locally (Pre-Restore)</em> label.
                 </p>
                 <p>
-                  2. Phir Users, Captains, Photos, Bookings, Ledger, Zones aur Settings clean atomic transaction mein restore honge.
+                  2. Next, Users, Captains, Photos, Bookings, Ledger, Zones, and Settings are restored in a single atomic transaction.
                 </p>
               </div>
 
@@ -829,7 +829,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                     Database Restored Successfully ✓
                   </div>
                   <div className="text-xs text-slate-600 font-semibold">
-                    Tamam SafarGo records safely restore ho chuke hain ({restoreSuccess.restored_at_pkt || 'Just now PKT'}).
+                    All SafarGo records restored safely ({restoreSuccess.restored_at_pkt || 'Just now PKT'}).
                   </div>
                 </div>
               </div>
@@ -913,9 +913,9 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 Cloud Hosting Note (Fix for [Errno 101] Network is unreachable):
               </div>
               <p>
-                Render cloud servers Gmail SMTP ports (465/587) block karte hain. Cloud par reliable{' '}
-                <strong>gosafar4@gmail.com</strong> email ke liye neeche <strong>Google Apps Script HTTPS Webhook URL</strong>{' '}
-                (HTTPS port 443 — hamesha chalta hai) ya <strong>Resend API Key</strong> enter karein. Local PC 4 AM task SMTP bhi use karta hai.
+                Render cloud servers block Gmail SMTP ports (465/587). For reliable cloud delivery to{' '}
+                <strong>gosafar4@gmail.com</strong>, enter a <strong>Google Apps Script HTTPS Webhook URL</strong>{' '}
+                (HTTPS port 443 — always works) or a <strong>Resend API Key</strong> below. Local PC runs use SMTP as well.
               </p>
               <button
                 type="button"
@@ -1035,7 +1035,7 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 Restore Full Database from Backup File
               </div>
               <p className="text-[11px] text-slate-500">
-                App folder (<code className="bg-slate-100 px-1 rounded">backups/</code>) ya <strong>gosafar4@gmail.com</strong> se download ki gayi <code className="bg-slate-100 px-1 rounded">.json.gz</code> / <code className="bg-slate-100 px-1 rounded">.json</code> file upload karke poora database restore karein. System pehle safety snapshot khud save karta hai.
+                Upload a <code className="bg-slate-100 px-1 rounded">.json.gz</code> or <code className="bg-slate-100 px-1 rounded">.json</code> backup file from the <code className="bg-slate-100 px-1 rounded">backups/</code> folder or <strong>gosafar4@gmail.com</strong> to restore the database. A safety snapshot is always saved first.
               </p>
             </div>
             <label className="flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/40 hover:bg-amber-50 cursor-pointer text-center transition">

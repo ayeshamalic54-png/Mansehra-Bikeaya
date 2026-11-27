@@ -436,7 +436,7 @@ def request_topup_proof(
     req.admin_note = (
         payload.admin_note.strip()
         if payload and payload.admin_note and payload.admin_note.strip()
-        else "Payment abhi receive nahi hui — meherbani apna TID / Transaction Proof submit karein."
+        else "Payment not received yet — please submit your TID / Payment Proof."
     )
     req.approved_by_id = current_admin.id
     db.commit()

@@ -324,7 +324,7 @@ export function AuthPage({ onNavigate }) {
                           </button>
                         </div>
                         <p className="text-[11px] text-slate-600 leading-snug">
-                          Jo photos abhi upload kareinge woh save ho jayengi — lekin Admin verification aur online duty tabhi khulegi jab tamam 4 photos + CNIC # complete honge aur Admin khud approve karega.
+                          Uploaded photos are saved immediately — Captain verification and online duty activate once all 4 photos + CNIC are completed and approved by Admin.
                         </p>
                         {showDocUpload && (
                           <CaptainPhotoUploads

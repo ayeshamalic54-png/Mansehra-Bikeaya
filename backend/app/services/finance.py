@@ -76,8 +76,8 @@ def can_captain_work(db: Session, rp: RiderProfile) -> tuple[bool, Optional[str]
         return (
             False,
             (
-                f"Top-Up Required (0 Rides Left): Kaam start karne ke liye pehle {policy['rides_count']} Rides ka "
-                f"Rs. {policy['package_fee']:.0f} Top-Up SafarGo account par bhej kar Admin approval lein."
+                f"Top-Up Required (0 Rides Left): Please transfer {policy['rides_count']} Rides "
+                f"(Rs. {policy['package_fee']:.0f}) to any SafarGo account and wait for Admin approval to start working."
             ),
         )
     if float(rp.balance_due_to_admin or 0.0) > float(rp.credit_limit or 0.0):

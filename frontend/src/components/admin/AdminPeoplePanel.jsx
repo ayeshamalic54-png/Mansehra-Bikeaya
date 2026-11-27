@@ -411,7 +411,7 @@ export function AdminPeoplePanel({
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] font-bold">
                         Pending Documents Note — Missing: <span className="text-rose-700">{missingList.join(', ')}</span>
                         <div className="text-[10px] text-amber-800 mt-0.5">
-                          Captain khud verify nahi ho sakta, lekin Admin chahe to abhi manually Approve &amp; Verify kar sakta hai.
+                          Captain cannot self-verify, though Admin can manually Approve &amp; Verify anytime.
                         </div>
                       </div>
                     )}
@@ -485,7 +485,7 @@ export function AdminPeoplePanel({
                       Edit Complete Captain Data — {editRiderForm.full_name}
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      Edit profile, vehicle, zone, verification, commission, password, aur sab 4 photos ek sath save karein.
+                      Edit profile, vehicle, zone, verification, commission, password, and all 4 photos at once.
                     </div>
                   </div>
                   <button
@@ -923,7 +923,7 @@ export function AdminPeoplePanel({
                 SafarGo Registered Captains ({riders.length})
               </div>
               <div className="text-[11px] text-slate-500">
-                Edit, verify, check per-trip km, ya office record ke liye full contrast sheet print karein.
+                Edit, verify, inspect per-trip distance, or print a high-contrast sheet for office records.
               </div>
             </div>
             <button
@@ -1291,7 +1291,7 @@ export function AdminPeoplePanel({
                 SafarGo Registered Customers ({customers.length})
               </div>
               <div className="text-[11px] text-slate-500">
-                Customer details, bookings, total spend, edit/block actions, ya office record sheet print karein.
+                Inspect customer details, bookings, total spend, edit/block actions, or print an office record sheet.
               </div>
             </div>
             <button
