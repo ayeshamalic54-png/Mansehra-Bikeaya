@@ -384,6 +384,9 @@ def approve_topup_request(
         amount_override=payload.amount if payload else None,
         admin_note=payload.admin_note if payload else None,
     )
+    from app.routers.public_router import invalidate_nearby_captains_cache
+
+    invalidate_nearby_captains_cache()
     return {
         "id": req.id,
         "status": req.status,

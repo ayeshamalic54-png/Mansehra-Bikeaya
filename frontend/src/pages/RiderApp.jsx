@@ -128,19 +128,26 @@ export function RiderApp({ onOpenDownloads }) {
     });
   }, [user?.id, user?.rider_profile?.updated_at, user?.rider_profile?.is_verified]);
 
-  const loadAll = async (overrideOther = includeOtherVehicles) => {
+  const hasActiveTrip = myJobs.some((j) => ['assigned', 'arrived', 'in_progress'].includes(j.status));
+
+  const loadAll = async (overrideOther = includeOtherVehicles, includeSlow = true) => {
     try {
-      const [avail, mine, ledger, sosRows] = await Promise.all([
+      const fastReqs = [
         apiRequest(`/api/riders/available-jobs?include_other_vehicles=${overrideOther ? 'true' : 'false'}`),
         apiRequest('/api/bookings/my'),
-        apiRequest('/api/riders/ledger'),
-        apiRequest('/api/sos/my').catch(() => []),
-      ]);
+      ];
+      const [avail, mine, ledger, sosRows] = includeSlow
+        ? await Promise.all([
+            ...fastReqs,
+            apiRequest('/api/riders/ledger'),
+            apiRequest('/api/sos/my').catch(() => []),
+          ])
+        : [...(await Promise.all(fastReqs)), null, null];
       const list = avail || [];
       setAvailableJobs(list);
       setMyJobs(mine);
-      setLedgerData(ledger);
-      setMySosHistory(sosRows || []);
+      if (ledger) setLedgerData(ledger);
+      if (sosRows !== null) setMySosHistory(sosRows || []);
 
       if (seenJobIdsRef.current === null) {
         seenJobIdsRef.current = new Set(list.map((j) => j.id));
@@ -175,10 +182,24 @@ export function RiderApp({ onOpenDownloads }) {
   };
 
   useEffect(() => {
-    loadAll();
-    const timer = setInterval(() => loadAll(), 3500);
-    return () => clearInterval(timer);
-  }, [includeOtherVehicles]);
+    loadAll(includeOtherVehicles, true);
+    let tick = 0;
+    const intervalMs = rp?.is_online || hasActiveTrip ? 5000 : 30000;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      tick += 1;
+      const includeSlow = tab === 'ledger' ? tick % 3 === 0 : tick % 6 === 0;
+      loadAll(includeOtherVehicles, includeSlow);
+    }, intervalMs);
+    const onVisible = () => {
+      if (!document.hidden) loadAll(includeOtherVehicles, true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [includeOtherVehicles, rp?.is_online, hasActiveTrip, tab]);
 
   const pushRiderLocation = async (lat, lng, source = 'live') => {
     try {

@@ -131,6 +131,9 @@ def toggle_online(
         rp.is_online = False
 
     db.commit()
+    from app.routers.public_router import invalidate_nearby_captains_cache
+
+    invalidate_nearby_captains_cache()
     return {
         "is_online": rp.is_online,
         "balance_due_to_admin": rp.balance_due_to_admin,
@@ -164,6 +167,9 @@ def update_rider_location(
         else:
             rp.is_online = False
     db.commit()
+    from app.routers.public_router import invalidate_nearby_captains_cache
+
+    invalidate_nearby_captains_cache()
     return {
         "current_lat": rp.current_lat,
         "current_lng": rp.current_lng,

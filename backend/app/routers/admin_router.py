@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, defer, joinedload
 from app.auth import hash_password, require_roles
 from app.database import get_db
 from app.models import (
@@ -93,7 +93,17 @@ def admin_overview(
     pending_count = sum(1 for b in all_bookings if b.status == "pending")
     active_count = sum(1 for b in all_bookings if b.status in ("assigned", "arrived", "in_progress"))
 
-    riders = db.query(RiderProfile).options(joinedload(RiderProfile.user)).all()
+    riders = (
+        db.query(RiderProfile)
+        .options(
+            joinedload(RiderProfile.user),
+            defer(RiderProfile.rider_photo),
+            defer(RiderProfile.vehicle_photo),
+            defer(RiderProfile.cnic_front_photo),
+            defer(RiderProfile.cnic_back_photo),
+        )
+        .all()
+    )
     online_riders = sum(1 for r in riders if r.is_online and r.is_verified)
     pending_verification = sum(1 for r in riders if not r.is_verified)
 
@@ -113,7 +123,11 @@ def admin_overview(
 
     total_expenses = round(db.query(func.coalesce(func.sum(AdminExpense.amount), 0.0)).scalar() or 0.0, 2)
     total_commission = round(sum(b.commission_amount for b in completed_all), 2)
-    approved_topups = db.query(RiderTopupRequest).filter(RiderTopupRequest.status == "approved").all()
+    approved_topups = (
+        db.query(RiderTopupRequest)
+        .filter(RiderTopupRequest.status == "approved")
+        .all()
+    )
     all_time_topups = round(sum(t.amount for t in approved_topups), 2)
     today_topups = round(
         sum(
@@ -809,6 +823,9 @@ def update_rider_config(
         rp.custom_commission_value = payload.custom_commission_value
 
     db.commit()
+    from app.routers.public_router import invalidate_nearby_captains_cache
+
+    invalidate_nearby_captains_cache()
     return {"status": "updated", "rider_id": user.id}
 
 
@@ -1054,7 +1071,10 @@ def get_admin_live_map(
 
     riders = (
         db.query(User)
-        .options(joinedload(User.rider_profile))
+        .options(
+            joinedload(User.rider_profile).defer(RiderProfile.cnic_front_photo),
+            joinedload(User.rider_profile).defer(RiderProfile.cnic_back_photo),
+        )
         .filter(User.role == "rider")
         .all()
     )
@@ -1432,6 +1452,10 @@ def admin_update_setting(
             {RiderProfile.is_online: False}, synchronize_session=False
         )
     db.commit()
+    from app.routers.public_router import invalidate_nearby_captains_cache, invalidate_public_bootstrap_cache
+
+    invalidate_public_bootstrap_cache()
+    invalidate_nearby_captains_cache()
     return {"key": s.key, "value": "" if key in secret_keys else s.value}
 
 

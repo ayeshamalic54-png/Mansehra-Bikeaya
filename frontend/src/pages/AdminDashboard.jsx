@@ -260,21 +260,38 @@ export function AdminDashboard({ onOpenDownloads }) {
   }, [subpage, bookingStatusFilter]);
 
   useEffect(() => {
-    const timer = setInterval(async () => {
+    const refreshOverview = async () => {
+      if (document.hidden) return;
       try {
         const ov = await apiRequest('/api/admin/overview');
         handleOverviewPayload(ov);
       } catch {
         // ignore transient poll errors
       }
-    }, 4000);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(refreshOverview, 15000);
+    const onVisible = () => {
+      if (!document.hidden) refreshOverview();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   useEffect(() => {
     if (subpage !== 'livemap' && subpage !== 'overview') return;
-    const timer = setInterval(loadLiveMap, 4500);
-    return () => clearInterval(timer);
+    const refreshMap = () => {
+      if (!document.hidden) loadLiveMap();
+    };
+    const timer = setInterval(refreshMap, 12000);
+    const onVisible = () => refreshMap();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [subpage]);
 
   const handleAssignRider = async (bookingId, riderId) => {

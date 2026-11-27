@@ -54,7 +54,9 @@ export function LandingPage({ onNavigate }) {
 
   useEffect(() => {
     let active = true;
+    let pollCount = 0;
     const loadNearby = async () => {
+      if (document.hidden) return;
       try {
         const res = await apiRequest(
           `/api/public/nearby-captains?lat=${pickupLat}&lng=${pickupLng}&service_type=${serviceType}&radius_km=60`,
@@ -66,10 +68,23 @@ export function LandingPage({ onNavigate }) {
       }
     };
     loadNearby();
-    const timer = setInterval(loadNearby, 12000);
+    // Poll up to 5 min while visible so an unattended open homepage tab never keeps serverless DB awake 24/7
+    const timer = setInterval(() => {
+      if (document.hidden || pollCount >= 10) return;
+      pollCount += 1;
+      loadNearby();
+    }, 30000);
+    const onVisible = () => {
+      if (!document.hidden) {
+        pollCount = 0;
+        loadNearby();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       active = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [pickupLat, pickupLng, serviceType]);
 

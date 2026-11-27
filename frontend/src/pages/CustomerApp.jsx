@@ -193,16 +193,33 @@ export function CustomerApp({ onOpenDownloads }) {
     }
   };
 
+  const hasLiveRide = bookings.some((b) => ['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status));
+  const hasSearching = bookings.some((b) => b.status === 'pending');
+
   useEffect(() => {
     loadBookings();
     loadTickets();
-    const hasSearching = bookings.some((b) => b.status === 'pending');
+    let tick = 0;
     const timer = setInterval(() => {
+      if (document.hidden) return;
+      tick += 1;
       loadBookings();
-      loadTickets();
-    }, hasSearching ? 3000 : 6000);
-    return () => clearInterval(timer);
-  }, [bookings.some((b) => b.status === 'pending')]);
+      if (tab === 'support' || tick % 6 === 0) {
+        loadTickets();
+      }
+    }, hasLiveRide ? 5000 : 25000);
+    const onVisible = () => {
+      if (!document.hidden) {
+        loadBookings();
+        if (tab === 'support') loadTickets();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [hasLiveRide, tab]);
 
   useEffect(() => {
     if (bootstrap.zones?.length >= 2) {
@@ -222,6 +239,8 @@ export function CustomerApp({ onOpenDownloads }) {
   useEffect(() => {
     let active = true;
     const loadNearby = async () => {
+      if (document.hidden) return;
+      if (tab !== 'book' && !hasSearching) return;
       try {
         const res = await apiRequest(
           `/api/public/nearby-captains?lat=${pickupLat}&lng=${pickupLng}&service_type=${serviceType}&radius_km=60`,
@@ -233,12 +252,17 @@ export function CustomerApp({ onOpenDownloads }) {
       }
     };
     loadNearby();
-    const timer = setInterval(loadNearby, 8000);
+    const timer = setInterval(loadNearby, 20000);
+    const onVisible = () => {
+      if (!document.hidden) loadNearby();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       active = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [pickupLat, pickupLng, serviceType]);
+  }, [pickupLat, pickupLng, serviceType, tab, hasSearching]);
 
   useEffect(() => {
     let active = true;

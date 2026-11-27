@@ -196,6 +196,9 @@ def _run_scheduled_pkt_backup_if_due() -> None:
     global _LAST_SCHEDULED_BACKUP_DATE_PKT
     if not _db_state["ready"]:
         return
+    # Avoid cluttering production backups folder from temporary local SQLite QA runs.
+    if engine.dialect.name != "postgresql" and os.getenv("APP_ENV") != "production":
+        return
     now_p = pkt_now()
     today_pkt = now_p.strftime("%Y-%m-%d")
     if now_p.hour < BACKUP_HOUR_PKT or _LAST_SCHEDULED_BACKUP_DATE_PKT == today_pkt:
