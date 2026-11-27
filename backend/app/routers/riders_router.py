@@ -10,6 +10,7 @@ from app.models import (
     RideOffer,
     RiderProfile,
     RiderSettlementRequest,
+    RiderTopupRequest,
     User,
 )
 from app.routers.auth_router import serialize_user
@@ -20,13 +21,16 @@ from app.schemas import (
     RiderLocationUpdate,
     RiderProfileSelfUpdate,
     RiderSettlementSubmit,
+    RiderTopupSubmit,
 )
 from app.services.finance import (
     apply_wait_charge_to_booking,
+    can_captain_work,
     captain_matches_service,
     complete_booking_and_post_ledger,
     compute_commission,
     find_nearest_captains_for_booking,
+    get_topup_policy,
     haversine_km,
     resolve_nearest_zone_name,
     utcnow,
@@ -113,19 +117,9 @@ def toggle_online(
         raise HTTPException(status_code=404, detail="Rider profile not found")
 
     if not rp.is_online:
-        if not rp.is_verified:
-            raise HTTPException(
-                status_code=403,
-                detail="Please upload your Photo, Vehicle Photo & CNIC in Profile and wait for verification before going online.",
-            )
-        if rp.balance_due_to_admin > rp.credit_limit:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Unpaid commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds "
-                    f"your limit (Rs. {rp.credit_limit:.0f}). Please settle with SafarGo first."
-                ),
-            )
+        eligible, block_reason = can_captain_work(db, rp)
+        if not eligible:
+            raise HTTPException(status_code=403, detail=block_reason)
         rp.is_online = True
         if rp.current_lat is None or rp.current_lng is None:
             z = db.query(MansehraZone).filter(MansehraZone.name == rp.zone_name).first()
@@ -139,6 +133,8 @@ def toggle_online(
     return {
         "is_online": rp.is_online,
         "balance_due_to_admin": rp.balance_due_to_admin,
+        "remaining_paid_rides": int(rp.remaining_paid_rides or 0),
+        "topup_wallet_balance": float(rp.topup_wallet_balance or 0.0),
         "current_lat": rp.current_lat,
         "current_lng": rp.current_lng,
     }
@@ -159,8 +155,13 @@ def update_rider_location(
     resolved_zone = resolve_nearest_zone_name(db, payload.lat, payload.lng)
     if resolved_zone:
         rp.zone_name = resolved_zone
-    if payload.is_online is not None and rp.is_verified and rp.balance_due_to_admin <= rp.credit_limit:
-        rp.is_online = payload.is_online
+    if payload.is_online is not None:
+        if payload.is_online:
+            eligible, _ = can_captain_work(db, rp)
+            if eligible:
+                rp.is_online = True
+        else:
+            rp.is_online = False
     db.commit()
     return {
         "current_lat": rp.current_lat,
@@ -181,6 +182,9 @@ def get_available_jobs(
     if not rp:
         raise HTTPException(status_code=404, detail="Rider profile not found")
     if not rp.is_verified:
+        return []
+    eligible, _ = can_captain_work(db, rp)
+    if not eligible:
         return []
 
     rules = {r.service_type: r for r in db.query(PricingRule).all()}
@@ -263,16 +267,11 @@ def send_or_update_ride_offer(
     db: Session = Depends(get_db),
 ):
     rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
-    if not rp or not rp.is_verified:
-        raise HTTPException(status_code=403, detail="Account verification required before sending ride offers")
-    if rp.balance_due_to_admin > rp.credit_limit:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds credit cap "
-                f"(Rs. {rp.credit_limit:.0f}). Settle with SafarGo to continue."
-            ),
-        )
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    eligible, block_reason = can_captain_work(db, rp)
+    if not eligible:
+        raise HTTPException(status_code=403, detail=block_reason)
 
     booking = booking_query_with_relations(db).filter(Booking.id == booking_id).first()
     if not booking:
@@ -349,16 +348,11 @@ def accept_job(
     db: Session = Depends(get_db),
 ):
     rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
-    if not rp or not rp.is_verified:
-        raise HTTPException(status_code=403, detail="Account verification required to accept rides")
-    if rp.balance_due_to_admin > rp.credit_limit:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds credit cap "
-                f"(Rs. {rp.credit_limit:.0f}). Settle with SafarGo to continue."
-            ),
-        )
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    eligible, block_reason = can_captain_work(db, rp)
+    if not eligible:
+        raise HTTPException(status_code=403, detail=block_reason)
 
     booking = booking_query_with_relations(db).filter(Booking.id == booking_id).first()
     if not booking:
@@ -470,11 +464,25 @@ def get_my_rider_ledger(
         .limit(40)
         .all()
     )
+    topups = (
+        db.query(RiderTopupRequest)
+        .filter(RiderTopupRequest.rider_id == current_user.id)
+        .order_by(RiderTopupRequest.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    topup_policy = get_topup_policy(db, rp.vehicle_type)
     return {
         "summary": {
             "balance_due_to_admin": rp.balance_due_to_admin,
             "credit_limit": rp.credit_limit,
             "is_over_limit": rp.balance_due_to_admin > rp.credit_limit,
+            "topup_wallet_balance": float(rp.topup_wallet_balance or 0.0),
+            "remaining_paid_rides": int(rp.remaining_paid_rides or 0),
+            "topup_per_ride_fee": float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"]),
+            "total_topups_paid": float(rp.total_topups_paid or 0.0),
+            "topup_policy": topup_policy,
+            "topup_blocked": bool(topup_policy["required"] and int(rp.remaining_paid_rides or 0) <= 0),
             "total_trips": rp.total_trips,
             "total_gross_collected": rp.total_gross_collected,
             "total_net_earned": rp.total_net_earned,
@@ -511,6 +519,66 @@ def get_my_rider_ledger(
             }
             for req in requests
         ],
+        "topup_requests": [
+            {
+                "id": t.id,
+                "amount": t.amount,
+                "rides_requested": t.rides_requested,
+                "payment_channel": t.payment_channel,
+                "reference_no": t.reference_no,
+                "note": t.note,
+                "admin_note": t.admin_note,
+                "account_title": "SafarGo",
+                "status": t.status,
+                "created_at": t.created_at,
+                "reviewed_at": t.reviewed_at,
+            }
+            for t in topups
+        ],
+    }
+
+
+@router.post("/topup-requests", status_code=status.HTTP_201_CREATED)
+def submit_rider_topup_request(
+    payload: RiderTopupSubmit,
+    current_user: User = Depends(require_roles("rider")),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == current_user.id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    if payload.payment_channel != "cash" and not (payload.reference_no or "").strip():
+        raise HTTPException(status_code=400, detail="Transaction ID / Reference # is required for digital Top-Up")
+
+    policy = get_topup_policy(db, rp.vehicle_type)
+    amt = round(float(payload.amount), 2)
+    if payload.rides_requested is not None:
+        rides_req = int(payload.rides_requested)
+    else:
+        rides_req = max(1, int(round((amt / policy["package_fee"]) * policy["rides_count"])))
+
+    req = RiderTopupRequest(
+        rider_id=current_user.id,
+        amount=amt,
+        rides_requested=rides_req,
+        payment_channel=payload.payment_channel,
+        reference_no=payload.reference_no.strip() if payload.reference_no else None,
+        note=payload.note.strip() if payload.note else None,
+        status="pending",
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return {
+        "id": req.id,
+        "amount": req.amount,
+        "rides_requested": req.rides_requested,
+        "payment_channel": req.payment_channel,
+        "reference_no": req.reference_no,
+        "note": req.note,
+        "account_title": "SafarGo",
+        "status": req.status,
+        "created_at": req.created_at,
     }
 
 

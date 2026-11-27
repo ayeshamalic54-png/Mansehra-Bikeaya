@@ -10,6 +10,15 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
   const [balances, setBalances] = useState([]);
   const [ledger, setLedger] = useState([]);
   const [settlementRequests, setSettlementRequests] = useState([]);
+  const [topupRequests, setTopupRequests] = useState([]);
+  const [topupPolicy, setTopupPolicy] = useState({
+    rider_topup_required: 'true',
+    rider_topup_rides_count: '10',
+    rider_topup_package_fee: '100',
+    rider_topup_car_package_fee: '',
+  });
+  const [topupEdits, setTopupEdits] = useState({});
+  const [savingTopupPolicy, setSavingTopupPolicy] = useState(false);
   const [expenses, setExpenses] = useState([]);
   const [pricing, setPricing] = useState([]);
   const [payAccounts, setPayAccounts] = useState({
@@ -30,6 +39,12 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
       payment_jazzcash: s.payment_jazzcash || '',
       payment_bank_name: s.payment_bank_name || '',
       payment_bank_account: s.payment_bank_account || '',
+    });
+    setTopupPolicy({
+      rider_topup_required: String(s.rider_topup_required ?? 'true').toLowerCase() === 'false' ? 'false' : 'true',
+      rider_topup_rides_count: String(s.rider_topup_rides_count || '10'),
+      rider_topup_package_fee: String(s.rider_topup_package_fee || '100'),
+      rider_topup_car_package_fee: s.rider_topup_car_package_fee != null ? String(s.rider_topup_car_package_fee) : '',
     });
   }, [bootstrap?.settings]);
 
@@ -56,23 +71,92 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
 
   const loadFinanceData = async () => {
     try {
-      const [bal, led, exp, prc, reqs] = await Promise.all([
+      const [bal, led, exp, prc, reqs, topups] = await Promise.all([
         apiRequest('/api/finance/rider-balances'),
         apiRequest('/api/finance/ledger'),
         apiRequest('/api/finance/expenses'),
         apiRequest('/api/admin/pricing'),
         apiRequest('/api/finance/settlement-requests'),
+        apiRequest('/api/finance/topup-requests'),
       ]);
       setBalances(bal);
       setLedger(led);
       setExpenses(exp);
       setPricing(prc);
       setSettlementRequests(reqs);
+      setTopupRequests(topups || []);
       if (!settForm.rider_id && bal.length > 0) {
         setSettForm((prev) => ({ ...prev, rider_id: String(bal[0].rider_id) }));
       }
     } catch (e) {
       onNotify(e.message, true);
+    }
+  };
+
+  const handleSaveTopupPolicy = async (e) => {
+    e.preventDefault();
+    setSavingTopupPolicy(true);
+    try {
+      const updates = [
+        ['rider_topup_required', String(topupPolicy.rider_topup_required === 'false' ? 'false' : 'true')],
+        ['rider_topup_rides_count', String(Math.max(1, Number(topupPolicy.rider_topup_rides_count || 10)))],
+        ['rider_topup_package_fee', String(Math.max(1, Number(topupPolicy.rider_topup_package_fee || 100)))],
+        ['rider_topup_car_package_fee', String(topupPolicy.rider_topup_car_package_fee ?? '').trim()],
+      ];
+      await Promise.all(
+        updates.map(([key, value]) => apiRequest(`/api/admin/settings/${key}`, { method: 'PUT', body: { value } }))
+      );
+      onNotify(
+        topupPolicy.rider_topup_required === 'false'
+          ? 'Top-Up OFF kar diya gaya — Captains ab baghair advance top-up ke rides kar sakein ge!'
+          : `Top-Up ON & saved (${updates[1][1]} Rides = Rs. ${updates[2][1]})! Unpaid captains offline & hidden rahein ge.`
+      );
+      if (onRefreshBootstrap) await onRefreshBootstrap();
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
+    } finally {
+      setSavingTopupPolicy(false);
+    }
+  };
+
+  const handleApproveTopupReq = async (req) => {
+    const draft = topupEdits[req.id] || {};
+    const ridesVal = draft.rides !== undefined && draft.rides !== '' ? Number(draft.rides) : undefined;
+    const amountVal = draft.amount !== undefined && draft.amount !== '' ? Number(draft.amount) : undefined;
+    try {
+      const res = await apiRequest(`/api/finance/topup-requests/${req.id}/approve`, {
+        method: 'POST',
+        body: {
+          rides_granted: ridesVal,
+          amount: amountVal,
+          admin_note: (draft.admin_note || '').trim() || null,
+        },
+      });
+      onNotify(
+        `Top-Up approved! ${req.rider_name} ko +${res.rides_approved} rides mil gayein (Total left: ${res.remaining_paid_rides}).`
+      );
+      if (onRefreshBootstrap) await onRefreshBootstrap();
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
+    }
+  };
+
+  const handleRejectTopupReq = async (req) => {
+    const draft = topupEdits[req.id] || {};
+    try {
+      await apiRequest(`/api/finance/topup-requests/${req.id}/reject`, {
+        method: 'POST',
+        body: {
+          admin_note: (draft.admin_note || '').trim() || null,
+        },
+      });
+      onNotify(`Top-Up request (#${req.id}) rejected.`);
+      if (onRefreshBootstrap) await onRefreshBootstrap();
+      await loadFinanceData();
+    } catch (err) {
+      onNotify(err.message, true);
     }
   };
 
@@ -569,6 +653,208 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
         </button>
       </form>
 
+      {/* Captain Pre-Paid Top-Up Policy & ON/OFF Toggle */}
+      <form onSubmit={handleSaveTopupPolicy} className="bg-white border-2 border-emerald-200 rounded-2xl p-5 space-y-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-extrabold text-sm text-slate-900">
+              Captain Pre-Paid Top-Up Package &amp; Mode Toggle (Bike + Car)
+            </div>
+            <p className="text-slate-500 mt-0.5">
+              <strong>ON</strong> karne par naye/0-ride captains customer map aur ride requests se hidden rahein ge jab tak Top-Up pay karke approve na hon.{' '}
+              <strong>OFF</strong> karne par sab verified captains baghair top-up free rides kar sakte hain.
+            </p>
+          </div>
+          <span
+            className={`px-3 py-1 rounded-full font-extrabold text-[11px] ${
+              topupPolicy.rider_topup_required === 'false'
+                ? 'bg-slate-200 text-slate-800'
+                : 'bg-[#009E4D] text-white'
+            }`}
+          >
+            {topupPolicy.rider_topup_required === 'false' ? 'TOP-UP OFF (FREE MODE)' : 'TOP-UP ON (LOCKED)'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Top-Up Requirement</label>
+            <select
+              value={topupPolicy.rider_topup_required}
+              onChange={(e) => setTopupPolicy({ ...topupPolicy, rider_topup_required: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 font-extrabold text-slate-900"
+            >
+              <option value="true">ON — Top-Up Required First</option>
+              <option value="false">OFF — Free (No Top-Up)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Rides per Package</label>
+            <input
+              type="number"
+              min="1"
+              value={topupPolicy.rider_topup_rides_count}
+              onChange={(e) => setTopupPolicy({ ...topupPolicy, rider_topup_rides_count: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">
+              Package Fee (Rs.) · ≈ Rs.{' '}
+              {(
+                Number(topupPolicy.rider_topup_package_fee || 100) /
+                Math.max(1, Number(topupPolicy.rider_topup_rides_count || 10))
+              ).toFixed(1)}
+              /ride
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={topupPolicy.rider_topup_package_fee}
+              onChange={(e) => setTopupPolicy({ ...topupPolicy, rider_topup_package_fee: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 block mb-1">Car Package Fee (opt. Rs.)</label>
+            <input
+              type="number"
+              min="0"
+              placeholder={`Same as Bike (Rs. ${topupPolicy.rider_topup_package_fee || 100})`}
+              value={topupPolicy.rider_topup_car_package_fee}
+              onChange={(e) => setTopupPolicy({ ...topupPolicy, rider_topup_car_package_fee: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num font-bold"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={savingTopupPolicy}
+          className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
+        >
+          {savingTopupPolicy ? 'Saving...' : 'Save Top-Up Package & Toggle'}
+        </button>
+      </form>
+
+      {/* Captain Pre-Paid Top-Up Approvals Queue */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-extrabold text-sm text-slate-900">
+            Captain Pre-Paid Top-Up Approvals ({topupRequests.filter((r) => r.status === 'pending').length} pending)
+          </span>
+          <span className="text-[11px] text-slate-500">
+            Approve karne par Captain ke wallet mein paid rides aur balance foran add ho jayega.
+          </span>
+        </div>
+        {topupRequests.length === 0 ? (
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-500 text-center">
+            Abhi tak kisi captain ki top-up request nahi aayi.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {topupRequests.map((req) => {
+              const draft = topupEdits[req.id] || {};
+              return (
+                <div key={req.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
+                      <span>{req.rider_name} ({req.rider_phone})</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                          req.vehicle_type === 'car'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                            : 'bg-emerald-50 text-[#008741] border border-emerald-200'
+                        }`}
+                      >
+                        {req.vehicle_type === 'car' ? 'CAR' : 'BIKE'}
+                      </span>
+                      <span className="text-slate-500 font-normal">· {req.bike_plate}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] mono-num">
+                        Left: {req.current_remaining_paid_rides} rides
+                      </span>
+                    </div>
+                    <div className="text-slate-700 mono-num">
+                      Requested: <strong>Rs. {req.amount}</strong> ({req.rides_requested} rides) ·{' '}
+                      <span className="uppercase font-bold">{req.payment_channel}</span> · TID/Ref:{' '}
+                      <strong className="text-[#008741]">{req.reference_no || '—'}</strong>
+                    </div>
+                    {(req.note || req.admin_note) && (
+                      <div className="text-[11px] text-slate-500">
+                        {req.note ? `Captain Note: ${req.note}` : ''}{' '}
+                        {req.admin_note ? `· Admin Note: ${req.admin_note}` : ''}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {req.status === 'pending' ? (
+                      <>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder={`${req.rides_requested} rides`}
+                          value={draft.rides ?? ''}
+                          onChange={(e) =>
+                            setTopupEdits((prev) => ({
+                              ...prev,
+                              [req.id]: { ...(prev[req.id] || {}), rides: e.target.value },
+                            }))
+                          }
+                          className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 mono-num font-bold"
+                          title="Override Rides Count"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder={`Rs. ${req.amount}`}
+                          value={draft.amount ?? ''}
+                          onChange={(e) =>
+                            setTopupEdits((prev) => ({
+                              ...prev,
+                              [req.id]: { ...(prev[req.id] || {}), amount: e.target.value },
+                            }))
+                          }
+                          className="w-24 px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 mono-num font-bold"
+                          title="Override Amount Rs."
+                        />
+                        <input
+                          type="text"
+                          placeholder="Admin note (opt.)"
+                          value={draft.admin_note ?? ''}
+                          onChange={(e) =>
+                            setTopupEdits((prev) => ({
+                              ...prev,
+                              [req.id]: { ...(prev[req.id] || {}), admin_note: e.target.value },
+                            }))
+                          }
+                          className="w-32 px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApproveTopupReq(req)}
+                          className="px-3 py-1.5 rounded-lg bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold"
+                        >
+                          Approve &amp; Add Rides
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectTopupReq(req)}
+                          className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 font-bold"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    ) : (
+                      <StatusBadge value={req.status === 'approved' ? 'paid' : 'rejected'} />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Captain Submitted Payment Proofs */}
       {settlementRequests.length > 0 && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-2.5 text-xs">
@@ -695,6 +981,7 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               <tr>
                 <th className="p-3.5">Captain</th>
                 <th className="p-3.5">Trips</th>
+                <th className="p-3.5">Rides Left / Top-Up</th>
                 <th className="p-3.5">Gross Collected</th>
                 <th className="p-3.5">Rider Net</th>
                 <th className="p-3.5">Admin Comm.</th>
@@ -707,10 +994,29 @@ export function AdminFinancePanel({ subpage, onNotify, onRefreshBootstrap }) {
               {balances.map((r) => (
                 <tr key={r.rider_id}>
                   <td className="p-3.5">
-                    <div className="font-bold text-slate-900">{r.full_name}</div>
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>{r.full_name}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
+                          r.vehicle_type === 'car'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                            : 'bg-emerald-50 text-[#008741] border border-emerald-200'
+                        }`}
+                      >
+                        {r.vehicle_type === 'car' ? 'CAR' : 'BIKE'}
+                      </span>
+                    </div>
                     <div className="text-slate-500 mono-num">{r.bike_plate} · {r.phone}</div>
                   </td>
                   <td className="p-3.5 mono-num font-bold">{r.total_trips}</td>
+                  <td className="p-3.5 mono-num">
+                    <div className={`font-extrabold ${(r.remaining_paid_rides || 0) > 0 ? 'text-[#008741]' : 'text-rose-600'}`}>
+                      {r.remaining_paid_rides ?? 0} rides left
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Bal: Rs. {Number(r.topup_wallet_balance || 0).toFixed(0)} · Paid: Rs. {Number(r.total_topups_paid || 0).toFixed(0)}
+                    </div>
+                  </td>
                   <td className="p-3.5 mono-num">Rs. {r.total_gross_collected}</td>
                   <td className="p-3.5 mono-num text-[#009E4D] font-bold">Rs. {r.total_net_earned}</td>
                   <td className="p-3.5 mono-num font-bold">Rs. {r.total_commission_generated}</td>

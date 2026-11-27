@@ -447,6 +447,12 @@ export function AdminDashboard({ onOpenDownloads }) {
                             {kpis.pending_dispatch_count}
                           </span>
                         )}
+                        {item.id === 'settlements' &&
+                          (kpis.pending_topup_count || 0) + (kpis.pending_settlement_count || 0) > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[10px] mono-num">
+                              {(kpis.pending_topup_count || 0) + (kpis.pending_settlement_count || 0)}
+                            </span>
+                          )}
                         {item.id === 'sos' && (overview?.active_sos_alerts?.length || 0) > 0 && (
                           <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white font-extrabold text-[10px] mono-num animate-pulse">
                             {overview.active_sos_alerts.length}
@@ -892,6 +898,23 @@ export function AdminDashboard({ onOpenDownloads }) {
           {/* 1. OVERVIEW */}
           {subpage === 'overview' && overview && (
             <div className="space-y-5">
+              {kpis.pending_topup_count > 0 && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-amber-900 font-bold">
+                    <Bell className="w-4 h-4 text-amber-600" />
+                    <span>
+                      {kpis.pending_topup_count} Captain Top-Up approval request(s) waiting! Approve karein taake Bike/Car captains rides le sakein.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setSubpage('settlements')}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                  >
+                    Approve Top-Ups Now →
+                  </button>
+                </div>
+              )}
+
               {overview.over_limit_riders.length > 0 && (
                 <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2 text-rose-800 font-bold">

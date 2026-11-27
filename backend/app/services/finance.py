@@ -10,12 +10,85 @@ from app.models import (
     PricingRule,
     PromoCode,
     RiderProfile,
+    RiderTopupRequest,
+    SystemSetting,
     User,
 )
 
 
 def utcnow():
     return datetime.now(timezone.utc)
+
+
+def _parse_bool_setting(val: Optional[str], default: bool = True) -> bool:
+    if val is None or not str(val).strip():
+        return default
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+
+def get_topup_policy(db: Session, vehicle_type: Optional[str] = None) -> dict:
+    """Read live Admin-configured prepaid Ride Top-Up package rules."""
+    keys = (
+        "rider_topup_required",
+        "rider_topup_rides_count",
+        "rider_topup_package_fee",
+        "rider_topup_car_package_fee",
+    )
+    rows = {s.key: s.value for s in db.query(SystemSetting).filter(SystemSetting.key.in_(keys)).all()}
+    required = _parse_bool_setting(rows.get("rider_topup_required"), default=True)
+    try:
+        rides_count = max(1, int(float(rows.get("rider_topup_rides_count") or 10)))
+    except ValueError:
+        rides_count = 10
+    try:
+        base_fee = max(1.0, float(rows.get("rider_topup_package_fee") or 100.0))
+    except ValueError:
+        base_fee = 100.0
+
+    package_fee = base_fee
+    if (vehicle_type or "").lower() == "car":
+        raw_car = (rows.get("rider_topup_car_package_fee") or "").strip()
+        if raw_car:
+            try:
+                car_fee = float(raw_car)
+                if car_fee > 0:
+                    package_fee = car_fee
+            except ValueError:
+                pass
+
+    return {
+        "required": required,
+        "rides_count": rides_count,
+        "package_fee": round(package_fee, 2),
+        "per_ride_fee": round(package_fee / rides_count, 2),
+    }
+
+
+def can_captain_work(db: Session, rp: RiderProfile) -> tuple[bool, Optional[str]]:
+    """Shared eligibility guard checking verification, prepaid top-up rides, and credit cap."""
+    if not rp.is_verified:
+        return (
+            False,
+            "Please upload your Selfie, Vehicle Photo & CNIC in Profile and wait for Admin verification first.",
+        )
+    policy = get_topup_policy(db, rp.vehicle_type)
+    if policy["required"] and int(rp.remaining_paid_rides or 0) <= 0:
+        return (
+            False,
+            (
+                f"Top-Up Required (0 Rides Left): Kaam start karne ke liye pehle {policy['rides_count']} Rides ka "
+                f"Rs. {policy['package_fee']:.0f} Top-Up SafarGo account par bhej kar Admin approval lein."
+            ),
+        )
+    if float(rp.balance_due_to_admin or 0.0) > float(rp.credit_limit or 0.0):
+        return (
+            False,
+            (
+                f"Unpaid commission due (Rs. {rp.balance_due_to_admin:.0f}) exceeds "
+                f"your limit (Rs. {rp.credit_limit:.0f}). Please settle with SafarGo first."
+            ),
+        )
+    return True, None
 
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -79,6 +152,9 @@ def find_nearest_captains_for_booking(
 
     from sqlalchemy.orm import joinedload
 
+    topup_setting = db.query(SystemSetting).filter(SystemSetting.key == "rider_topup_required").first()
+    topup_required = _parse_bool_setting(topup_setting.value if topup_setting else None, default=True)
+
     captains = (
         db.query(User)
         .options(joinedload(User.rider_profile))
@@ -89,6 +165,8 @@ def find_nearest_captains_for_booking(
     for u in captains:
         rp = u.rider_profile
         if not rp or not rp.is_verified or not rp.is_online:
+            continue
+        if topup_required and int(rp.remaining_paid_rides or 0) <= 0:
             continue
         if rp.balance_due_to_admin > rp.credit_limit:
             continue
@@ -317,14 +395,29 @@ def complete_booking_and_post_ledger(
     else:
         apply_wait_charge_to_booking(booking, rule, wait_minutes_override=wait_minutes_override)
         final_fare = float(round(booking.final_fare))
-    c_type, c_val, commission_amount, rider_earning = compute_commission(
-        final_fare, rule, rider_profile
-    )
 
     if payment_collector_override:
         collector = payment_collector_override
     else:
         collector = "rider" if booking.payment_method == "cash" else "admin"
+
+    policy = get_topup_policy(db, rider_profile.vehicle_type)
+    use_prepaid_ride = bool(policy["required"]) and int(rider_profile.remaining_paid_rides or 0) > 0
+
+    if use_prepaid_ride:
+        unit_fee = float(rider_profile.topup_per_ride_fee or policy["per_ride_fee"] or 10.0)
+        commission_amount = round(min(final_fare, unit_fee), 2)
+        rider_earning = round(max(0.0, final_fare - commission_amount), 2)
+        c_type = "topup_prepaid"
+        c_val = commission_amount
+        rider_profile.remaining_paid_rides = max(0, int(rider_profile.remaining_paid_rides or 0) - 1)
+        rider_profile.topup_wallet_balance = round(
+            max(0.0, float(rider_profile.topup_wallet_balance or 0.0) - commission_amount), 2
+        )
+    else:
+        c_type, c_val, commission_amount, rider_earning = compute_commission(
+            final_fare, rule, rider_profile
+        )
 
     booking.final_fare = final_fare
     booking.commission_type_snapshot = c_type
@@ -343,18 +436,47 @@ def complete_booking_and_post_ledger(
     )
 
     if collector == "rider":
-        # Rider collected full cash from customer -> rider owes admin the commission amount
-        signed_delta = commission_amount
-        entry_type = "commission_due"
-        ledger_amount = commission_amount
-        booking.payment_status = "paid"
-        note = f"Ride {booking.booking_code}: Cash collected Rs.{final_fare:.0f}, SafarGo commission Rs.{commission_amount:.2f}"
+        if use_prepaid_ride:
+            signed_delta = 0.0
+            entry_type = "topup_ride_deduction"
+            ledger_amount = commission_amount
+            booking.payment_status = "paid"
+            note = (
+                f"Ride {booking.booking_code}: Paid from Top-Up (-1 Ride / Rs.{commission_amount:.2f}, "
+                f"{rider_profile.remaining_paid_rides} rides left)"
+            )
+        else:
+            # Post-paid cash ride: rider owes admin the commission amount
+            signed_delta = commission_amount
+            entry_type = "commission_due"
+            ledger_amount = commission_amount
+            booking.payment_status = "paid"
+            note = f"Ride {booking.booking_code}: Cash collected Rs.{final_fare:.0f}, SafarGo commission Rs.{commission_amount:.2f}"
     else:
         # Digital payment to SafarGo -> admin owes rider their net earning
         signed_delta = -rider_earning
         entry_type = "digital_payout_credit"
         ledger_amount = rider_earning
-        note = f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, Captain credit Rs.{rider_earning:.2f}"
+        if use_prepaid_ride:
+            note = (
+                f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, "
+                f"-1 Top-Up Ride (Rs.{commission_amount:.2f}), Captain credit Rs.{rider_earning:.2f}"
+            )
+        else:
+            note = f"Ride {booking.booking_code}: Digital payment to SafarGo Rs.{final_fare:.0f}, Captain credit Rs.{rider_earning:.2f}"
+
+    if policy["required"] and int(rider_profile.remaining_paid_rides or 0) <= 0:
+        other_active = (
+            db.query(Booking.id)
+            .filter(
+                Booking.rider_id == rider_profile.user_id,
+                Booking.id != booking.id,
+                Booking.status.in_(("assigned", "arrived", "in_progress")),
+            )
+            .first()
+        )
+        if not other_active:
+            rider_profile.is_online = False
 
     new_balance = round(rider_profile.balance_due_to_admin + signed_delta, 2)
     rider_profile.balance_due_to_admin = new_balance
@@ -456,3 +578,57 @@ def recalculate_rider_ledger_balances(db: Session, rider_id: int) -> None:
     rp.balance_due_to_admin = running
     rp.total_settled_to_admin = settled
     db.commit()
+
+
+def approve_rider_topup_request(
+    db: Session,
+    req: RiderTopupRequest,
+    rider_profile: RiderProfile,
+    admin_user: User,
+    rides_override: Optional[int] = None,
+    amount_override: Optional[float] = None,
+    admin_note: Optional[str] = None,
+) -> tuple[RiderTopupRequest, RiderProfile, LedgerEntry]:
+    """Approve a pending Captain prepaid Top-Up request and credit rides + wallet balance."""
+    rides_credit = int(rides_override or req.rides_requested or 10)
+    if rides_credit <= 0:
+        raise HTTPException(status_code=400, detail="Rides granted must be greater than 0")
+    amt = round(float(amount_override if amount_override is not None else req.amount), 2)
+    if amt <= 0:
+        raise HTTPException(status_code=400, detail="Top-up amount must be greater than 0")
+
+    per_ride = round(amt / rides_credit, 2)
+    rider_profile.remaining_paid_rides = int(rider_profile.remaining_paid_rides or 0) + rides_credit
+    rider_profile.topup_wallet_balance = round(float(rider_profile.topup_wallet_balance or 0.0) + amt, 2)
+    rider_profile.topup_per_ride_fee = per_ride
+    rider_profile.total_topups_paid = round(float(rider_profile.total_topups_paid or 0.0) + amt, 2)
+
+    req.rides_requested = rides_credit
+    req.amount = amt
+    req.status = "approved"
+    req.admin_note = admin_note.strip() if admin_note else req.admin_note
+    req.approved_by_id = admin_user.id
+    req.reviewed_at = utcnow()
+
+    ref_txt = f" · Ref: {req.reference_no}" if req.reference_no else ""
+    entry = LedgerEntry(
+        rider_id=rider_profile.user_id,
+        booking_id=None,
+        entry_type="topup_approved",
+        amount=amt,
+        signed_delta=0.0,
+        balance_after=rider_profile.balance_due_to_admin,
+        payment_channel=req.payment_channel,
+        reference_no=req.reference_no,
+        note=(
+            f"Top-Up Approved: +{rides_credit} Rides (Rs.{amt:.0f} via {req.payment_channel}{ref_txt})"
+            + (f" — {admin_note.strip()}" if admin_note and admin_note.strip() else "")
+        ),
+        recorded_by_id=admin_user.id,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(req)
+    db.refresh(rider_profile)
+    db.refresh(entry)
+    return req, rider_profile, entry

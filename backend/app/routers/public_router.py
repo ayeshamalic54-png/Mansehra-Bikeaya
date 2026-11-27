@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import AppRelease, MansehraZone, PricingRule, RiderProfile, SystemSetting, User
 from app.schemas import FareEstimateRequest
-from app.services.finance import estimate_booking_fare, haversine_km
+from app.services.finance import can_captain_work, estimate_booking_fare, haversine_km
 
 router = APIRouter(prefix="/api/public", tags=["Public"])
 
@@ -114,6 +114,9 @@ def get_nearby_captains(
     for u in rows:
         rp = u.rider_profile
         if not rp or not rp.is_verified or not rp.is_online:
+            continue
+        eligible, _ = can_captain_work(db, rp)
+        if not eligible:
             continue
         if rp.current_lat is None or rp.current_lng is None:
             continue

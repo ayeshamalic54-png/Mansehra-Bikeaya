@@ -21,6 +21,7 @@ from app.schemas import (
     SupportTicketCreate,
 )
 from app.services.finance import (
+    can_captain_work,
     compute_commission,
     estimate_booking_fare,
     find_nearest_captains_for_booking,
@@ -313,8 +314,12 @@ def accept_captain_offer(
     rp = captain.rider_profile if captain else None
     if not captain or not rp or not captain.is_active or not rp.is_verified:
         raise HTTPException(status_code=400, detail="Selected Captain is unavailable")
-    if rp.balance_due_to_admin > rp.credit_limit:
-        raise HTTPException(status_code=400, detail="Selected Captain exceeded settlement credit cap")
+    eligible, block_reason = can_captain_work(db, rp)
+    if not eligible:
+        raise HTTPException(
+            status_code=400,
+            detail=block_reason or "Selected Captain cannot take rides right now",
+        )
 
     agreed_fare = float(round(offer.offered_fare))
     booking.final_fare = agreed_fare

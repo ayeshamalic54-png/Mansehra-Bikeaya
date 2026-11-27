@@ -5,10 +5,11 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import AdminExpense, Booking, LedgerEntry, RiderProfile, User
+from app.models import AdminExpense, Booking, LedgerEntry, RiderProfile, RiderTopupRequest, User
 
 router = APIRouter(prefix="/api/reports", tags=["Profit & Loss Reports"])
 
@@ -53,6 +54,15 @@ def get_pnl_report(
         )
         .all()
     )
+    approved_topups = (
+        db.query(RiderTopupRequest)
+        .filter(
+            RiderTopupRequest.status == "approved",
+            func.coalesce(RiderTopupRequest.reviewed_at, RiderTopupRequest.created_at) >= dt_start,
+            func.coalesce(RiderTopupRequest.reviewed_at, RiderTopupRequest.created_at) <= dt_end,
+        )
+        .all()
+    )
 
     gross_gmv = round(sum(b.final_fare for b in completed), 2)
     admin_commission = round(sum(b.commission_amount for b in completed), 2)
@@ -60,6 +70,7 @@ def get_pnl_report(
     cash_by_riders = round(sum(b.final_fare for b in completed if b.payment_collector == "rider"), 2)
     digital_by_admin = round(sum(b.final_fare for b in completed if b.payment_collector == "admin"), 2)
     settlements_collected = round(sum(s.amount for s in settlements), 2)
+    topup_collected = round(sum(t.amount for t in approved_topups), 2)
     total_expenses = round(sum(e.amount for e in expenses), 2)
     net_profit = round(admin_commission - total_expenses, 2)
 
@@ -127,6 +138,7 @@ def get_pnl_report(
             "cash_collected_by_riders": cash_by_riders,
             "digital_collected_by_admin": digital_by_admin,
             "settlements_collected": settlements_collected,
+            "topup_collected": topup_collected,
             "total_expenses": total_expenses,
             "net_business_profit": net_profit,
         },

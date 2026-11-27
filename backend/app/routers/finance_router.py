@@ -3,9 +3,22 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from app.auth import require_roles
 from app.database import get_db
-from app.models import AdminExpense, LedgerEntry, RiderProfile, RiderSettlementRequest, User
-from app.schemas import ExpenseCreate, ExpenseUpdate, LedgerEntryUpdate, SettlementCreate
-from app.services.finance import post_rider_settlement, recalculate_rider_ledger_balances, utcnow
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
+
+from app.auth import require_roles
+from app.database import get_db
+from app.models import AdminExpense, LedgerEntry, RiderProfile, RiderSettlementRequest, RiderTopupRequest, User
+from app.schemas import AdminTopupReview, ExpenseCreate, ExpenseUpdate, LedgerEntryUpdate, SettlementCreate
+from app.services.finance import (
+    approve_rider_topup_request,
+    get_topup_policy,
+    post_rider_settlement,
+    recalculate_rider_ledger_balances,
+    utcnow,
+)
 
 router = APIRouter(prefix="/api/finance", tags=["Finance & Lain-Dain"])
 
@@ -27,6 +40,7 @@ def list_rider_balances(
             "full_name": rp.user.full_name if rp.user else "Rider",
             "phone": rp.user.phone if rp.user else "",
             "bike_plate": rp.bike_plate,
+            "vehicle_type": getattr(rp, "vehicle_type", "bike") or "bike",
             "zone_name": rp.zone_name,
             "total_trips": rp.total_trips,
             "total_gross_collected": rp.total_gross_collected,
@@ -36,6 +50,10 @@ def list_rider_balances(
             "balance_due_to_admin": rp.balance_due_to_admin,
             "credit_limit": rp.credit_limit,
             "is_over_limit": rp.balance_due_to_admin > rp.credit_limit,
+            "remaining_paid_rides": rp.remaining_paid_rides or 0,
+            "topup_wallet_balance": round(float(rp.topup_wallet_balance or 0.0), 2),
+            "topup_per_ride_fee": round(float(rp.topup_per_ride_fee or 0.0), 2),
+            "total_topups_paid": round(float(rp.total_topups_paid or 0.0), 2),
         }
         for rp in profiles
     ]
@@ -281,3 +299,122 @@ def admin_reject_settlement_request(
     req.status = "rejected"
     db.commit()
     return {"id": req.id, "status": req.status}
+
+
+@router.get("/topup-requests")
+def list_topup_requests(
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("admin", "dispatcher")),
+):
+    query = db.query(RiderTopupRequest).options(
+        joinedload(RiderTopupRequest.rider),
+        joinedload(RiderTopupRequest.approved_by),
+    )
+    if status_filter:
+        query = query.filter(RiderTopupRequest.status == status_filter)
+    rows = query.order_by(RiderTopupRequest.created_at.desc(), RiderTopupRequest.id.desc()).all()
+
+    rider_ids = list({r.rider_id for r in rows})
+    profiles = (
+        db.query(RiderProfile).filter(RiderProfile.user_id.in_(rider_ids)).all()
+        if rider_ids
+        else []
+    )
+    profile_map = {rp.user_id: rp for rp in profiles}
+
+    return [
+        {
+            "id": req.id,
+            "rider_id": req.rider_id,
+            "rider_name": req.rider.full_name if req.rider else "Captain",
+            "rider_phone": req.rider.phone if req.rider else "",
+            "vehicle_type": getattr(profile_map.get(req.rider_id), "vehicle_type", "bike") or "bike",
+            "bike_plate": profile_map[req.rider_id].bike_plate if req.rider_id in profile_map else "",
+            "zone_name": profile_map[req.rider_id].zone_name if req.rider_id in profile_map else "",
+            "current_remaining_paid_rides": (
+                int(profile_map[req.rider_id].remaining_paid_rides or 0)
+                if req.rider_id in profile_map
+                else 0
+            ),
+            "current_topup_wallet_balance": (
+                round(float(profile_map[req.rider_id].topup_wallet_balance or 0.0), 2)
+                if req.rider_id in profile_map
+                else 0.0
+            ),
+            "amount": req.amount,
+            "rides_requested": req.rides_requested,
+            "payment_channel": req.payment_channel,
+            "reference_no": req.reference_no,
+            "note": req.note,
+            "status": req.status,
+            "admin_note": req.admin_note,
+            "approved_by_id": req.approved_by_id,
+            "reviewed_by_name": req.approved_by.full_name if req.approved_by else None,
+            "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else None,
+            "created_at": req.created_at.isoformat() if req.created_at else None,
+        }
+        for req in rows
+    ]
+
+
+@router.post("/topup-requests/{req_id}/approve")
+def approve_topup_request(
+    req_id: int,
+    payload: Optional[AdminTopupReview] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_roles("admin", "dispatcher")),
+):
+    req = db.query(RiderTopupRequest).filter(RiderTopupRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Top-up request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Top-up request already {req.status}")
+
+    rp = db.query(RiderProfile).filter(RiderProfile.user_id == req.rider_id).first()
+    if not rp:
+        raise HTTPException(status_code=404, detail="Captain profile not found")
+
+    req, rp, entry = approve_rider_topup_request(
+        db,
+        req,
+        rp,
+        current_admin,
+        rides_override=payload.rides_granted if payload else None,
+        amount_override=payload.amount if payload else None,
+        admin_note=payload.admin_note if payload else None,
+    )
+    return {
+        "id": req.id,
+        "status": req.status,
+        "rider_id": rp.user_id,
+        "amount": req.amount,
+        "rides_approved": req.rides_requested,
+        "remaining_paid_rides": rp.remaining_paid_rides,
+        "topup_wallet_balance": rp.topup_wallet_balance,
+        "topup_per_ride_fee": rp.topup_per_ride_fee,
+        "total_topups_paid": rp.total_topups_paid,
+        "ledger_entry_id": entry.id,
+    }
+
+
+@router.post("/topup-requests/{req_id}/reject")
+def reject_topup_request(
+    req_id: int,
+    payload: Optional[AdminTopupReview] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_roles("admin", "dispatcher")),
+):
+    req = db.query(RiderTopupRequest).filter(RiderTopupRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Top-up request not found")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Top-up request already {req.status}")
+
+    req.status = "rejected"
+    req.approved_by_id = current_admin.id
+    req.reviewed_at = utcnow()
+    if payload and payload.admin_note is not None:
+        req.admin_note = payload.admin_note.strip() or None
+    db.commit()
+    return {"id": req.id, "status": req.status, "admin_note": req.admin_note}

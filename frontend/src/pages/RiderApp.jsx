@@ -41,13 +41,19 @@ export function RiderApp({ onOpenDownloads }) {
   const [tab, setTab] = useState('duty'); // duty | active | ledger | profile
   const [availableJobs, setAvailableJobs] = useState([]);
   const [myJobs, setMyJobs] = useState([]);
-  const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [], settlement_requests: [] });
+  const [ledgerData, setLedgerData] = useState({ summary: {}, entries: [], settlement_requests: [], topup_requests: [] });
   const [commPayForm, setCommPayForm] = useState({
     amount: '',
     payment_channel: 'easypaisa',
     reference_no: '',
     note: '',
   });
+  const [topupForm, setTopupForm] = useState({
+    payment_channel: 'easypaisa',
+    reference_no: '',
+    note: '',
+  });
+  const [submittingTopup, setSubmittingTopup] = useState(false);
   const [waitDrafts, setWaitDrafts] = useState({});
   const [offerDrafts, setOfferDrafts] = useState({}); // { [bookingId]: { fare, eta, note } }
   const [includeOtherVehicles, setIncludeOtherVehicles] = useState(false);
@@ -83,6 +89,23 @@ export function RiderApp({ onOpenDownloads }) {
 
   const rp = user?.rider_profile;
   const isCarCaptain = (rp?.vehicle_type || 'bike') === 'car';
+  const topupRequired = String(bootstrap?.settings?.rider_topup_required ?? 'true').toLowerCase() === 'true';
+  const topupRidesCount = Math.max(1, Number(bootstrap?.settings?.rider_topup_rides_count || 10));
+  const topupCarFeeRaw = bootstrap?.settings?.rider_topup_car_package_fee;
+  const topupPackageFee = Math.max(
+    1,
+    Number(
+      isCarCaptain && topupCarFeeRaw !== undefined && String(topupCarFeeRaw).trim() !== ''
+        ? topupCarFeeRaw
+        : bootstrap?.settings?.rider_topup_package_fee || 100
+    )
+  );
+  const topupPerRideFee = Number((topupPackageFee / topupRidesCount).toFixed(2));
+  const remainingPaidRides = Number(ledgerData?.summary?.remaining_paid_rides ?? rp?.remaining_paid_rides ?? 0);
+  const topupWalletBalance = Number(ledgerData?.summary?.topup_wallet_balance ?? rp?.topup_wallet_balance ?? 0);
+  const topupRequests = ledgerData?.topup_requests || [];
+  const pendingTopupRequests = topupRequests.filter((t) => t.status === 'pending');
+  const needsTopup = topupRequired && remainingPaidRides <= 0;
 
   useEffect(() => {
     if (!user) return;
@@ -335,8 +358,195 @@ export function RiderApp({ onOpenDownloads }) {
     }
   };
 
+  const handleSubmitTopupRequest = async (e) => {
+    e.preventDefault();
+    setErr('');
+    setMsg('');
+    setSubmittingTopup(true);
+    try {
+      const res = await apiRequest('/api/riders/topup-requests', {
+        method: 'POST',
+        body: {
+          amount: topupPackageFee,
+          rides_requested: topupRidesCount,
+          payment_channel: topupForm.payment_channel,
+          reference_no: topupForm.reference_no.trim(),
+          note: topupForm.note.trim() || null,
+        },
+      });
+      setTopupForm((prev) => ({ ...prev, reference_no: '', note: '' }));
+      setMsg(
+        `Top-Up request Rs. ${res.amount} (${res.rides_requested} rides) bhej di gayi hai! Admin approve karega to aap kaam start kar sakein ge.`
+      );
+      await Promise.all([refreshMe(), loadAll()]);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setSubmittingTopup(false);
+    }
+  };
+
   const activeJobs = myJobs.filter((j) => ['assigned', 'arrived', 'in_progress'].includes(j.status));
   const summary = ledgerData.summary || {};
+
+  const renderTopupPackageCard = ({ compact = false } = {}) => {
+    if (!topupRequired && topupRequests.length === 0 && remainingPaidRides <= 0) {
+      return null;
+    }
+    return (
+      <div
+        className={`rounded-2xl p-4 sm:p-5 space-y-3 text-xs border-2 ${
+          needsTopup
+            ? 'bg-gradient-to-br from-amber-50 via-white to-emerald-50 border-amber-400 shadow-sm'
+            : 'bg-white border-emerald-200/90'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-extrabold text-sm text-slate-900 inline-flex items-center gap-1.5">
+                <Wallet className={`w-4 h-4 ${needsTopup ? 'text-amber-600' : 'text-[#009E4D]'}`} />
+                {needsTopup ? 'Top-Up Required to Unlock Rides' : 'Pre-Paid Ride Package & Top-Up'}
+              </span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold mono-num ${
+                  remainingPaidRides > 0
+                    ? 'bg-emerald-100 text-[#008741]'
+                    : 'bg-rose-100 text-rose-700'
+                }`}
+              >
+                {remainingPaidRides} Rides Remaining
+              </span>
+            </div>
+            <p className="text-slate-600 mt-1">
+              {needsTopup ? (
+                <>
+                  Account active karne aur online rides lene ke liye pehle Admin ke SafarGo account par{' '}
+                  <strong className="text-slate-900">
+                    {topupRidesCount} Rides = Rs. {topupPackageFee}
+                  </strong>{' '}
+                  Top-Up bhejein aur neeche TID submit karein. Admin approve karega to aap foran kaam kar sakein ge.
+                </>
+              ) : (
+                <>
+                  Aapka pre-paid package active hai — har completed ride par{' '}
+                  <strong className="text-slate-900">1 Ride (Rs. {topupPerRideFee})</strong> kat-ti hai. Advance top-up bhi bhej sakte hain.
+                </>
+              )}
+            </p>
+          </div>
+          {compact && (
+            <button
+              type="button"
+              onClick={() => setTab('ledger')}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold shrink-0"
+            >
+              Open Full Wallet →
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mono-num">
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-[11px] text-slate-500">Rides Left</div>
+            <div className={`text-base font-extrabold ${remainingPaidRides > 0 ? 'text-[#009E4D]' : 'text-rose-600'}`}>
+              {remainingPaidRides}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-[11px] text-slate-500">Top-Up Balance</div>
+            <div className="text-base font-extrabold text-slate-900">Rs. {topupWalletBalance.toFixed(0)}</div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-[11px] text-slate-500">Current Package</div>
+            <div className="text-sm font-extrabold text-slate-900">
+              {topupRidesCount} Rides · Rs. {topupPackageFee}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="text-[11px] text-slate-500">Per Ride Cut</div>
+            <div className="text-sm font-extrabold text-[#008741]">Rs. {topupPerRideFee} / ride</div>
+          </div>
+        </div>
+
+        {pendingTopupRequests.length > 0 && (
+          <div className="p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 font-bold flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Pending Approval: Rs. {pendingTopupRequests[0].amount} ({pendingTopupRequests[0].rides_requested} rides ·{' '}
+              {formatPaymentMethodLabel(pendingTopupRequests[0].payment_channel)} · Ref: {pendingTopupRequests[0].reference_no})
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-extrabold uppercase">
+              Waiting Admin Approval
+            </span>
+          </div>
+        )}
+
+        <SafarGoPayBox
+          settings={bootstrap?.settings}
+          selectedChannel={topupForm.payment_channel}
+          amount={topupPackageFee}
+          showAllChannels={true}
+          onSelectChannel={(ch) => setTopupForm((prev) => ({ ...prev, payment_channel: ch }))}
+        />
+
+        <form onSubmit={handleSubmitTopupRequest} className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+          <select
+            value={topupForm.payment_channel}
+            onChange={(e) => setTopupForm((prev) => ({ ...prev, payment_channel: e.target.value }))}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+          >
+            {DIGITAL_PAYMENT_CHANNELS.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            required
+            placeholder="Transaction ID / TID (e.g. EP-987654)"
+            value={topupForm.reference_no}
+            onChange={(e) => setTopupForm((prev) => ({ ...prev, reference_no: e.target.value }))}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold sm:col-span-2"
+          />
+          <button
+            type="submit"
+            disabled={submittingTopup}
+            className="py-2.5 px-4 rounded-xl bg-[#009E4D] hover:bg-[#008741] disabled:opacity-60 text-white font-extrabold"
+          >
+            {submittingTopup ? 'Sending...' : `Top-Up Rs. ${topupPackageFee}`}
+          </button>
+          <input
+            type="text"
+            placeholder="Optional note (e.g. Sent from 03xx...)"
+            value={topupForm.note}
+            onChange={(e) => setTopupForm((prev) => ({ ...prev, note: e.target.value }))}
+            className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 sm:col-span-4"
+          />
+        </form>
+
+        {!compact && topupRequests.length > 0 && (
+          <div className="pt-2 border-t border-slate-100 space-y-1.5">
+            <div className="font-bold text-slate-700">Your Top-Up Requests</div>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {topupRequests.map((tr) => (
+                <div
+                  key={tr.id}
+                  className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="font-bold text-slate-900 mono-num">
+                      Rs. {tr.amount} · {tr.rides_requested} Rides · {formatPaymentMethodLabel(tr.payment_channel)} · Ref: {tr.reference_no}
+                    </div>
+                    {tr.admin_note && <div className="text-[11px] text-slate-500">Admin Note: {tr.admin_note}</div>}
+                  </div>
+                  <StatusBadge value={tr.status === 'approved' ? 'paid' : tr.status} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -356,9 +566,26 @@ export function RiderApp({ onOpenDownloads }) {
                 {isCarCaptain ? 'AC Car Captain' : 'Bike Captain'} · {rp?.bike_model} ({rp?.bike_plate})
               </div>
               <div className="text-base font-extrabold">{user?.full_name}</div>
-              <div className="text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {rp?.zone_name || 'Syncing GPS...'}
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                <div className="text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {rp?.zone_name || 'Syncing GPS...'}
+                </div>
+                {topupRequired && (
+                  <button
+                    type="button"
+                    onClick={() => setTab('ledger')}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold mono-num border ${
+                      remainingPaidRides > 0
+                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+                        : 'bg-amber-400 border-amber-300 text-slate-950 animate-pulse'
+                    }`}
+                  >
+                    {remainingPaidRides > 0
+                      ? `${remainingPaidRides} Rides Left · Rs. ${topupWalletBalance.toFixed(0)}`
+                      : '0 Rides · Top-Up Required'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -702,6 +929,8 @@ export function RiderApp({ onOpenDownloads }) {
                 })()}
               </div>
             )}
+
+            {needsTopup && renderTopupPackageCard({ compact: true })}
 
             {availableJobs.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
@@ -1075,6 +1304,8 @@ export function RiderApp({ onOpenDownloads }) {
         {/* TAB 3: HISAB / LEDGER */}
         {tab === 'ledger' && (
           <div className="space-y-4">
+            {renderTopupPackageCard({ compact: false })}
+
             <div className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-slate-400">Net Commission Balance with SafarGo</span>

@@ -42,6 +42,8 @@ export function AdminPeoplePanel({
     license_no: '',
     zone_name: zones?.[0]?.name || 'Main Bazar / Lari Adda',
     credit_limit: 1500,
+    remaining_paid_rides: 0,
+    topup_wallet_balance: 0,
     custom_commission_type: 'none',
     custom_commission_value: '',
     is_verified: false,
@@ -116,6 +118,9 @@ export function AdminPeoplePanel({
       zone_name: r.zone_name || zones?.[0]?.name || 'Main Bazar / Lari Adda',
       sync_zone_coords: false,
       credit_limit: r.credit_limit ?? 1500,
+      remaining_paid_rides: r.remaining_paid_rides ?? 0,
+      topup_wallet_balance: r.topup_wallet_balance ?? 0,
+      topup_per_ride_fee: r.topup_per_ride_fee ?? 0,
       custom_commission_type: r.custom_commission_type || 'none',
       custom_commission_value: r.custom_commission_value ?? '',
       is_active: r.is_active !== false,
@@ -148,6 +153,12 @@ export function AdminPeoplePanel({
         zone_name: editRiderForm.zone_name,
         sync_zone_coords: Boolean(editRiderForm.sync_zone_coords),
         credit_limit: editRiderForm.credit_limit === '' ? 1500 : Number(editRiderForm.credit_limit),
+        remaining_paid_rides:
+          editRiderForm.remaining_paid_rides === '' ? 0 : Math.max(0, Number(editRiderForm.remaining_paid_rides)),
+        topup_wallet_balance:
+          editRiderForm.topup_wallet_balance === '' ? 0 : Math.max(0, Number(editRiderForm.topup_wallet_balance)),
+        topup_per_ride_fee:
+          editRiderForm.topup_per_ride_fee === '' ? 0 : Math.max(0, Number(editRiderForm.topup_per_ride_fee)),
         custom_commission_type: editRiderForm.custom_commission_type || 'none',
         custom_commission_value:
           editRiderForm.custom_commission_type !== 'none' && editRiderForm.custom_commission_value !== ''
@@ -198,6 +209,8 @@ export function AdminPeoplePanel({
           license_no: riderForm.license_no || null,
           zone_name: riderForm.zone_name,
           credit_limit: Number(riderForm.credit_limit || 1500),
+          remaining_paid_rides: Math.max(0, Number(riderForm.remaining_paid_rides || 0)),
+          topup_wallet_balance: Math.max(0, Number(riderForm.topup_wallet_balance || 0)),
           custom_commission_type:
             riderForm.custom_commission_type !== 'none' ? riderForm.custom_commission_type : null,
           custom_commission_value:
@@ -626,6 +639,38 @@ export function AdminPeoplePanel({
                     />
                   </div>
                   <div>
+                    <label className="text-[11px] font-bold text-[#008741] block mb-1">Paid Rides Remaining</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editRiderForm.remaining_paid_rides}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, remaining_paid_rides: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-[#008741] block mb-1">Top-Up Wallet Bal (Rs.)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editRiderForm.topup_wallet_balance}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, topup_wallet_balance: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50 mono-num font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">Top-Up Per-Ride Cut (Rs.)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={editRiderForm.topup_per_ride_fee}
+                      onChange={(e) => setEditRiderForm({ ...editRiderForm, topup_per_ride_fee: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white mono-num"
+                    />
+                  </div>
+                  <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">Commission Rule</label>
                     <select
                       value={editRiderForm.custom_commission_type}
@@ -822,6 +867,22 @@ export function AdminPeoplePanel({
                 onChange={(e) => setRiderForm({ ...riderForm, credit_limit: e.target.value })}
                 className="px-3 py-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 mono-num"
               />
+              <input
+                type="number"
+                min="0"
+                placeholder="Initial Paid Rides (e.g. 0 or 10)"
+                value={riderForm.remaining_paid_rides}
+                onChange={(e) => setRiderForm({ ...riderForm, remaining_paid_rides: e.target.value })}
+                className="px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 mono-num font-bold"
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="Initial Top-Up Bal (Rs.)"
+                value={riderForm.topup_wallet_balance}
+                onChange={(e) => setRiderForm({ ...riderForm, topup_wallet_balance: e.target.value })}
+                className="px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 mono-num font-bold"
+              />
               <select
                 value={riderForm.custom_commission_type}
                 onChange={(e) => setRiderForm({ ...riderForm, custom_commission_type: e.target.value })}
@@ -889,7 +950,7 @@ export function AdminPeoplePanel({
                   <th className="p-3.5">Captain &amp; Vehicle</th>
                   <th className="p-3.5">Zone &amp; Docs Status</th>
                   <th className="p-3.5">Trips / Rating</th>
-                  <th className="p-3.5">Due / Cap</th>
+                  <th className="p-3.5">Top-Up / Dues</th>
                   <th className="p-3.5">Commission</th>
                   <th className="p-3.5">Admin Actions</th>
                 </tr>
@@ -959,8 +1020,11 @@ export function AdminPeoplePanel({
                       )}
                     </td>
                     <td className="p-3.5 mono-num">
+                      <div className={`font-extrabold ${(r.remaining_paid_rides || 0) > 0 ? 'text-[#008741]' : 'text-rose-600'}`}>
+                        {r.remaining_paid_rides ?? 0} Rides · Rs. {Number(r.topup_wallet_balance || 0).toFixed(0)}
+                      </div>
                       <div className="font-bold text-amber-600">Due: Rs. {r.balance_due_to_admin}</div>
-                      <div className="text-slate-500">Cap: Rs. {r.credit_limit}</div>
+                      <div className="text-[11px] text-slate-500">Cap: Rs. {r.credit_limit}</div>
                     </td>
                     <td className="p-3.5 mono-num">
                       {r.custom_commission_type

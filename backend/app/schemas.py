@@ -146,6 +146,8 @@ class AdminCreateRider(BaseModel):
     license_no: Optional[str] = None
     zone_name: str = "Main Bazar / Lari Adda"
     credit_limit: float = Field(1500.0, ge=0)
+    remaining_paid_rides: int = Field(0, ge=0)
+    topup_wallet_balance: float = Field(0.0, ge=0)
     custom_commission_type: Optional[str] = Field(None, pattern="^(percent|fixed)$")
     custom_commission_value: Optional[float] = Field(None, ge=0)
     rider_photo: Optional[str] = Field(None, max_length=950000)
@@ -179,6 +181,9 @@ class RiderConfigUpdate(BaseModel):
     current_lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
     current_lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
     credit_limit: Optional[float] = Field(None, ge=0)
+    remaining_paid_rides: Optional[int] = Field(None, ge=0)
+    topup_wallet_balance: Optional[float] = Field(None, ge=0)
+    topup_per_ride_fee: Optional[float] = Field(None, ge=0)
     custom_commission_type: Optional[str] = Field(None, pattern="^(percent|fixed|none)$")
     custom_commission_value: Optional[float] = Field(None, ge=0)
 
@@ -249,6 +254,20 @@ class RiderSettlementSubmit(BaseModel):
     payment_channel: str = Field(..., pattern="^(cash|easypaisa|upaisa|jazzcash|bank)$")
     reference_no: Optional[str] = Field(None, max_length=80)
     note: Optional[str] = Field(None, max_length=255)
+
+
+class RiderTopupSubmit(BaseModel):
+    amount: float = Field(..., gt=0)
+    rides_requested: Optional[int] = Field(None, ge=1, le=500)
+    payment_channel: str = Field(..., pattern="^(cash|easypaisa|upaisa|jazzcash|bank)$")
+    reference_no: Optional[str] = Field(None, max_length=80)
+    note: Optional[str] = Field(None, max_length=255)
+
+
+class AdminTopupReview(BaseModel):
+    rides_granted: Optional[int] = Field(None, ge=1, le=500)
+    amount: Optional[float] = Field(None, gt=0)
+    admin_note: Optional[str] = Field(None, max_length=255)
 
 
 class ExpenseCreate(BaseModel):

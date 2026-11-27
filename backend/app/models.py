@@ -62,9 +62,13 @@ class RiderProfile(Base):
     custom_commission_type = Column(String(20), nullable=True)  # percent | fixed | None
     custom_commission_value = Column(Float, nullable=True)
 
-    # Financial ledger counters (positive balance_due_to_admin = rider owes admin)
+    # Financial ledger & Prepaid Top-Up Ride Package counters
     credit_limit = Column(Float, default=1500.0, nullable=False)
     balance_due_to_admin = Column(Float, default=0.0, nullable=False)
+    topup_wallet_balance = Column(Float, default=0.0, nullable=False)
+    remaining_paid_rides = Column(Integer, default=0, nullable=False)
+    topup_per_ride_fee = Column(Float, default=10.0, nullable=False)
+    total_topups_paid = Column(Float, default=0.0, nullable=False)
     total_gross_collected = Column(Float, default=0.0, nullable=False)
     total_net_earned = Column(Float, default=0.0, nullable=False)
     total_commission_generated = Column(Float, default=0.0, nullable=False)
@@ -292,6 +296,26 @@ class RiderSettlementRequest(Base):
     paid_at = Column(DateTime(timezone=True), nullable=True)
 
     rider = relationship("User")
+
+
+class RiderTopupRequest(Base):
+    __tablename__ = "rider_topup_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rider_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    rides_requested = Column(Integer, nullable=False, default=10)
+    payment_channel = Column(String(32), nullable=False)  # easypaisa | upaisa | jazzcash | bank | cash
+    reference_no = Column(String(80), nullable=True)
+    note = Column(String(255), nullable=True)
+    status = Column(String(24), nullable=False, default="pending", index=True)  # pending | approved | rejected
+    admin_note = Column(String(255), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    rider = relationship("User", foreign_keys=[rider_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
 
 
 class DatabaseBackup(Base):

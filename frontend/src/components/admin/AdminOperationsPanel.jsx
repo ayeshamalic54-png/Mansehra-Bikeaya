@@ -1328,6 +1328,10 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
                 'business_name',
                 'city',
                 'default_credit_limit',
+                'rider_topup_required',
+                'rider_topup_rides_count',
+                'rider_topup_package_fee',
+                'rider_topup_car_package_fee',
               ];
               await Promise.all(
                 fields.map((key) =>
@@ -1355,16 +1359,40 @@ export function AdminOperationsPanel({ subpage, onNotify, onRefreshBootstrap }) 
             { key: 'business_name', label: 'Brand Name', placeholder: 'SafarGo' },
             { key: 'city', label: 'Operating Cities', placeholder: 'Hazara & Intercity' },
             { key: 'default_credit_limit', label: 'Default Rider Limit (Rs.)', placeholder: '1500' },
+            {
+              key: 'rider_topup_required',
+              label: 'Captain Top-Up Mode',
+              type: 'select',
+              options: [
+                { value: 'true', label: 'ON — Pre-Paid Top-Up Required (10 Rides = Rs. 100)' },
+                { value: 'false', label: 'OFF — Free / No Pre-Paid Top-Up Required' },
+              ],
+            },
+            { key: 'rider_topup_rides_count', label: 'Top-Up Rides Count', placeholder: '10' },
+            { key: 'rider_topup_package_fee', label: 'Top-Up Package Fee (Rs.)', placeholder: '100' },
+            { key: 'rider_topup_car_package_fee', label: 'Car Top-Up Fee (opt. Rs.)', placeholder: 'Blank = Same as Bike (100)' },
           ].map((f) => (
             <div key={f.key} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
               <label className="sm:w-44 font-semibold text-slate-700 shrink-0">{f.label}</label>
-              <input
-                type="text"
-                placeholder={f.placeholder}
-                value={sysSettings[f.key] ?? ''}
-                onChange={(e) => setSysSettings({ ...sysSettings, [f.key]: e.target.value })}
-                className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 focus:bg-white focus:border-[#009E4D] focus:outline-none"
-              />
+              {f.type === 'select' ? (
+                <select
+                  value={String(sysSettings[f.key] ?? 'true').toLowerCase() === 'false' ? 'false' : 'true'}
+                  onChange={(e) => setSysSettings({ ...sysSettings, [f.key]: e.target.value })}
+                  className="flex-1 px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50/70 font-bold text-slate-900 focus:bg-white focus:border-[#009E4D] focus:outline-none"
+                >
+                  {f.options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={f.placeholder}
+                  value={sysSettings[f.key] ?? ''}
+                  onChange={(e) => setSysSettings({ ...sysSettings, [f.key]: e.target.value })}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/80 focus:bg-white focus:border-[#009E4D] focus:outline-none"
+                />
+              )}
             </div>
           ))}
           <button

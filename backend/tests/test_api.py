@@ -58,6 +58,9 @@ def test_health_and_bootstrap(client):
     ):
         assert hub in zone_names
     assert len(data["releases"]) == 2
+    assert data["settings"]["rider_topup_required"] == "true"
+    assert data["settings"]["rider_topup_rides_count"] == "10"
+    assert data["settings"]["rider_topup_package_fee"] == "100"
 
 
 def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
@@ -83,6 +86,17 @@ def test_full_ride_commission_settlement_and_dynamic_rate_change(client):
     )
     assert admin_login.status_code == 200
     admin_token = admin_login.json()["access_token"]
+
+    # Temporarily switch to post-paid mode so legacy commission/settlement flow runs;
+    # pre-paid top-up mode (default "true") is tested end-to-end below.
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "false"},
+        ).status_code
+        == 200
+    )
 
     # Fresh Captain starts unverified; partial doc saves progress, stays unverified until Admin manually approves
     sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
@@ -1492,4 +1506,329 @@ def test_health_head_and_db_quota_resilience(client):
     finally:
         app.dependency_overrides.pop(get_db, None)
         assert main_mod.initialize_database_once(force=True) is True
+
+
+def test_prepaid_rider_topup_package_approval_and_deduction(client):
+    admin_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03139620729", "password": "superadmin99"},
+    ).json()["access_token"]
+    cust_token = client.post(
+        "/api/auth/login",
+        json={"phone_or_email": "03334444444", "password": "newuser999"},
+    ).json()["access_token"]
+
+    # Ensure Top-Up is ON (10 Rides = Rs. 100) and all receiving methods are configured
+    for key, val in [
+        ("rider_topup_required", "true"),
+        ("rider_topup_rides_count", "10"),
+        ("rider_topup_package_fee", "100"),
+        ("rider_topup_car_package_fee", ""),
+        ("payment_account_title", "SafarGo"),
+        ("payment_easypaisa", "03001234567"),
+        ("payment_upaisa", "03331234567"),
+        ("payment_jazzcash", "03017654321"),
+        ("payment_bank_name", "Meezan Bank"),
+        ("payment_bank_account", "PK00MEZN0001234567"),
+    ]:
+        assert (
+            client.put(
+                f"/api/admin/settings/{key}",
+                headers=_auth_header(admin_token),
+                json={"value": val},
+            ).status_code
+            == 200
+        )
+
+    boot = client.get("/api/public/bootstrap").json()["settings"]
+    assert boot["rider_topup_required"] == "true"
+    assert boot["rider_topup_rides_count"] == "10"
+    assert boot["rider_topup_package_fee"] == "100"
+    assert boot["payment_easypaisa"] == "03001234567"
+    assert boot["payment_upaisa"] == "03331234567"
+    assert boot["payment_jazzcash"] == "03017654321"
+    assert boot["payment_bank_account"] == "PK00MEZN0001234567"
+
+    # 1. Register new Bike Captain & AC Car Captain -> both start with 0 rides & 0 topup wallet
+    sample_jpg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+    bike_reg = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Asif Topup Bike",
+            "phone": "03160001111",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "bike",
+            "bike_model": "Honda CD-70",
+            "bike_plate": "MNS-1010",
+            "cnic_number": "13503-5551111-1",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    )
+    assert bike_reg.status_code == 201
+    bike_user = bike_reg.json()["user"]
+    bike_token = bike_reg.json()["access_token"]
+    assert bike_user["rider_profile"]["remaining_paid_rides"] == 0
+    assert bike_user["rider_profile"]["topup_wallet_balance"] == 0.0
+
+    car_reg = client.post(
+        "/api/auth/register",
+        json={
+            "full_name": "Usman Topup Car",
+            "phone": "03160002222",
+            "password": "pass1234",
+            "role": "rider",
+            "vehicle_type": "car",
+            "bike_model": "Suzuki Alto AC",
+            "bike_plate": "MNS-2020",
+            "cnic_number": "13503-5552222-2",
+            "zone_name": "Mansehra — Punjab Chowk",
+            "rider_photo": sample_jpg,
+            "vehicle_photo": sample_jpg,
+            "cnic_front_photo": sample_jpg,
+            "cnic_back_photo": sample_jpg,
+        },
+    )
+    assert car_reg.status_code == 201
+    car_user = car_reg.json()["user"]
+    car_token = car_reg.json()["access_token"]
+    assert car_user["rider_profile"]["remaining_paid_rides"] == 0
+
+    # Verify docs by Admin; set GPS coords -> unpaid captains STILL cannot go online OR appear on Customer map!
+    for rid in (bike_user["id"], car_user["id"]):
+        patch_res = client.patch(
+            f"/api/admin/riders/{rid}",
+            headers=_auth_header(admin_token),
+            json={"is_verified": True, "is_online": True, "sync_zone_coords": True},
+        )
+        assert patch_res.status_code == 200
+
+    bike_me = client.get("/api/auth/me", headers=_auth_header(bike_token)).json()["user"]
+    assert bike_me["rider_profile"]["is_online"] is False
+
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).status_code == 403
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(car_token)).status_code == 403
+
+    loc_push = client.post(
+        "/api/riders/location",
+        headers=_auth_header(bike_token),
+        json={"lat": 34.328548, "lng": 73.188513},
+    )
+    assert loc_push.status_code == 200
+    assert loc_push.json()["is_online"] is False
+
+    # Confirm Customer map (/api/public/nearby-captains) hides unpaid Bike & Car captains completely
+    nearby_bike = client.get(
+        "/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride"
+    ).json()
+    assert not any(c["rider_id"] == bike_user["id"] for c in nearby_bike)
+    nearby_car = client.get(
+        "/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=car_ride"
+    ).json()
+    assert not any(c["rider_id"] == car_user["id"] for c in nearby_car)
+
+    # Customer books a ride -> unpaid captains receive ZERO requests in available-jobs & get 403 on offer/accept
+    bk = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk Stand",
+            "pickup_lat": 34.328548,
+            "pickup_lng": 73.188513,
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Chowk",
+            "distance_km": 2.0,
+            "payment_method": "cash",
+        },
+    ).json()
+
+    assert client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json() == []
+    assert (
+        client.post(
+            f"/api/riders/jobs/{bk['id']}/offer",
+            headers=_auth_header(bike_token),
+            json={"offered_fare": 200.0, "eta_minutes": 4},
+        ).status_code
+        == 403
+    )
+    assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(bike_token)).status_code == 403
+
+    # 2. Admin toggles Top-Up OFF -> unpaid captain can work in free mode; toggling ON hides them immediately
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "false"},
+        ).status_code
+        == 200
+    )
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).json()["is_online"] is True
+    assert any(
+        c["rider_id"] == bike_user["id"]
+        for c in client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
+    )
+    assert any(
+        j["id"] == bk["id"]
+        for j in client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
+    )
+
+    # Turn Top-Up ON again -> immediately forces unpaid online Bike Captain offline & invisible!
+    assert (
+        client.put(
+            "/api/admin/settings/rider_topup_required",
+            headers=_auth_header(admin_token),
+            json={"value": "true"},
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/auth/me", headers=_auth_header(bike_token)).json()["user"]["rider_profile"]["is_online"] is False
+    assert not any(
+        c["rider_id"] == bike_user["id"]
+        for c in client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
+    )
+    assert client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json() == []
+
+    # 3. Bike & Car submit Top-Up proofs -> Reject one, Approve valid ones -> both unlocked for 10 rides!
+    bad_req = client.post(
+        "/api/riders/topup-requests",
+        headers=_auth_header(bike_token),
+        json={"amount": 100, "rides_requested": 10, "payment_channel": "easypaisa", "reference_no": "FAKE-TID"},
+    )
+    assert bad_req.status_code == 201
+    rej = client.post(
+        f"/api/finance/topup-requests/{bad_req.json()['id']}/reject",
+        headers=_auth_header(admin_token),
+        json={"admin_note": "Invalid TID"},
+    )
+    assert rej.status_code == 200
+    assert rej.json()["status"] == "rejected"
+    assert client.get("/api/auth/me", headers=_auth_header(bike_token)).json()["user"]["rider_profile"]["remaining_paid_rides"] == 0
+
+    bike_req = client.post(
+        "/api/riders/topup-requests",
+        headers=_auth_header(bike_token),
+        json={"amount": 100, "rides_requested": 10, "payment_channel": "upaisa", "reference_no": "UP-1001"},
+    )
+    car_req = client.post(
+        "/api/riders/topup-requests",
+        headers=_auth_header(car_token),
+        json={"amount": 100, "rides_requested": 10, "payment_channel": "bank", "reference_no": "MEZN-2002"},
+    )
+    assert bike_req.status_code == 201 and car_req.status_code == 201
+
+    ov = client.get("/api/admin/overview", headers=_auth_header(admin_token)).json()
+    assert ov["kpis"]["pending_topup_count"] >= 2
+
+    topups_list = client.get("/api/finance/topup-requests", headers=_auth_header(admin_token))
+    assert topups_list.status_code == 200
+    t_rows = topups_list.json()
+    assert any(r["id"] == bike_req.json()["id"] and r["status"] == "pending" for r in t_rows)
+    assert any(r["id"] == car_req.json()["id"] and r["vehicle_type"] == "car" for r in t_rows)
+
+    app_bike = client.post(
+        f"/api/finance/topup-requests/{bike_req.json()['id']}/approve",
+        headers=_auth_header(admin_token),
+        json={"admin_note": "Verified UPaisa Rs. 100"},
+    )
+    app_car = client.post(
+        f"/api/finance/topup-requests/{car_req.json()['id']}/approve",
+        headers=_auth_header(admin_token),
+        json={"admin_note": "Verified Bank Rs. 100"},
+    )
+    assert app_bike.status_code == 200 and app_car.status_code == 200
+    assert app_bike.json()["remaining_paid_rides"] == 10
+    assert app_bike.json()["topup_wallet_balance"] == 100.0
+    assert app_bike.json()["topup_per_ride_fee"] == 10.0
+
+    # Now Bike Captain goes online, appears on Customer map, sees job, accepts & completes cash ride!
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).json()["is_online"] is True
+    assert any(
+        c["rider_id"] == bike_user["id"]
+        for c in client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
+    )
+    assert any(
+        j["id"] == bk["id"]
+        for j in client.get("/api/riders/available-jobs", headers=_auth_header(bike_token)).json()
+    )
+
+    assert client.post(f"/api/riders/jobs/{bk['id']}/accept", headers=_auth_header(bike_token)).status_code == 200
+    done = client.post(
+        f"/api/riders/jobs/{bk['id']}/status",
+        headers=_auth_header(bike_token),
+        json={"status": "completed"},
+    )
+    assert done.status_code == 200
+    assert done.json()["commission_amount"] == 10.0
+
+    # Prepaid cash ride decrements rides 10 -> 9, topup balance 100 -> 90, adds ZERO udhaar due to admin!
+    bike_led = client.get("/api/riders/ledger", headers=_auth_header(bike_token)).json()
+    assert bike_led["summary"]["remaining_paid_rides"] == 9
+    assert bike_led["summary"]["topup_wallet_balance"] == 90.0
+    assert bike_led["summary"]["balance_due_to_admin"] == 0.0
+    assert bike_led["summary"]["total_topups_paid"] == 100.0
+
+    pnl = client.get("/api/reports/pnl", headers=_auth_header(admin_token)).json()
+    assert pnl["summary"]["topup_collected"] >= 200.0
+
+    # 4. Admin dynamically changes package to 5 Rides = Rs. 150 (Car Rs. 250) & exhaustion auto-offline test
+    for k, v in [
+        ("rider_topup_rides_count", "5"),
+        ("rider_topup_package_fee", "150"),
+        ("rider_topup_car_package_fee", "250"),
+    ]:
+        assert client.put(f"/api/admin/settings/{k}", headers=_auth_header(admin_token), json={"value": v}).status_code == 200
+
+    # Set Bike Captain down to 1 last paid ride -> completes 1 ride -> drops to 0 & auto-offlines!
+    assert (
+        client.patch(
+            f"/api/admin/riders/{bike_user['id']}",
+            headers=_auth_header(admin_token),
+            json={"remaining_paid_rides": 1, "topup_wallet_balance": 10.0, "is_online": True},
+        ).status_code
+        == 200
+    )
+    bk2 = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk 2",
+            "pickup_lat": 34.328548,
+            "pickup_lng": 73.188513,
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal 2",
+            "distance_km": 1.5,
+            "payment_method": "cash",
+        },
+    ).json()
+    assert client.post(f"/api/riders/jobs/{bk2['id']}/accept", headers=_auth_header(bike_token)).status_code == 200
+    assert (
+        client.post(
+            f"/api/riders/jobs/{bk2['id']}/status",
+            headers=_auth_header(bike_token),
+            json={"status": "completed"},
+        ).status_code
+        == 200
+    )
+
+    after_zero = client.get("/api/auth/me", headers=_auth_header(bike_token)).json()["user"]["rider_profile"]
+    assert after_zero["remaining_paid_rides"] == 0
+    assert after_zero["is_online"] is False
+    assert not any(
+        c["rider_id"] == bike_user["id"]
+        for c in client.get("/api/public/nearby-captains?lat=34.328548&lng=73.188513&service_type=bike_ride").json()
+    )
+    assert client.post("/api/riders/toggle-online", headers=_auth_header(bike_token)).status_code == 403
+
+    # Verify deleting a Captain with topup history cleans up cleanly without FK errors
+    del_car = client.delete(f"/api/admin/riders/{car_user['id']}", headers=_auth_header(admin_token))
+    assert del_car.status_code == 200
+
 

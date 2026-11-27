@@ -15,7 +15,10 @@ from app.models import (
     MansehraZone,
     PricingRule,
     PromoCode,
+    RideOffer,
     RiderProfile,
+    RiderSettlementRequest,
+    RiderTopupRequest,
     SupportTicket,
     SystemSetting,
     User,
@@ -45,6 +48,7 @@ from app.schemas import (
 )
 from app.services.finance import (
     apply_wait_charge_to_booking,
+    can_captain_work,
     complete_booking_and_post_ledger,
     compute_commission,
     estimate_booking_fare,
@@ -166,6 +170,8 @@ def admin_overview(
             "online_riders_count": online_riders,
             "total_riders_count": len(riders),
             "pending_verification_count": pending_verification,
+            "pending_topup_count": db.query(RiderTopupRequest).filter(RiderTopupRequest.status == "pending").count(),
+            "pending_settlement_count": db.query(RiderSettlementRequest).filter(RiderSettlementRequest.status == "pending").count(),
             "receivable_from_riders": receivable_from_riders,
             "payable_to_riders": payable_to_riders,
             "active_sos_count": len(active_sos_rows),
@@ -592,6 +598,10 @@ def list_riders(
                 "is_online": rp.is_online if rp else False,
                 "credit_limit": rp.credit_limit if rp else 1500.0,
                 "balance_due_to_admin": rp.balance_due_to_admin if rp else 0.0,
+                "topup_wallet_balance": round(float(rp.topup_wallet_balance or 0.0), 2) if rp else 0.0,
+                "remaining_paid_rides": int(rp.remaining_paid_rides or 0) if rp else 0,
+                "topup_per_ride_fee": round(float(rp.topup_per_ride_fee or 0.0), 2) if rp else 0.0,
+                "total_topups_paid": round(float(rp.total_topups_paid or 0.0), 2) if rp else 0.0,
                 "custom_commission_type": rp.custom_commission_type if rp else None,
                 "custom_commission_value": rp.custom_commission_value if rp else None,
                 "total_trips": rp.total_trips if rp else 0,
@@ -664,6 +674,8 @@ def admin_create_rider(
         cnic_front_photo=cnic_front_photo,
         cnic_back_photo=cnic_back_photo,
         credit_limit=payload.credit_limit,
+        remaining_paid_rides=max(0, int(payload.remaining_paid_rides or 0)),
+        topup_wallet_balance=round(max(0.0, float(payload.topup_wallet_balance or 0.0)), 2),
         custom_commission_type=payload.custom_commission_type,
         custom_commission_value=payload.custom_commission_value,
         is_verified=bool(payload.is_verified),
@@ -750,8 +762,6 @@ def update_rider_config(
         user.is_active = payload.is_active
         if not payload.is_active:
             rp.is_online = False
-    if payload.is_online is not None:
-        rp.is_online = bool(payload.is_online and rp.is_verified and user.is_active)
     if payload.zone_name is not None:
         rp.zone_name = payload.zone_name
         if payload.sync_zone_coords:
@@ -766,6 +776,17 @@ def update_rider_config(
         rp.location_updated_at = utcnow()
     if payload.credit_limit is not None:
         rp.credit_limit = payload.credit_limit
+    if payload.remaining_paid_rides is not None:
+        rp.remaining_paid_rides = max(0, int(payload.remaining_paid_rides))
+    if payload.topup_wallet_balance is not None:
+        rp.topup_wallet_balance = round(max(0.0, float(payload.topup_wallet_balance)), 2)
+    if payload.topup_per_ride_fee is not None:
+        rp.topup_per_ride_fee = round(max(0.0, float(payload.topup_per_ride_fee)), 2)
+    eligible, _ = can_captain_work(db, rp)
+    if payload.is_online is not None:
+        rp.is_online = bool(payload.is_online and rp.is_verified and user.is_active and eligible)
+    elif not eligible:
+        rp.is_online = False
     if payload.custom_commission_type == "none":
         rp.custom_commission_type = None
         rp.custom_commission_value = None
@@ -795,6 +816,18 @@ def delete_rider(
     db.query(SupportTicket).filter(SupportTicket.user_id == rider_user_id).delete()
     db.query(EmergencySosAlert).filter(EmergencySosAlert.user_id == rider_user_id).delete()
     db.query(EmergencySosAlert).filter(EmergencySosAlert.resolved_by_id == rider_user_id).update({"resolved_by_id": None})
+    db.query(RiderTopupRequest).filter(RiderTopupRequest.approved_by_id == rider_user_id).update(
+        {RiderTopupRequest.approved_by_id: None}, synchronize_session=False
+    )
+    db.query(RiderTopupRequest).filter(RiderTopupRequest.rider_id == rider_user_id).delete(
+        synchronize_session=False
+    )
+    db.query(RiderSettlementRequest).filter(RiderSettlementRequest.rider_id == rider_user_id).delete(
+        synchronize_session=False
+    )
+    db.query(RideOffer).filter(RideOffer.rider_id == rider_user_id).delete(synchronize_session=False)
+    db.query(RiderProfile).filter(RiderProfile.user_id == rider_user_id).delete(synchronize_session=False)
+    db.expire(user)
     db.delete(user)
     db.commit()
     return {"deleted": rider_user_id}
@@ -1383,6 +1416,10 @@ def admin_update_setting(
         db.add(s)
     else:
         s.value = val
+    if key == "rider_topup_required" and str(val).strip().lower() in ("1", "true", "yes", "on"):
+        db.query(RiderProfile).filter(RiderProfile.remaining_paid_rides <= 0).update(
+            {RiderProfile.is_online: False}, synchronize_session=False
+        )
     db.commit()
     return {"key": s.key, "value": "" if key in secret_keys else s.value}
 

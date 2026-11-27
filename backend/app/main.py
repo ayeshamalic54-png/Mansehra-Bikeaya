@@ -135,6 +135,10 @@ def ensure_schema_migrations() -> None:
             ("verification_status", "VARCHAR(24) NOT NULL DEFAULT 'pending'"),
             ("verification_note", "VARCHAR(255)"),
             ("docs_submitted_at", ts_type),
+            ("topup_wallet_balance", "FLOAT NOT NULL DEFAULT 0.0"),
+            ("remaining_paid_rides", "INTEGER NOT NULL DEFAULT 0"),
+            ("topup_per_ride_fee", "FLOAT NOT NULL DEFAULT 10.0"),
+            ("total_topups_paid", "FLOAT NOT NULL DEFAULT 0.0"),
         ],
         "mansehra_zones": [
             ("lat", "FLOAT"),

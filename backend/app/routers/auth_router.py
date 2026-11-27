@@ -45,6 +45,10 @@ def serialize_rider_profile(rp: RiderProfile) -> dict:
         "is_online": rp.is_online,
         "credit_limit": rp.credit_limit,
         "balance_due_to_admin": rp.balance_due_to_admin,
+        "topup_wallet_balance": float(getattr(rp, "topup_wallet_balance", 0.0) or 0.0),
+        "remaining_paid_rides": int(getattr(rp, "remaining_paid_rides", 0) or 0),
+        "topup_per_ride_fee": float(getattr(rp, "topup_per_ride_fee", 10.0) or 10.0),
+        "total_topups_paid": float(getattr(rp, "total_topups_paid", 0.0) or 0.0),
         "custom_commission_type": rp.custom_commission_type,
         "custom_commission_value": rp.custom_commission_value,
         "total_trips": rp.total_trips,
@@ -134,6 +138,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             docs_submitted_at=utcnow() if has_docs else None,
             is_online=False,
             credit_limit=credit_limit,
+            topup_wallet_balance=0.0,
+            remaining_paid_rides=0,
+            topup_per_ride_fee=10.0,
+            total_topups_paid=0.0,
         )
         db.add(rp)
         db.commit()
