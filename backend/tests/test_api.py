@@ -1802,6 +1802,61 @@ def test_prepaid_rider_topup_package_approval_and_deduction(client):
     assert pnl["summary"]["topup_collected"] >= 200.0
     assert pnl["summary"]["net_business_profit"] >= pnl["summary"]["topup_collected"] - pnl["summary"]["total_expenses"]
 
+    # 3b. Prepaid App Fee Captain Counter-Offer -> Customer Accept keeps 0 Commission & full counter-offer earning
+    bk_counter = client.post(
+        "/api/bookings",
+        headers=_auth_header(cust_token),
+        json={
+            "service_type": "bike_ride",
+            "pickup_zone": "Mansehra — Punjab Chowk",
+            "pickup_address": "Punjab Chowk Counter Test",
+            "pickup_lat": 34.328548,
+            "pickup_lng": 73.188513,
+            "drop_zone": "Mansehra — Pakhwal Chowk",
+            "drop_address": "Pakhwal Counter Test",
+            "distance_km": 2.0,
+            "offered_fare": 150,
+            "payment_method": "cash",
+        },
+    ).json()
+    offer_res = client.post(
+        f"/api/riders/jobs/{bk_counter['id']}/offer",
+        headers=_auth_header(bike_token),
+        json={"offered_fare": 200, "eta_minutes": 4, "note": "Near College Chowk"},
+    )
+    assert offer_res.status_code == 200, offer_res.text
+    offer_data = offer_res.json()
+    assert offer_data["offered_fare"] == 200.0
+    assert offer_data["fee_mode"] == "app_fee_topup"
+    assert offer_data["commission_amount"] == 0.0
+    assert offer_data["rider_earning"] == 200.0
+
+    my_bookings_after = client.get("/api/bookings/my", headers=_auth_header(cust_token)).json()
+    cust_bk = next(b for b in my_bookings_after if b["id"] == bk_counter["id"])
+    assert len(cust_bk["offers"]) == 1
+    assert cust_bk["offers"][0]["offered_fare"] == 200.0
+
+    acc_offer = client.post(
+        f"/api/bookings/{bk_counter['id']}/offers/{offer_data['id']}/accept",
+        headers=_auth_header(cust_token),
+    )
+    assert acc_offer.status_code == 200, acc_offer.text
+    acc_data = acc_offer.json()
+    assert acc_data["final_fare"] == 200.0
+    assert acc_data["commission_type_snapshot"] == "app_fee_topup"
+    assert acc_data["commission_amount"] == 0.0
+    assert acc_data["rider_earning"] == 200.0
+
+    done_counter = client.post(
+        f"/api/riders/jobs/{bk_counter['id']}/status",
+        headers=_auth_header(bike_token),
+        json={"status": "completed"},
+    )
+    assert done_counter.status_code == 200, done_counter.text
+    assert done_counter.json()["commission_type_snapshot"] == "app_fee_topup"
+    assert done_counter.json()["commission_amount"] == 0.0
+    assert done_counter.json()["rider_earning"] == 200.0
+
     # 4. Admin dynamically changes package to 5 Rides = Rs. 150 (Car Rs. 250) & exhaustion auto-offline test
     for k, v in [
         ("rider_topup_rides_count", "5"),

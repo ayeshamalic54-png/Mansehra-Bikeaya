@@ -162,6 +162,11 @@ export function RiderApp({ onOpenDownloads }) {
             `${topNew.pickup_zone} → ${topNew.drop_zone} · Offer Rs. ${topNew.final_fare}`,
             `rider-job-${topNew.id}`
           );
+        } else {
+          setLiveRideAlert((prev) => {
+            if (!prev) return null;
+            return list.find((j) => j.id === prev.id) || null;
+          });
         }
       }
     } catch (e) {
@@ -266,14 +271,17 @@ export function RiderApp({ onOpenDownloads }) {
     }
   };
 
-  const handleSendOffer = async (job) => {
+  const handleSendOffer = async (job, overrideFare = null) => {
     setErr('');
     setMsg('');
     const draft = offerDrafts[job.id] || {};
-    const offeredFare = Number(draft.fare !== undefined && draft.fare !== '' ? draft.fare : job.final_fare);
+    const offeredFare =
+      overrideFare !== null
+        ? Number(overrideFare)
+        : Number(draft.fare !== undefined && draft.fare !== '' ? draft.fare : Number(job.final_fare) + 30);
     const etaMinutes = Number(draft.eta || 5);
     try {
-      await apiRequest(`/api/riders/jobs/${job.id}/offer`, {
+      const offerRes = await apiRequest(`/api/riders/jobs/${job.id}/offer`, {
         method: 'POST',
         body: {
           offered_fare: offeredFare,
@@ -281,6 +289,13 @@ export function RiderApp({ onOpenDownloads }) {
           note: (draft.note || '').trim() || null,
         },
       });
+      setOfferDrafts((prev) => ({
+        ...prev,
+        [job.id]: { ...(prev[job.id] || {}), fare: String(offeredFare) },
+      }));
+      setLiveRideAlert((prev) =>
+        prev && prev.id === job.id ? { ...prev, my_offer: offerRes } : prev
+      );
       setMsg(`Counter-offer Rs. ${offeredFare} sent directly to Customer (${job.booking_code})!`);
       await loadAll();
     } catch (e) {
@@ -633,6 +648,198 @@ export function RiderApp({ onOpenDownloads }) {
     );
   };
 
+  const renderJobCard = (job) => (
+    <div
+      key={job.id}
+      className={`bg-white rounded-2xl p-4 space-y-3 text-xs shadow-xs border-2 ${
+        job.is_closest_captain ? 'border-[#009E4D] ring-2 ring-emerald-200/60' : 'border-slate-200'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {job.is_closest_captain ? (
+            <span className="px-2 py-0.5 rounded-lg bg-[#009E4D] text-white font-extrabold">
+              CLOSEST TO YOU
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-lg bg-teal-600 text-white font-bold">NEW JOB</span>
+          )}
+          <span className="mono-num font-bold">{job.booking_code}</span>
+          <StatusBadge value={job.service_type} />
+          {job.captain_distance_km != null && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#008741] border border-emerald-200 font-bold">
+              {job.captain_distance_km} km away (~{job.captain_eta_min} min)
+            </span>
+          )}
+        </div>
+        <span className="mono-num font-bold text-slate-600">Trip {job.distance_km} km</span>
+      </div>
+
+      <div className="space-y-1 text-slate-800">
+        <div className="flex items-start gap-2">
+          <MapPin className="w-3.5 h-3.5 text-[#009E4D] shrink-0 mt-0.5" />
+          <span><strong>Pickup:</strong> {job.pickup_zone} — {job.pickup_address}</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+          <span><strong>Drop:</strong> {job.drop_zone} — {job.drop_address}</span>
+        </div>
+      </div>
+
+      <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-3 gap-2 mono-num">
+        <div>
+          <div className="text-[11px] text-slate-500">Customer Offer</div>
+          <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[11px] text-slate-500">
+            {job.fee_mode === 'app_fee_topup' ? 'Top-Up Package' : 'Less Commission'}
+          </div>
+          <div className="text-sm font-bold text-[#008741]">
+            {job.fee_mode === 'app_fee_topup'
+              ? '-1 Ride (0 Comm.)'
+              : `-Rs. ${job.commission_amount}`}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[11px] text-slate-500">Your Actual Net</div>
+          <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
+        </div>
+      </div>
+
+      {/* Dual Action: 1-Tap Accept OR Custom Counter-Offer to Customer */}
+      <div className="space-y-2.5 pt-0.5">
+        <button
+          onClick={() => handleAccept(job.id)}
+          className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#009E4D] hover:bg-[#008741] transition shadow-sm"
+        >
+          Accept Rs. {job.final_fare} Immediately
+        </button>
+
+        {job.my_offer && job.my_offer.status === 'pending' && (
+          <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold text-teal-900 mono-num">
+              Counter-Offer Sent: Rs. {job.my_offer.offered_fare} ({job.my_offer.eta_minutes} min ETA) · Net Rs.{' '}
+              {job.my_offer.rider_earning ?? job.my_offer.offered_fare} — Waiting Customer
+            </span>
+            <button
+              type="button"
+              onClick={() => handleWithdrawOffer(job.id)}
+              className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 font-bold"
+            >
+              Withdraw Offer
+            </button>
+          </div>
+        )}
+
+        <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-slate-800">
+            <span>Or Send Counter-Offer to Customer</span>
+            <div className="flex gap-1">
+              {[20, 50, 100].map((bump) => (
+                <button
+                  key={bump}
+                  type="button"
+                  onClick={() => {
+                    const nextFare = Number(job.final_fare) + bump;
+                    setOfferDrafts((prev) => ({
+                      ...prev,
+                      [job.id]: { ...(prev[job.id] || {}), fare: String(nextFare) },
+                    }));
+                    handleSendOffer(job, nextFare);
+                  }}
+                  className="px-2 py-0.5 rounded bg-white border border-amber-300 text-slate-900 hover:bg-amber-100 font-extrabold mono-num"
+                >
+                  +Rs.{bump}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              type="number"
+              min="50"
+              placeholder={`Rs. ${Number(job.final_fare) + 30}`}
+              value={offerDrafts[job.id]?.fare ?? ''}
+              onChange={(e) =>
+                setOfferDrafts((prev) => ({
+                  ...prev,
+                  [job.id]: { ...(prev[job.id] || {}), fare: e.target.value },
+                }))
+              }
+              className="px-2.5 py-2 rounded-lg border border-slate-200 bg-white font-bold mono-num"
+            />
+            <select
+              value={offerDrafts[job.id]?.eta ?? '5'}
+              onChange={(e) =>
+                setOfferDrafts((prev) => ({
+                  ...prev,
+                  [job.id]: { ...(prev[job.id] || {}), eta: e.target.value },
+                }))
+              }
+              className="px-2 py-2 rounded-lg border border-slate-200 bg-white font-bold"
+            >
+              <option value="3">3 min away</option>
+              <option value="5">5 min away</option>
+              <option value="8">8 min away</option>
+              <option value="12">12 min away</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                unlockRideAlertAudio();
+                handleSendOffer(job);
+              }}
+              className="py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold"
+            >
+              {job.my_offer?.status === 'pending' ? 'Update Offer' : 'Send Offer'}
+            </button>
+          </div>
+          <input
+            type="text"
+            placeholder="Optional note to customer (e.g. Near Pakhwal Chowk)"
+            value={offerDrafts[job.id]?.note ?? ''}
+            onChange={(e) =>
+              setOfferDrafts((prev) => ({
+                ...prev,
+                [job.id]: { ...(prev[job.id] || {}), note: e.target.value },
+              }))
+            }
+            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px]"
+          />
+        </div>
+      </div>
+
+      {job.pickup_lat != null && job.drop_lat != null && (
+        <SafarGoMap
+          pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: job.pickup_address || job.pickup_zone }}
+          drop={{ lat: job.drop_lat, lng: job.drop_lng, label: job.drop_address || job.drop_zone }}
+          captains={
+            rp?.current_lat != null
+              ? [
+                  {
+                    id: user?.id,
+                    display_name: 'You',
+                    vehicle_type: rp?.vehicle_type || 'bike',
+                    bike_model: rp?.bike_model,
+                    zone_name: rp?.zone_name,
+                    rider_photo: rp?.rider_photo,
+                    vehicle_photo: rp?.vehicle_photo,
+                    lat: rp.current_lat,
+                    lng: rp.current_lng,
+                    is_online: rp?.is_online,
+                  },
+                ]
+              : []
+          }
+          heightClass="h-36"
+          showCaptainSidebar={false}
+          fitSignature={`avail-${job.id}-${rp?.current_lat}`}
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen pb-24">
       {/* Dark Captain Header */}
@@ -726,41 +933,102 @@ export function RiderApp({ onOpenDownloads }) {
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
         {liveRideAlert && (
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-[#009E4D] to-emerald-700 text-white shadow-lg border border-emerald-300/40 flex flex-wrap items-center justify-between gap-3 animate-pulse-once">
-            <div className="space-y-0.5 text-xs">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">
-                <Bell className="w-3 h-3" />
-                {liveRideAlert.is_closest_captain
-                  ? `CLOSEST RIDE ALERT · ${liveRideAlert.captain_distance_km ?? ''} km away`
-                  : `NEW RIDE REQUEST · ${liveRideAlert.booking_code}`}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-[#009E4D] to-emerald-700 text-white shadow-lg border border-emerald-300/40 space-y-3 animate-pulse-once">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5 text-xs">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">
+                  <Bell className="w-3 h-3" />
+                  {liveRideAlert.is_closest_captain
+                    ? `CLOSEST RIDE ALERT · ${liveRideAlert.captain_distance_km ?? ''} km away`
+                    : `NEW RIDE REQUEST · ${liveRideAlert.booking_code}`}
+                </div>
+                <div className="font-extrabold text-sm">
+                  {liveRideAlert.pickup_zone} → {liveRideAlert.drop_zone}
+                </div>
+                <div className="text-emerald-100">
+                  Pickup: {liveRideAlert.pickup_address} · Customer Offer: <strong>Rs. {liveRideAlert.final_fare}</strong>
+                  {liveRideAlert.captain_eta_min ? ` (~${liveRideAlert.captain_eta_min} min to pickup)` : ''}
+                </div>
               </div>
-              <div className="font-extrabold text-sm">
-                {liveRideAlert.pickup_zone} → {liveRideAlert.drop_zone}
-              </div>
-              <div className="text-emerald-100">
-                Pickup: {liveRideAlert.pickup_address} · Offer: <strong>Rs. {liveRideAlert.final_fare}</strong>
-                {liveRideAlert.captain_eta_min ? ` (~${liveRideAlert.captain_eta_min} min to pickup)` : ''}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    unlockRideAlertAudio();
+                    setTab('duty');
+                    handleAccept(liveRideAlert.id);
+                    setLiveRideAlert(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-white text-[#008741] font-extrabold text-xs hover:bg-emerald-50"
+                >
+                  Accept Rs. {liveRideAlert.final_fare}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLiveRideAlert(null)}
+                  className="px-2.5 py-2 rounded-xl bg-emerald-950/30 text-white text-xs font-bold"
+                >
+                  Dismiss
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            {liveRideAlert.my_offer?.status === 'pending' ? (
+              <div className="p-2.5 rounded-xl bg-white/15 border border-white/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-extrabold mono-num">
+                  Counter-Offer Sent: Rs. {liveRideAlert.my_offer.offered_fare} ({liveRideAlert.my_offer.eta_minutes} min ETA) — Waiting for Customer
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleWithdrawOffer(liveRideAlert.id)}
+                  className="px-2.5 py-1 rounded-lg bg-white text-rose-700 font-bold"
+                >
+                  Withdraw
+                </button>
+              </div>
+            ) : null}
+
+            <div className="p-2.5 rounded-xl bg-slate-950/25 border border-white/20 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-bold text-emerald-100 shrink-0">Or Send Counter-Offer:</span>
+              {[20, 50, 100].map((bump) => (
+                <button
+                  key={bump}
+                  type="button"
+                  onClick={() => {
+                    const nextFare = Number(liveRideAlert.final_fare) + bump;
+                    setOfferDrafts((prev) => ({
+                      ...prev,
+                      [liveRideAlert.id]: { ...(prev[liveRideAlert.id] || {}), fare: String(nextFare) },
+                    }));
+                    handleSendOffer(liveRideAlert, nextFare);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-300 hover:bg-amber-200 text-slate-950 font-extrabold mono-num"
+                >
+                  +Rs.{bump}
+                </button>
+              ))}
+              <input
+                type="number"
+                min="50"
+                placeholder={`Rs. ${Number(liveRideAlert.final_fare) + 30}`}
+                value={offerDrafts[liveRideAlert.id]?.fare ?? ''}
+                onChange={(e) =>
+                  setOfferDrafts((prev) => ({
+                    ...prev,
+                    [liveRideAlert.id]: { ...(prev[liveRideAlert.id] || {}), fare: e.target.value },
+                  }))
+                }
+                className="w-24 px-2.5 py-1.5 rounded-lg bg-white text-slate-900 font-extrabold mono-num"
+              />
               <button
                 type="button"
                 onClick={() => {
                   unlockRideAlertAudio();
-                  setTab('duty');
-                  handleAccept(liveRideAlert.id);
-                  setLiveRideAlert(null);
+                  handleSendOffer(liveRideAlert);
                 }}
-                className="px-3.5 py-2 rounded-xl bg-white text-[#008741] font-extrabold text-xs hover:bg-emerald-50"
+                className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-900 text-white font-extrabold"
               >
-                Accept Rs. {liveRideAlert.final_fare}
-              </button>
-              <button
-                type="button"
-                onClick={() => setLiveRideAlert(null)}
-                className="px-2.5 py-2 rounded-xl bg-emerald-950/30 text-white text-xs font-bold"
-              >
-                Dismiss
+                Send Counter-Offer
               </button>
             </div>
           </div>
@@ -928,6 +1196,10 @@ export function RiderApp({ onOpenDownloads }) {
               </div>
             </div>
 
+            {availableJobs.length > 0 && (
+              <div className="space-y-3">{availableJobs.map(renderJobCard)}</div>
+            )}
+
             {showLocationPicker && (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-4 space-y-3 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1031,200 +1303,10 @@ export function RiderApp({ onOpenDownloads }) {
 
             {needsTopup && renderTopupPackageCard({ compact: true })}
 
-            {availableJobs.length === 0 ? (
+            {availableJobs.length === 0 && (
               <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center text-xs sm:text-sm text-slate-500">
                 No pending ride requests right now. Keep Duty ONLINE to receive new city &amp; intercity bookings!
               </div>
-            ) : (
-              availableJobs.map((job) => (
-                <div
-                  key={job.id}
-                  className={`bg-white rounded-2xl p-4 space-y-3 text-xs shadow-xs border-2 ${
-                    job.is_closest_captain ? 'border-[#009E4D] ring-2 ring-emerald-200/60' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {job.is_closest_captain ? (
-                        <span className="px-2 py-0.5 rounded-lg bg-[#009E4D] text-white font-extrabold">
-                          CLOSEST TO YOU
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-lg bg-teal-600 text-white font-bold">NEW JOB</span>
-                      )}
-                      <span className="mono-num font-bold">{job.booking_code}</span>
-                      <StatusBadge value={job.service_type} />
-                      {job.captain_distance_km != null && (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#008741] border border-emerald-200 font-bold">
-                          {job.captain_distance_km} km away (~{job.captain_eta_min} min)
-                        </span>
-                      )}
-                    </div>
-                    <span className="mono-num font-bold text-slate-600">Trip {job.distance_km} km</span>
-                  </div>
-
-                  <div className="space-y-1 text-slate-800">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#009E4D] shrink-0 mt-0.5" />
-                      <span><strong>Pickup:</strong> {job.pickup_zone} — {job.pickup_address}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                      <span><strong>Drop:</strong> {job.drop_zone} — {job.drop_address}</span>
-                    </div>
-                  </div>
-
-                  {job.pickup_lat != null && job.drop_lat != null && (
-                    <SafarGoMap
-                      pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: job.pickup_address || job.pickup_zone }}
-                      drop={{ lat: job.drop_lat, lng: job.drop_lng, label: job.drop_address || job.drop_zone }}
-                      captains={
-                        rp?.current_lat != null
-                          ? [
-                              {
-                                id: user?.id,
-                                display_name: 'You',
-                                vehicle_type: rp?.vehicle_type || 'bike',
-                                bike_model: rp?.bike_model,
-                                zone_name: rp?.zone_name,
-                                rider_photo: rp?.rider_photo,
-                                vehicle_photo: rp?.vehicle_photo,
-                                lat: rp.current_lat,
-                                lng: rp.current_lng,
-                                is_online: rp?.is_online,
-                              },
-                            ]
-                          : []
-                      }
-                      heightClass="h-40"
-                      showCaptainSidebar={false}
-                      fitSignature={`avail-${job.id}-${rp?.current_lat}`}
-                    />
-                  )}
-
-                  <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 grid grid-cols-3 gap-2 mono-num">
-                    <div>
-                      <div className="text-[11px] text-slate-500">Customer Offer</div>
-                      <div className="text-sm font-extrabold text-slate-900">Rs. {job.final_fare}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-[11px] text-slate-500">
-                        {job.fee_mode === 'app_fee_topup' ? 'Top-Up Package' : 'Less Commission'}
-                      </div>
-                      <div className="text-sm font-bold text-[#008741]">
-                        {job.fee_mode === 'app_fee_topup'
-                          ? '-1 Ride (0 Comm.)'
-                          : `-Rs. ${job.commission_amount}`}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[11px] text-slate-500">Your Actual Net</div>
-                      <div className="text-base font-extrabold text-[#009E4D]">Rs. {job.rider_earning}</div>
-                    </div>
-                  </div>
-
-                  {/* InDrive Dual Path: Instant 1-Tap Accept OR Custom Counter-Offer */}
-                  <div className="space-y-2.5 pt-1">
-                    <button
-                      onClick={() => handleAccept(job.id)}
-                      className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-[#009E4D] hover:bg-[#008741] transition shadow-sm"
-                    >
-                      Accept Rs. {job.final_fare} Immediately
-                    </button>
-
-                    {job.my_offer && job.my_offer.status === 'pending' && (
-                      <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-bold text-teal-900 mono-num">
-                          Offer Sent: Rs. {job.my_offer.offered_fare} ({job.my_offer.eta_minutes} min ETA) · Net Rs.{' '}
-                          {job.my_offer.rider_earning ?? '—'} — Waiting Customer
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleWithdrawOffer(job.id)}
-                          className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 font-bold"
-                        >
-                          Withdraw Offer
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                        <span>Or Send InDrive Counter-Offer</span>
-                        <div className="flex gap-1">
-                          {[20, 50, 100].map((bump) => (
-                            <button
-                              key={bump}
-                              type="button"
-                              onClick={() =>
-                                setOfferDrafts((prev) => ({
-                                  ...prev,
-                                  [job.id]: {
-                                    ...(prev[job.id] || {}),
-                                    fare: String(Number(job.final_fare) + bump),
-                                  },
-                                }))
-                              }
-                              className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 hover:border-emerald-400 mono-num"
-                            >
-                              +{bump}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <input
-                          type="number"
-                          min="50"
-                          placeholder={`Rs. ${Number(job.final_fare) + 30}`}
-                          value={offerDrafts[job.id]?.fare ?? ''}
-                          onChange={(e) =>
-                            setOfferDrafts((prev) => ({
-                              ...prev,
-                              [job.id]: { ...(prev[job.id] || {}), fare: e.target.value },
-                            }))
-                          }
-                          className="px-2.5 py-2 rounded-lg border border-slate-200 bg-white font-bold mono-num"
-                        />
-                        <select
-                          value={offerDrafts[job.id]?.eta ?? '5'}
-                          onChange={(e) =>
-                            setOfferDrafts((prev) => ({
-                              ...prev,
-                              [job.id]: { ...(prev[job.id] || {}), eta: e.target.value },
-                            }))
-                          }
-                          className="px-2 py-2 rounded-lg border border-slate-200 bg-white font-bold"
-                        >
-                          <option value="3">3 min away</option>
-                          <option value="5">5 min away</option>
-                          <option value="8">8 min away</option>
-                          <option value="12">12 min away</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => handleSendOffer(job)}
-                          className="py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold"
-                        >
-                          Send Offer
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Optional note to customer (e.g. Near Pakhwal Chowk)"
-                        value={offerDrafts[job.id]?.note ?? ''}
-                        onChange={(e) =>
-                          setOfferDrafts((prev) => ({
-                            ...prev,
-                            [job.id]: { ...(prev[job.id] || {}), note: e.target.value },
-                          }))
-                        }
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))
             )}
           </div>
         )}

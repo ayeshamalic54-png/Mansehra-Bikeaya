@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Bell,
   Bike,
   Car,
   CheckCircle2,
@@ -33,6 +34,12 @@ import {
   formatPaymentMethodLabel,
   getRidePaymentBadgeState,
 } from '../utils/paymentAccounts';
+import {
+  playRideAlertChime,
+  requestRideNotificationsPermission,
+  showBrowserRideNotification,
+  unlockRideAlertAudio,
+} from '../utils/rideAlerts';
 
 export function CustomerApp({ onOpenDownloads }) {
   const { user, bootstrap, logout } = useAuth();
@@ -90,6 +97,10 @@ export function CustomerApp({ onOpenDownloads }) {
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [sosModalOpen, setSosModalOpen] = useState(false);
   const [mySosHistory, setMySosHistory] = useState([]);
+  const [alertsEnabled, setAlertsEnabled] = useState(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
+  const seenOfferKeysRef = useRef(null);
 
   const policeNumber = bootstrap?.settings?.emergency_police_number || '15';
   const rescueNumber = bootstrap?.settings?.emergency_rescue_number || '1122';
@@ -130,8 +141,44 @@ export function CustomerApp({ onOpenDownloads }) {
         apiRequest('/api/bookings/my'),
         apiRequest('/api/sos/my').catch(() => []),
       ]);
-      setBookings(data);
+      const list = data || [];
+      setBookings(list);
       setMySosHistory(sosRows || []);
+
+      const pendingOffersList = [];
+      for (const bk of list) {
+        if (bk.status === 'pending' && !bk.rider_id) {
+          for (const o of bk.offers || []) {
+            if (o.status === 'pending') {
+              pendingOffersList.push({ booking: bk, offer: o });
+            }
+          }
+        }
+      }
+      const nextKeys = new Set(
+        pendingOffersList.map(({ offer }) => `${offer.id}:${offer.offered_fare}`)
+      );
+      if (seenOfferKeysRef.current === null) {
+        seenOfferKeysRef.current = nextKeys;
+      } else {
+        const freshOffers = pendingOffersList.filter(
+          ({ offer }) => !seenOfferKeysRef.current.has(`${offer.id}:${offer.offered_fare}`)
+        );
+        seenOfferKeysRef.current = nextKeys;
+        if (freshOffers.length > 0) {
+          const top = freshOffers[0];
+          const captName = top.offer.rider?.full_name || 'Captain';
+          playRideAlertChime('captain');
+          showBrowserRideNotification(
+            `Captain Offer: Rs. ${top.offer.offered_fare} (${top.booking.booking_code})`,
+            `${captName} offered Rs. ${top.offer.offered_fare} (~${top.offer.eta_minutes} min away)`,
+            `cust-offer-${top.offer.id}-${top.offer.offered_fare}`
+          );
+          setStatusMsg(
+            `New Captain Counter-Offer: ${captName} offered Rs. ${top.offer.offered_fare} (${top.offer.eta_minutes} min away)!`
+          );
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -221,6 +268,7 @@ export function CustomerApp({ onOpenDownloads }) {
 
   const handleBook = async (e) => {
     e.preventDefault();
+    unlockRideAlertAudio();
     setErrMsg('');
     setStatusMsg('');
     if (!pickupAddress.trim() || !dropAddress.trim()) {
@@ -432,6 +480,13 @@ export function CustomerApp({ onOpenDownloads }) {
   const suggestedFare = estimate?.estimated_fare ?? fallbackFare;
   const minOfferFloor = Math.max(50, Math.round(suggestedFare * 0.5));
   const activeOfferFare = offerFareInput !== '' ? Number(offerFareInput) : suggestedFare;
+  const topIncomingOffers = bookings
+    .filter((b) => b.status === 'pending' && !b.rider_id)
+    .flatMap((b) =>
+      (b.offers || [])
+        .filter((o) => o.status === 'pending')
+        .map((o) => ({ booking: b, offer: o }))
+    );
 
   return (
     <div className="min-h-screen pb-24">
@@ -440,6 +495,22 @@ export function CustomerApp({ onOpenDownloads }) {
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <BrandLogo subtitle={`Hi, ${user?.full_name?.split(' ')[0]}`} />
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const perm = await requestRideNotificationsPermission();
+                setAlertsEnabled(perm === 'granted');
+                playRideAlertChime('captain');
+              }}
+              className={`p-2 rounded-xl border text-xs font-bold inline-flex items-center ${
+                alertsEnabled
+                  ? 'bg-emerald-50 border-emerald-200 text-[#008741]'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}
+              title="Enable Sound & Offer Alerts"
+            >
+              <Bell className="w-3.5 h-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => setSosModalOpen(true)}
@@ -484,6 +555,67 @@ export function CustomerApp({ onOpenDownloads }) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+        {topIncomingOffers.length > 0 && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-900 via-[#007D3D] to-teal-900 text-white shadow-lg border border-emerald-400/50 space-y-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">
+                <Bell className="w-3 h-3" />
+                INCOMING CAPTAIN COUNTER-OFFER ({topIncomingOffers.length})
+              </div>
+              {tab !== 'rides' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('rides');
+                    setRideFilter('active');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 font-bold"
+                >
+                  Open My Rides →
+                </button>
+              )}
+            </div>
+            {topIncomingOffers.slice(0, 3).map(({ booking, offer }) => (
+              <div
+                key={offer.id}
+                className="p-3 rounded-xl bg-white text-slate-900 flex flex-wrap items-center justify-between gap-3"
+              >
+                <div className="space-y-0.5">
+                  <div className="font-extrabold flex flex-wrap items-center gap-1.5">
+                    <span>{offer.rider?.full_name || 'SafarGo Captain'}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-[#008741] text-[10px] mono-num">
+                      ~{offer.eta_minutes} min away
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-extrabold mono-num">
+                      Your Offer: Rs. {booking.final_fare} → Counter: Rs. {offer.offered_fare}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600">
+                    {booking.booking_code} · {offer.rider?.vehicle_type === 'car' ? 'AC Car' : 'Bike'}:{' '}
+                    {offer.rider?.bike_model} ({offer.rider?.bike_plate}) · ★ {offer.rider?.rating_avg}
+                    {offer.note ? ` · “${offer.note}”` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDeclineOffer(booking.id, offer.id)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-bold hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAcceptOffer(booking.id, offer.id)}
+                    className="px-3.5 py-1.5 rounded-lg bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold mono-num"
+                  >
+                    Accept Rs. {offer.offered_fare}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {statusMsg && (
           <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#008741] text-xs font-bold flex items-center justify-between">
             <span>{statusMsg}</span>
@@ -807,6 +939,121 @@ export function CustomerApp({ onOpenDownloads }) {
                     </div>
                   </div>
 
+                  {/* Direct InDrive Captain Counter-Offers & Waiting Controls (Top Priority above Map) */}
+                  {!b.rider && b.status === 'pending' && (
+                    <div className="space-y-2.5">
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 font-bold">
+                          <Clock className="w-4 h-4 text-[#009E4D] animate-spin shrink-0" />
+                          <span>
+                            Searching {b.service_type === 'car_ride' ? 'AC Car' : 'Bike & Courier'} Captains directly (No Admin delay)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {[20, 50, 100].map((inc) => (
+                            <button
+                              key={inc}
+                              type="button"
+                              onClick={() => handleRaiseFare(b.id, Number(b.final_fare) + inc)}
+                              className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-[#008741] font-extrabold mono-num hover:bg-emerald-100"
+                            >
+                              Raise +Rs.{inc}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {(() => {
+                        const pendingOffers = (b.offers || []).filter((o) => o.status === 'pending');
+                        if (pendingOffers.length === 0) return null;
+                        return (
+                          <div className="space-y-2">
+                            <div className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2">
+                              <span>
+                                Incoming Captain Offers ({pendingOffers.length}) — Choose Your Captain:
+                              </span>
+                              <span className="mono-num text-[10px] font-bold text-slate-600">
+                                Your Offer: Rs. {b.final_fare}
+                              </span>
+                            </div>
+                            {pendingOffers.map((o) => {
+                              const isCounter = Number(o.offered_fare) !== Number(b.final_fare);
+                              return (
+                                <div
+                                  key={o.id}
+                                  className="p-3 rounded-2xl bg-white border-2 border-[#009E4D]/70 shadow-xs flex flex-wrap items-center justify-between gap-3"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    {o.rider?.rider_photo ? (
+                                      <img
+                                        src={o.rider.rider_photo}
+                                        alt={o.rider.full_name}
+                                        className="w-11 h-11 rounded-full object-cover border-2 border-[#009E4D]"
+                                      />
+                                    ) : (
+                                      <div className="w-11 h-11 rounded-full bg-emerald-100 text-[#008741] font-extrabold flex items-center justify-center">
+                                        {(o.rider?.full_name || 'C')[0]}
+                                      </div>
+                                    )}
+                                    {o.rider?.vehicle_photo && (
+                                      <img
+                                        src={o.rider.vehicle_photo}
+                                        alt={o.rider.bike_model}
+                                        className="w-12 h-10 rounded-lg object-cover border border-slate-200"
+                                      />
+                                    )}
+                                    <div>
+                                      <div className="font-extrabold text-slate-900 flex flex-wrap items-center gap-1.5">
+                                        <span>{o.rider?.full_name}</span>
+                                        {o.rider?.is_verified && (
+                                          <ShieldCheck className="w-3.5 h-3.5 text-[#009E4D]" />
+                                        )}
+                                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold">
+                                          ~{o.eta_minutes} min away
+                                        </span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold mono-num ${
+                                            isCounter
+                                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                              : 'bg-emerald-100 text-[#008741] border border-emerald-200'
+                                          }`}
+                                        >
+                                          {isCounter
+                                            ? `Counter: Rs. ${o.offered_fare} (Your Offer: Rs. ${b.final_fare})`
+                                            : `Matches Rs. ${o.offered_fare}`}
+                                        </span>
+                                      </div>
+                                      <div className="text-slate-500 mono-num text-[11px]">
+                                        {o.rider?.vehicle_type === 'car' ? 'AC Car' : 'Bike'}: {o.rider?.bike_model} ({o.rider?.bike_plate}) · ★ {o.rider?.rating_avg} · {o.rider?.total_trips} trips
+                                      </div>
+                                      {o.note && <div className="text-[11px] text-teal-800 font-semibold mt-0.5">“{o.note}”</div>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeclineOffer(b.id, o.id)}
+                                      className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-rose-50 hover:text-rose-600"
+                                    >
+                                      Decline
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAcceptOffer(b.id, o.id)}
+                                      className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold mono-num shadow-sm"
+                                    >
+                                      Accept Rs. {o.offered_fare}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {['pending', 'assigned', 'arrived', 'in_progress'].includes(b.status) &&
                     b.pickup_lat != null &&
                     b.drop_lat != null && (
@@ -838,7 +1085,7 @@ export function CustomerApp({ onOpenDownloads }) {
                       />
                     )}
 
-                  {/* Assigned Captain Box OR Direct InDrive Captain Offers */}
+                  {/* Assigned Captain Box */}
                   {b.rider ? (
                     <div className="p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -906,103 +1153,6 @@ export function CustomerApp({ onOpenDownloads }) {
                         </button>
                       </div>
                     </div>
-                  )}
-
-                  {!b.rider && (
-                    b.status === 'pending' && (
-                      <div className="space-y-2.5">
-                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 font-bold">
-                            <Clock className="w-4 h-4 text-[#009E4D] animate-spin shrink-0" />
-                            <span>
-                              Searching {b.service_type === 'car_ride' ? 'AC Car' : 'Bike & Courier'} Captains directly (No Admin delay)
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {[20, 50, 100].map((inc) => (
-                              <button
-                                key={inc}
-                                type="button"
-                                onClick={() => handleRaiseFare(b.id, Number(b.final_fare) + inc)}
-                                className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-[#008741] font-extrabold mono-num hover:bg-emerald-100"
-                              >
-                                Raise +Rs.{inc}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {(() => {
-                          const pendingOffers = (b.offers || []).filter((o) => o.status === 'pending');
-                          if (pendingOffers.length === 0) return null;
-                          return (
-                            <div className="space-y-2">
-                              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">
-                                Incoming Captain Offers ({pendingOffers.length}) — Choose Your Captain:
-                              </div>
-                              {pendingOffers.map((o) => (
-                                <div
-                                  key={o.id}
-                                  className="p-3 rounded-2xl bg-white border-2 border-[#009E4D]/60 shadow-xs flex flex-wrap items-center justify-between gap-3"
-                                >
-                                  <div className="flex items-center gap-2.5">
-                                    {o.rider?.rider_photo ? (
-                                      <img
-                                        src={o.rider.rider_photo}
-                                        alt={o.rider.full_name}
-                                        className="w-11 h-11 rounded-full object-cover border-2 border-[#009E4D]"
-                                      />
-                                    ) : (
-                                      <div className="w-11 h-11 rounded-full bg-emerald-100 text-[#008741] font-extrabold flex items-center justify-center">
-                                        {(o.rider?.full_name || 'C')[0]}
-                                      </div>
-                                    )}
-                                    {o.rider?.vehicle_photo && (
-                                      <img
-                                        src={o.rider.vehicle_photo}
-                                        alt={o.rider.bike_model}
-                                        className="w-12 h-10 rounded-lg object-cover border border-slate-200"
-                                      />
-                                    )}
-                                    <div>
-                                      <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                                        <span>{o.rider?.full_name}</span>
-                                        {o.rider?.is_verified && (
-                                          <ShieldCheck className="w-3.5 h-3.5 text-[#009E4D]" />
-                                        )}
-                                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold">
-                                          ~{o.eta_minutes} min away
-                                        </span>
-                                      </div>
-                                      <div className="text-slate-500 mono-num text-[11px]">
-                                        {o.rider?.vehicle_type === 'car' ? 'AC Car' : 'Bike'}: {o.rider?.bike_model} ({o.rider?.bike_plate}) · ★ {o.rider?.rating_avg} · {o.rider?.total_trips} trips
-                                      </div>
-                                      {o.note && <div className="text-[11px] text-teal-800 font-semibold mt-0.5">“{o.note}”</div>}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeclineOffer(b.id, o.id)}
-                                      className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-rose-50 hover:text-rose-600"
-                                    >
-                                      Decline
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAcceptOffer(b.id, o.id)}
-                                      className="px-4 py-2 rounded-xl bg-[#009E4D] hover:bg-[#008741] text-white font-extrabold mono-num shadow-sm"
-                                    >
-                                      Accept Rs. {o.offered_fare}
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )
                   )}
 
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">

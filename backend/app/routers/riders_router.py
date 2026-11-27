@@ -325,10 +325,17 @@ def send_or_update_ride_offer(
     rp.is_online = True
     db.commit()
     db.refresh(offer)
+    topup_policy = get_topup_policy(db, rp.vehicle_type)
+    on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
     rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
     res = serialize_offer(offer)
-    if rule:
+    if on_prepaid:
+        res["fee_mode"] = "app_fee_topup"
+        res["commission_amount"] = 0.0
+        res["rider_earning"] = offered
+    elif rule:
         _, _, o_comm, o_net = compute_commission(offered, rule, rp)
+        res["fee_mode"] = "commission"
         res["commission_amount"] = o_comm
         res["rider_earning"] = o_net
     return res

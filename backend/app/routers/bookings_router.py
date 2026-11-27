@@ -25,6 +25,7 @@ from app.services.finance import (
     compute_commission,
     estimate_booking_fare,
     find_nearest_captains_for_booking,
+    get_topup_policy,
     utcnow,
 )
 
@@ -328,8 +329,16 @@ def accept_captain_offer(
     booking.assigned_at = utcnow()
     rp.is_online = True
 
+    topup_policy = get_topup_policy(db, rp.vehicle_type)
+    on_prepaid = bool(topup_policy["required"]) and int(rp.remaining_paid_rides or 0) > 0
     rule = db.query(PricingRule).filter(PricingRule.service_type == booking.service_type).first()
-    if rule:
+    if on_prepaid:
+        unit_fee = round(min(agreed_fare, float(rp.topup_per_ride_fee or topup_policy["per_ride_fee"] or 10.0)), 2)
+        booking.commission_type_snapshot = "app_fee_topup"
+        booking.commission_rate_snapshot = unit_fee
+        booking.commission_amount = 0.0
+        booking.rider_earning = agreed_fare
+    elif rule:
         c_type, c_val, comm, net = compute_commission(agreed_fare, rule, rp)
         booking.commission_type_snapshot = c_type
         booking.commission_rate_snapshot = c_val
