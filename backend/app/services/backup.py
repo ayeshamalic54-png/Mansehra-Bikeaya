@@ -245,7 +245,7 @@ def create_full_database_backup(
     trigger_type: str = "manual",
     write_local_file: bool = True,
     send_email: bool = True,
-    keep_db_blobs: int = 7,
+    keep_db_blobs: int = 2,
     keep_local_files: int = 30,
 ) -> tuple[DatabaseBackup, Optional[Path]]:
     """Save compressed full-DB backup to App Directory backups/, DB table, and email recipient simultaneously."""

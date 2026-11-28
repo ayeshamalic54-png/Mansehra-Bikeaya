@@ -135,10 +135,11 @@ def main() -> int:
     cloud_engine = create_engine(cloud_url, pool_pre_ping=True, connect_args={"connect_timeout": 10})
     CloudSession = sessionmaker(autocommit=False, autoflush=False, bind=cloud_engine)
 
-    # Set temporary DATABASE_URL check safely: we only import app.database after check if needed,
-    # or ensure DATABASE_URL in os.environ works cleanly when importing models/backup.
-    os.environ.setdefault("DATABASE_URL", local_url)
+    # Force DATABASE_URL to local_url before importing app modules so app.database.engine
+    # and ensure_schema_migrations() always operate on the local mirror, never cloud.
+    os.environ["DATABASE_URL"] = local_url
     from app.database import Base
+    from app.main import ensure_schema_migrations
     from app.services.backup import (
         BACKUP_DIR,
         _coerce_column_value,
@@ -187,6 +188,7 @@ def main() -> int:
 
     local_engine = create_engine(local_url, pool_pre_ping=True, connect_args={"connect_timeout": 8})
     Base.metadata.create_all(bind=local_engine)
+    ensure_schema_migrations()
     LocalSession = sessionmaker(autocommit=False, autoflush=False, bind=local_engine)
     local_db = LocalSession()
     try:

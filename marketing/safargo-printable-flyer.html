@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafarGo Mansehra — Printable A4 Promo Flyer</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { margin: 0; background: #f1f5f9; color: #0f172a; }
+    .controls {
+      max-width: 794px; margin: 16px auto; background: #0f172a; color: #fff;
+      padding: 12px 16px; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    }
+    .controls input { padding: 6px 10px; border-radius: 8px; border: 0; font-weight: 700; }
+    .controls button {
+      margin-left: auto; background: #009E4D; color: #fff; border: 0; padding: 8px 16px;
+      border-radius: 8px; font-weight: 800; cursor: pointer;
+    }
+    .sheet {
+      width: 210mm; min-height: 272mm; margin: 0 auto 24px; background: #ffffff;
+      border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+      border: 4px solid #009E4D; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .hero {
+      background: linear-gradient(135deg, #009E4D 0%, #065f46 60%, #0f172a 100%);
+      color: #fff; padding: 26px 28px; text-align: center;
+    }
+    .brand { font-size: 38px; font-weight: 900; letter-spacing: -0.5px; }
+    .sub { font-size: 16px; font-weight: 700; color: #d1fae5; margin-top: 4px; }
+    .headline { font-size: 32px; font-weight: 900; margin: 14px 0 6px; line-height: 1.15; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 20px 26px; }
+    .card {
+      border: 2px solid #e2e8f0; border-radius: 14px; padding: 16px; text-align: center; background: #f8fafc;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 18px; color: #065f46; }
+    .card p { margin: 0; font-size: 13px; color: #334155; font-weight: 600; }
+    .offer {
+      margin: 0 26px; background: #fef3c7; border: 3px dashed #d97706; border-radius: 16px;
+      padding: 18px; text-align: center;
+    }
+    .offer .big { font-size: 26px; font-weight: 900; color: #92400e; }
+    .code-box {
+      display: inline-block; margin-top: 8px; padding: 8px 22px; background: #0f172a; color: #fcd34d;
+      border-radius: 10px; font-size: 24px; font-weight: 900; letter-spacing: 3px; font-family: monospace;
+    }
+    .routes { padding: 16px 26px; text-align: center; font-size: 14px; font-weight: 700; color: #1e293b; }
+    .footer {
+      background: #0f172a; color: #fff; padding: 18px 26px; display: flex;
+      justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .url { font-size: 20px; font-weight: 900; color: #34d399; }
+    @media print {
+      body { background: #fff; }
+      .controls { display: none; }
+      .sheet { box-shadow: none; margin: 0; width: 100%; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label>Referral Code: <input id="refIn" value="SGOWNQZWA" /></label>
+    <label>Phone/WhatsApp: <input id="phIn" value="0313-9620729" /></label>
+    <button onclick="window.print()">Print / Save A4 PDF</button>
+  </div>
+
+  <div class="sheet">
+    <div class="hero">
+      <div class="brand">SafarGo — Mansehra</div>
+      <div class="sub">Hazara University &bull; Lari Adda &bull; Kashmir Road &bull; Shinkiari &bull; Abbottabad</div>
+      <div class="headline">Ab Safar Hua Tez, Mehfooz Aur Sasta!</div>
+      <div style="font-size:15px;font-weight:700;color:#fde68a;">Pehle Mobile Par Kiraya Dekhein &bull; Verified Local Captains</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Bike Ride</h3>
+        <p>University, Bazaar &amp; Hospital ke liye tez aur sasti sawari</p>
+      </div>
+      <div class="card">
+        <h3>AC Car</h3>
+        <p>Family rides aur Mansehra–Abbottabad–Haripur safar</p>
+      </div>
+      <div class="card">
+        <h3>Express Parcel</h3>
+        <p>Dukaan, ghar aur medicine ki 20 min mein city delivery</p>
+      </div>
+    </div>
+
+    <div class="offer">
+      <div class="big">FIRST RIDE PAR RS. 30 OFF!</div>
+      <div style="font-size:14px;font-weight:700;color:#78350f;margin-top:4px;">
+        Signup waqt yeh Referral Code lagayein (Min Rs. 120 ride par):
+      </div>
+      <div class="code-box" id="codeOut">SGOWNQZWA</div>
+    </div>
+
+    <div class="routes">
+      Captains (Bike &amp; Car Drivers) ke liye Free Registration bhi jari hai!<br />
+      Website par apna phone register karein ya WhatsApp par rabta karein.
+    </div>
+
+    <div class="footer">
+      <div>
+        <div style="font-size:12px;color:#94a3b8;font-weight:700;">ONLINE BOOKING &amp; APK DOWNLOAD</div>
+        <div class="url" id="urlOut">safargoride.onrender.com/?ref=SGOWNQZWA</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:#94a3b8;font-weight:700;">WHATSAPP &amp; HELPLINE</div>
+        <div style="font-size:22px;font-weight:900;color:#fff;" id="phOut">0313-9620729</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const refIn = document.getElementById('refIn');
+    const phIn = document.getElementById('phIn');
+    const sync = () => {
+      const code = (refIn.value || 'SGOWNQZWA').trim().toUpperCase();
+      document.getElementById('codeOut').textContent = code;
+      document.getElementById('urlOut').textContent = 'safargoride.onrender.com/?ref=' + encodeURIComponent(code);
+      document.getElementById('phOut').textContent = phIn.value || '0313-9620729';
+    };
+    refIn.addEventListener('input', sync);
+    phIn.addEventListener('input', sync);
+  </script>
+</body>
+</html>

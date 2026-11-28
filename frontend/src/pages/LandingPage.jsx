@@ -531,6 +531,16 @@ export function LandingPage({ onNavigate }) {
                   <button onClick={() => onNavigate('downloads')} className="hover:text-emerald-400 transition">
                     Download APK / EXE
                   </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      'Mansehra ki Fast & Sasti Ride App — Bike, AC Car aur Express Parcel booking live fare ke sath! Book karein: https://safargoride.onrender.com/'
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-emerald-400 transition"
+                  >
+                    Share on WhatsApp
+                  </a>
                   <button onClick={() => onNavigate('auth')} className="hover:text-emerald-400 transition">
                     Customer Feedback &amp; Support
                   </button>

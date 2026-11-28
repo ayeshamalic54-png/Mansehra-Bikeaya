@@ -4,10 +4,21 @@ import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from '../components/BrandLogo';
 import { CaptainPhotoUploads } from '../components/CaptainPhotoUploads';
 
+function getInitialInviteParams() {
+  if (typeof window === 'undefined') return { ref: '', role: 'customer', openRegister: false };
+  const params = new URLSearchParams(window.location.search || '');
+  const ref = (params.get('ref') || '').trim().toUpperCase();
+  const rawRole = (params.get('role') || '').trim().toLowerCase();
+  const hasRole = rawRole === 'rider' || rawRole === 'captain' || rawRole === 'customer';
+  const role = rawRole === 'rider' || rawRole === 'captain' ? 'rider' : 'customer';
+  return { ref, role, openRegister: Boolean(ref || hasRole) };
+}
+
 export function AuthPage({ onNavigate }) {
+  const inviteParams = getInitialInviteParams();
   const { login, register, bootstrap } = useAuth();
-  const [mode, setMode] = useState('login'); // login | register
-  const [role, setRole] = useState('customer'); // customer | rider
+  const [mode, setMode] = useState(inviteParams.openRegister ? 'register' : 'login'); // login | register
+  const [role, setRole] = useState(inviteParams.role); // customer | rider
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -19,7 +30,7 @@ export function AuthPage({ onNavigate }) {
   const [bikePlate, setBikePlate] = useState('');
   const [licenseNo, setLicenseNo] = useState('');
   const [zoneName, setZoneName] = useState('Main Bazar / Lari Adda');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(inviteParams.ref);
   const [photos, setPhotos] = useState({
     rider_photo: '',
     vehicle_photo: '',
@@ -234,6 +245,11 @@ export function AuthPage({ onNavigate }) {
                       <label className="font-bold text-slate-700 block mb-1">
                         Referral Code (Optional)
                       </label>
+                      {inviteParams.ref && (
+                        <div className="mb-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
+                          Invite code <span className="mono-num">{inviteParams.ref}</span> applied automatically!
+                        </div>
+                      )}
                       <input
                         type="text"
                         placeholder="e.g. SGHAM482 — unlock bonus after 1st ride/activation"

@@ -6,6 +6,7 @@ export function ReferralCard({ data, onReload, role = 'customer' }) {
   const [applyInput, setApplyInput] = useState('');
   const [applying, setApplying] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -14,6 +15,13 @@ export function ReferralCard({ data, onReload, role = 'customer' }) {
   const policy = data.policy || {};
   const isCaptain = role === 'rider';
   const trackActive = isCaptain ? Boolean(policy.captain_active) : Boolean(policy.customer_active);
+  const baseOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://safargoride.onrender.com';
+  const inviteUrl = data.referral_code
+    ? `${baseOrigin}/?ref=${encodeURIComponent(data.referral_code)}${isCaptain ? '&role=rider' : ''}`
+    : baseOrigin;
 
   const handleCopy = async () => {
     try {
@@ -24,6 +32,18 @@ export function ReferralCard({ data, onReload, role = 'customer' }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(inviteUrl);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      setCopiedLink(false);
     }
   };
 
@@ -53,8 +73,8 @@ export function ReferralCard({ data, onReload, role = 'customer' }) {
   };
 
   const shareText = isCaptain
-    ? `Join SafarGo as a Verified Bike/Car Captain with my referral code ${data.referral_code} and start earning!`
-    : `Book rides on SafarGo! Use my referral code ${data.referral_code} to get Rs. ${policy.friend_discount || 30} off your first ride (min Rs. ${policy.min_fare || 120}).`;
+    ? `Join SafarGo as a Verified Bike/Car Captain in Mansehra with my code ${data.referral_code} and start earning! Free signup: ${inviteUrl}`
+    : `Book Bike, AC Car & Parcel on SafarGo Mansehra! Use my invite link (${data.referral_code}) to get Rs. ${policy.friend_discount || 30} OFF your first ride (min Rs. ${policy.min_fare || 120}): ${inviteUrl}`;
 
   return (
     <div className="bg-white border-2 border-indigo-200/80 rounded-3xl p-4 sm:p-5 space-y-3.5 text-xs shadow-sm">
@@ -113,6 +133,14 @@ export function ReferralCard({ data, onReload, role = 'customer' }) {
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copied!' : 'Copy Code'}
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="px-3 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold inline-flex items-center gap-1.5 transition"
+          >
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedLink ? 'Link Copied!' : 'Copy Link'}
           </button>
           <a
             href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}

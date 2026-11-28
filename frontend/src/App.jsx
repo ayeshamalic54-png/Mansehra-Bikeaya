@@ -10,9 +10,13 @@ import { AdminDashboard } from './pages/AdminDashboard';
 function AppRouter() {
   const { user, loading, serverWaking, dbError, refreshBootstrap } = useAuth();
   const [retryingDb, setRetryingDb] = useState(false);
-  const [guestRoute, setGuestRoute] = useState(() =>
-    typeof window !== 'undefined' && window.location.pathname === '/downloads' ? 'downloads' : 'landing'
-  ); // landing | auth | downloads
+  const [guestRoute, setGuestRoute] = useState(() => {
+    if (typeof window === 'undefined') return 'landing';
+    if (window.location.pathname === '/downloads') return 'downloads';
+    const params = new URLSearchParams(window.location.search);
+    if ((params.get('ref') || '').trim() || (params.get('role') || '').trim()) return 'auth';
+    return 'landing';
+  }); // landing | auth | downloads
   const [showDownloadsModal, setShowDownloadsModal] = useState(
     () => typeof window !== 'undefined' && window.location.pathname === '/downloads'
   );
